@@ -27,11 +27,6 @@
 *.app
 *.dmg
 *.DS_Store
-core_test
-qt_test
-czr_node
-czr_wallet
-slow_test
 
 # IDEs
 .idea
