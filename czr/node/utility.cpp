@@ -89,6 +89,11 @@ czr::mdb_val::mdb_val(size_t size_a, void * data_a) :
 {
 }
 
+czr::mdb_val::mdb_val(uint64_t const & val_a) :
+	mdb_val(sizeof(val_a), const_cast<uint64_t *> (&val_a))
+{
+}
+
 czr::mdb_val::mdb_val(czr::uint128_union const & val_a) :
 	mdb_val(sizeof(val_a), const_cast<czr::uint128_union *> (&val_a))
 {
@@ -109,6 +114,14 @@ size_t czr::mdb_val::size() const
 	return value.mv_size;
 }
 
+uint64_t czr::mdb_val::uint64() const
+{
+	uint64_t result;
+	assert(size() == sizeof(result));
+	std::copy(reinterpret_cast<uint8_t const *> (data()), reinterpret_cast<uint8_t const *> (data()) + sizeof(result), &result);
+	return result;
+}
+
 czr::uint256_union czr::mdb_val::uint256() const
 {
 	czr::uint256_union result;
@@ -116,6 +129,7 @@ czr::uint256_union czr::mdb_val::uint256() const
 	std::copy(reinterpret_cast<uint8_t const *> (data()), reinterpret_cast<uint8_t const *> (data()) + sizeof(result), result.bytes.data());
 	return result;
 }
+
 
 czr::mdb_val::operator MDB_val * () const
 {

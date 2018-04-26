@@ -117,14 +117,16 @@ namespace czr
 		bool contains(czr::account const &);
 		std::vector<czr::account> witness_list;
 	};
-	class free_block
+	class free_key
 	{
 	public:
-		free_block(MDB_val const &);
-		free_block(uint32_t const &, uint32_t const &);
+		free_key(uint64_t const &, uint64_t const &, czr::block_hash const &);
+		free_key(MDB_val const &);
+		bool operator== (czr::free_key const &) const;
 		czr::mdb_val val() const;
-		uint32_t witnessed_level;
-		uint32_t level;
+		uint64_t witnessed_level_desc;
+		uint64_t level_asc;
+		czr::block_hash hash_asc;
 	};
 
 	class block_state
@@ -136,13 +138,13 @@ namespace czr
 		bool is_fork;
 		bool is_stable;
 		bool is_on_main_chain;
-		boost::optional<uint32_t> main_chain_index;
-		uint32_t level;
-		uint32_t witnessed_level;
+		boost::optional<uint64_t> main_chain_index;
+		boost::optional<uint64_t> latest_included_mc_index;
+		uint64_t level;
+		uint64_t witnessed_level;
 		czr::block_hash best_parent;
 		std::chrono::system_clock::time_point creation_date;
 	};
-
 
 	enum class process_result
 	{

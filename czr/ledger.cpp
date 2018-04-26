@@ -2,8 +2,18 @@
 #include <czr/ledger.hpp>
 #include <czr/node/common.hpp>
 
+#include <queue>
+
 namespace
 {
+	struct state_cmp_by_level
+	{
+		bool operator()(std::pair<czr::uint256_union, czr::block_state> const & a, std::pair<czr::uint256_union, czr::block_state> const & b) const
+		{
+			return a.second.level > b.second.level;
+		}
+	};
+
 	/**
 	* Roll back the visited block
 	*/
@@ -48,7 +58,8 @@ namespace
 		void validate_block(czr::block const &);
 		void save_block(czr::block const &);
 		void update_main_chain(czr::block const &);
-		void advance_stable_mc_block(czr::block const &);
+		void update_parent_mc_index(czr::block_hash const &, uint64_t const &);
+		void advance_stable_mc_block();
 	};
 
 	void ledger_processor::block(czr::block const & block_a)
@@ -210,17 +221,18 @@ namespace
 		std::unique_ptr<czr::block> best_pblock;
 		czr::block_hash best_pblock_hash;
 		czr::block_state best_pblock_state;
-		uint32_t max_parent_level;
-		uint32_t witnessed_level;
-		for each (czr::block_hash pblock_hash in hashables.parents)
+		uint64_t max_parent_level;
+		uint64_t witnessed_level;
+		for (czr::block_hash pblock_hash : hashables.parents)
 		{
-			//remove parent blocks from free
-			ledger.store.free_del(transaction, pblock_hash);
-
 			std::unique_ptr<czr::block> pblock(ledger.store.block_get(transaction, pblock_hash));
 			czr::block_state pblock_state;
 			auto pstate_not_found(ledger.store.block_state_get(transaction, pblock_hash, pblock_state));
 			assert(!pstate_not_found);
+
+			//remove parent blocks from free
+			czr::free_key f_key(pblock_state.witnessed_level, pblock_state.level, pblock_hash);
+			ledger.store.free_del(transaction, f_key);
 
 			if (pblock_state.level > max_parent_level)
 			{
@@ -293,8 +305,9 @@ namespace
 		state.creation_date = std::chrono::system_clock::now();
 		ledger.store.block_state_put(transaction, block_hash, state);
 		//save free
-		czr::free_block free(state.witnessed_level, state.level);
-		ledger.store.free_put(transaction, block_hash, free);
+		ledger.store.free_put(transaction, czr::free_key(state.witnessed_level, state.level, block_hash));
+		//save unstable
+		ledger.store.unstable_put(transaction, block_hash);
 		//save block
 		ledger.store.block_put(transaction, block_hash, block_a);
 
@@ -308,57 +321,170 @@ namespace
 
 	void ledger_processor::update_main_chain(czr::block const & block_a)
 	{
-		//if genesis return;
-
 		//search best free block by witnessed_level desc, level asc, block hash asc
+		czr::store_iterator free_iter(ledger.store.free_begin(transaction));
+		assert(free_iter != czr::store_iterator(nullptr));
+		czr::free_key free_key = free_iter->first.value;
+		czr::block_hash free_block_hash(free_key.hash_asc);
 
-		//get best_parent of best free block, check best parent must be unstable
+		czr::block_state free_block_state;
+		ledger.store.block_state_get(transaction, free_block_hash, free_block_state);
+		if (free_block_state.level > 0) //not genesis block
+			assert(!free_block_state.is_stable);
 
-		//auto new_mc_blocks
-		//if best_parent is_on_main_chain == false 
-		//	set is_on_main_chain = true , main_chain_index = null
-		//	auto pre_best_parent(best_parent.best_parent);
-		//  new_mc_blocks.push_back(pre_best_parent)
-		//  while (pre_best_parent is_on_main_chain == false )
-		//		set is_on_main_chain = true , main_chain_index = null
-		//		new_mc_blocks.push_back(pre_best_parent)
-		//		pre_best_parent = pre_best_parent.best_parent
+		//get best parent of best free block
+		czr::block_hash last_best_pblock_state_hash(free_block_state.best_parent);
+		czr::block_state last_best_pblock_state;
+		bool best_pblock_not_found(ledger.store.block_state_get(transaction, last_best_pblock_state_hash, last_best_pblock_state));
+		assert(!best_pblock_not_found);
 
-		//  auto last_main_chain_index = pre_best_parent.main_chain_index
+		using pair_block_hash_state = std::pair<czr::block_hash, czr::block_state>;
 
-		//--update main chain index
-		//	check: there is no block is_on_main_chain = true and is_stable = true and main_chain_index > last_main_chain_index and main_chain_index != null
-		//  SET is_on_main_chain=0, main_chain_index=NULL WHERE main_chain_index > last_main_chain_index and main_chain_index != null
-		//	auto main_chain_index = last_main_chain_index;
-		//	new_mc_blocks order by level
-		//  for(auto mc_block : new_mc_blocks)
-		//		main_chain_index++;
-		//		search up along mc_block'parents whose main_chain_index==null and set main_chain_index=main_chain_index
+		std::priority_queue<pair_block_hash_state, std::vector<pair_block_hash_state>, state_cmp_by_level> new_mc_block_states;
+		while (!last_best_pblock_state.is_on_main_chain)
+		{
+			new_mc_block_states.emplace(last_best_pblock_state_hash, last_best_pblock_state);
 
-		//--update latest included mc index
-		//auto to_update_limci_blocks //get from unstable blocks where main_chain_index > last_main_chain_index or main_chain_index == null
-		//while(to_update_limci_blocks.length > 0)
-		//	list<block> updated_limci_blocks;
-		//	for (auto to_update_block :to_update_limci_blocks)
-		//		if(to_update_block.parents.exists(!p.is_on_main_chain && p.latest_included_mc_index == null))
-		//			continue;
-		//		auto max_limci = -1;
-		//		for (auto p : to_update_block.parents)
-		//			if(p.is_on_main_chain)
-		//				if(max_limci < p.main_chain_index)
-		//					max_limci = p.main_chain_index;
-		//			else 
-		//				if(max_limci < p.latest_included_mc_index)
-		//					max_limci = p.latest_included_mc_index;
-		//		assert(max_limci > 0);	
-		//		to_update_block.latest_included_mc_index = max_limci;
-		//		updated_limci_blocks.push_back(to_update_block);
-		//	
-		//	for (auto updated_block : updated_limci_blocks)
-		//		to_update_limci_blocks.remove(updated_block);
+			//get pre best parent block
+			last_best_pblock_state_hash = last_best_pblock_state.best_parent;
+			bool pre_best_pblock_not_found(ledger.store.block_state_get(transaction, last_best_pblock_state_hash, last_best_pblock_state));
+			assert(!pre_best_pblock_not_found);
+		}
+		assert(last_best_pblock_state.main_chain_index);
 
+		uint64_t last_mc_index(*last_best_pblock_state.main_chain_index);
+
+#pragma region delete old main chain block whose main chain index larger than last_mc_index
+
+		for (czr::store_iterator i(ledger.store.main_chain_begin(transaction, last_mc_index + 1)), n(nullptr); i != n; ++i)
+		{
+			czr::block_hash old_mc_block_hash(i->second.uint256());
+			czr::block_state old_mc_block_state;
+			bool old_mc_block_not_found(ledger.store.block_state_get(transaction, old_mc_block_hash, old_mc_block_state));
+			assert(!old_mc_block_not_found && !old_mc_block_state.is_stable);
+
+			old_mc_block_state.is_on_main_chain = false;
+			old_mc_block_state.main_chain_index = boost::none;
+			ledger.store.block_state_put(transaction, old_mc_block_hash, old_mc_block_state);
+
+			uint64_t old_mc_block_mc_index(i->first.uint64());
+			ledger.store.main_chain_del(transaction, old_mc_block_mc_index);
+		}
+
+#pragma endregion
+
+#pragma region update main chain index
+
+		uint64_t mc_index(last_mc_index);
+		while (!new_mc_block_states.empty())
+		{
+			auto pair(new_mc_block_states.top());
+			mc_index++;
+			czr::block_hash new_mc_block_hash(pair.first);
+			czr::block_state new_mc_block_state(pair.second);
+			new_mc_block_state.is_on_main_chain = true;
+			new_mc_block_state.main_chain_index = mc_index;
+			ledger.store.block_state_put(transaction, new_mc_block_hash, new_mc_block_state);
+			ledger.store.main_chain_put(transaction, mc_index, new_mc_block_hash);
+
+			update_parent_mc_index(new_mc_block_hash, mc_index);
+
+			new_mc_block_states.pop();
+		}
+
+#pragma endregion
+
+#pragma region update latest included mc index
+
+		//get from unstable blocks where main_chain_index > last_main_chain_index or main_chain_index == null
+		std::unordered_map <czr::block_hash, czr::block_state> to_update_limci_blocks;
+		for (czr::store_iterator i(ledger.store.unstable_begin(transaction)), n(nullptr); i != n; ++i)
+		{
+			czr::block_hash block_hash(i->first.uint256());
+			czr::block_state state;
+			bool not_found(ledger.store.block_state_get(transaction, block_hash, state));
+			assert(!not_found);
+			if (!state.main_chain_index || *state.main_chain_index > last_mc_index)
+				to_update_limci_blocks.insert(std::make_pair(block_hash, state));
+		}
+
+		while (to_update_limci_blocks.size() > 0)
+		{
+			std::vector<czr::block_hash> updated_limci_blocks;
+			for (auto pair : to_update_limci_blocks)
+			{
+				czr::block_hash block_hash(pair.first);
+				std::unique_ptr<czr::block> block = ledger.store.block_get(transaction, block_hash);
+				assert(block != nullptr);
+
+				bool is_parent_ready(true);
+				boost::optional<uint64_t> max_limci;
+				for (auto pblock_hash : block->hashables.parents)
+				{
+					czr::block_state pblock_state;
+					bool pblock_state_not_found(ledger.store.block_state_get(transaction, pblock_hash, pblock_state));
+					assert(!pblock_state_not_found);
+
+					if (pblock_state.is_on_main_chain)
+					{
+						if (max_limci < pblock_state.main_chain_index)
+							max_limci = pblock_state.main_chain_index;
+					}
+					else
+					{
+						if (!pblock_state.latest_included_mc_index)
+						{
+							is_parent_ready = false;
+							break;
+						}
+						if (max_limci < pblock_state.latest_included_mc_index)
+							max_limci = pblock_state.latest_included_mc_index;
+					}
+				}
+
+				if (!is_parent_ready)
+					continue;
+
+				assert(max_limci);
+				czr::block_state block_state;
+				bool block_state_not_found(ledger.store.block_state_get(transaction, block_hash, block_state));
+				assert(!block_state_not_found);
+				block_state.latest_included_mc_index = max_limci;
+				ledger.store.block_state_put(transaction, block_hash, block_state);
+
+				updated_limci_blocks.push_back(block_hash);
+			}
+
+			for (auto block_hash : updated_limci_blocks)
+				to_update_limci_blocks.erase(block_hash);
+		}
+
+#pragma endregion
+
+		advance_stable_mc_block();
+	}
+
+	void ledger_processor::update_parent_mc_index(czr::block_hash const & hash_a, uint64_t const & mc_index)
+	{
+		std::unique_ptr<czr::block> block = ledger.store.block_get(transaction, hash_a);
+		assert(block != nullptr);
+		for (auto pblock_hash : block->hashables.parents)
+		{
+			czr::block_state pblock_state;
+			bool pblock_state_not_found(ledger.store.block_state_get(transaction, pblock_hash, pblock_state));
+			assert(!pblock_state_not_found);
+			if (pblock_state.main_chain_index)
+				continue;
+			pblock_state.main_chain_index = mc_index;
+			ledger.store.block_state_put(transaction, pblock_hash, pblock_state);
+			update_parent_mc_index(pblock_hash, mc_index);
+		}
+	}
+
+	void ledger_processor::advance_stable_mc_block()
+	{
 		//--update stable point
-		//auto last_stable_block //get last stable block
+		//auto last_stable_block //get last stable main chain block
 		//auto witness_list //get witness list of last stable block
 		//auto last_stable_block_children //get children of last stable block(children's best parent = last stable block)
 		//auto mc_child //filter last_stable_block_children is_on_main_chain = 1
@@ -366,9 +492,10 @@ namespace
 		//auto free_main_chain_block	//get free and is_on_main_chain = true block
 		//search up along best parent where level >= free_main_chain_block.witnessed_level
 		//find min_wl = min(witnessed_leve) of all best parent whose account in witness_list
+		//auto unstable_block;
 		//if branch_children.length == 0
 		//	if(min_wl >= mc_child.level)
-		//		advance_stable_mc_block(mc_child)
+		//		unstable_block = mc_child;
 		//else 
 		//	uint32_t branch_max_level;
 		//	for (auto branch_root :branch_children)
@@ -376,12 +503,11 @@ namespace
 		//		if branch_child's witnessed_level > it's parent's witnessed_level
 		//			branch_max_level = branch_child.level
 		//  if min_wl > branch_max_level
-		//		advance_stable_mc_block(mc_child)
+		//		unstable_block = mc_child;
 
-	}
+		//if(unstable_block == null)
+		//	return;
 
-	void ledger_processor::advance_stable_mc_block(czr::block const & unstable_block)
-	{
 		//--update block stable
 		//vector<block> stable_block_list;
 		//set stable_block is_stable=true
@@ -448,8 +574,9 @@ namespace
 		//	delete summary_hash from hash_tree_summary
 
 		//update current stable main chain index
-	}
 
+		//advance_stable_mc_block();
+	}
 
 	ledger_processor::ledger_processor(czr::ledger & ledger_a, MDB_txn * transaction_a) :
 		ledger(ledger_a),

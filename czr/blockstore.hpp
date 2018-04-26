@@ -107,11 +107,20 @@ namespace czr
 		bool block_witnesslist_get(MDB_txn *, czr::block_hash const &, czr::witness_list_info &);
 		void block_witnesslist_put(MDB_txn *, czr::block_hash const &, czr::witness_list_info const &);
 
-		void free_put(MDB_txn *, czr::block_hash const &, czr::free_block const &);
-		void free_del(MDB_txn *, czr::block_hash const &);
+		czr::store_iterator free_begin(MDB_txn *);
+		void free_put(MDB_txn *, czr::free_key const &);
+		void free_del(MDB_txn *, czr::free_key const &);
+
+		czr::store_iterator unstable_begin(MDB_txn *);
+		void unstable_put(MDB_txn *, czr::block_hash const &);
+		void unstable_del(MDB_txn *, czr::block_hash const &);
 
 		bool block_state_get(MDB_txn *, czr::block_hash const &, czr::block_state &);
 		void block_state_put(MDB_txn *, czr::block_hash const &, czr::block_state const &);
+
+		czr::store_iterator main_chain_begin(MDB_txn *, uint64_t const &);
+		void main_chain_put(MDB_txn *, uint64_t const &, czr::block_hash const &);
+		void main_chain_del(MDB_txn *, uint64_t const &);
 
 		void flush(MDB_txn *);
 		std::mutex cache_mutex;
@@ -141,10 +150,14 @@ namespace czr
 		MDB_dbi block_witnesslist;
 		//witnesslist hash -> block hash
 		MDB_dbi witnesslisthash_block;
-		//block hash -> witnessed level, level
-		MDB_dbi free;
 		//block hash -> block state
 		MDB_dbi block_state;
+		//witnessed level, level, block hash -> nullptr
+		MDB_dbi free;
+		//block hash -> nullptr
+		MDB_dbi unstable;
+		//main chain index -> block hash
+		MDB_dbi main_chain;
 		// block hash -> summary hash
 		MDB_dbi summary;
 		//block hash -> skiplist

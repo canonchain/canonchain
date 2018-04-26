@@ -118,10 +118,12 @@ namespace czr
 		mdb_val();
 		mdb_val(MDB_val const &);
 		mdb_val(size_t, void *);
+		mdb_val(uint64_t const &);
 		mdb_val(czr::uint128_union const &);
 		mdb_val(czr::uint256_union const &);
 		void * data() const;
 		size_t size() const;
+		uint64_t uint64() const;
 		czr::uint256_union uint256() const;
 		operator MDB_val * () const;
 		operator MDB_val const & () const;

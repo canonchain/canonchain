@@ -383,7 +383,7 @@ czr::uint256_union czr::witness_list_info::hash()
 	auto status(blake2b_init(&hash_l, sizeof(result.bytes)));
 	assert(status == 0);
 
-	for each(czr::uint256_union item in witness_list)
+	for (czr::uint256_union item : witness_list)
 		blake2b_update(&hash_l, item.bytes.data(), sizeof(item.bytes));
 
 	status = blake2b_final(&hash_l, result.bytes.data(), sizeof(result.bytes));
@@ -394,7 +394,7 @@ czr::uint256_union czr::witness_list_info::hash()
 bool czr::witness_list_info::is_compatible(witness_list_info const & other_a)
 {
 	uint8_t uncompatible_count;
-	for each (auto w in witness_list)
+	for (auto w : witness_list)
 	{
 		auto iter(std::find(other_a.witness_list.begin(), other_a.witness_list.end(), w));
 		if (iter == other_a.witness_list.end())
@@ -413,32 +413,42 @@ bool czr::witness_list_info::contains(czr::account const & account_a)
 	return iter != witness_list.end();
 }
 
-czr::free_block::free_block(MDB_val const & val_a)
-{
-	std::copy(reinterpret_cast<uint8_t const *> (val_a.mv_data), reinterpret_cast<uint8_t const *> (val_a.mv_data) + val_a.mv_size, reinterpret_cast<uint8_t *> (this));
-}
-
-czr::free_block::free_block(uint32_t const & witnessed_level_a, uint32_t const & level_a) :
-	witnessed_level(witnessed_level_a),
-	level(level_a)
-{
-}
-
-czr::mdb_val czr::free_block::val() const
-{
-	return czr::mdb_val(sizeof(*this), const_cast<czr::free_block *> (this));
-}
-
 czr::block_state::block_state()
 {
 }
 
 czr::block_state::block_state(MDB_val const & val_a)
 {
-	std::copy(reinterpret_cast<uint8_t const *> (val_a.mv_data), reinterpret_cast<uint8_t const *> (val_a.mv_data) + val_a.mv_size, reinterpret_cast<uint8_t *> (this));
+	assert(val_a.mv_size == sizeof(*this));
+	std::copy(reinterpret_cast<uint8_t const *> (val_a.mv_data), reinterpret_cast<uint8_t const *> (val_a.mv_data) + sizeof(*this), reinterpret_cast<uint8_t *> (this));
 }
 
 czr::mdb_val czr::block_state::val() const
 {
 	return czr::mdb_val(sizeof(*this), const_cast<czr::block_state *> (this));
+}
+
+czr::free_key::free_key(uint64_t const & witnessed_level_a, uint64_t const & level_a, czr::block_hash const & hash_a) :
+	witnessed_level_desc(std::numeric_limits<uint64_t>::max() - witnessed_level_a),
+	level_asc(level_a),
+	hash_asc(hash_a)
+{
+}
+
+czr::free_key::free_key(MDB_val const & val_a)
+{
+	assert(val_a.mv_size == sizeof(*this));
+	std::copy(reinterpret_cast<uint8_t const *> (val_a.mv_data), reinterpret_cast<uint8_t const *> (val_a.mv_data) + sizeof(*this), reinterpret_cast<uint8_t *> (this));
+}
+
+bool czr::free_key::operator==(czr::free_key const & other) const
+{
+	return witnessed_level_desc == other.witnessed_level_desc
+		&& level_asc == other.level_asc
+		&& hash_asc == other.hash_asc;
+}
+
+czr::mdb_val czr::free_key::val() const
+{
+	return czr::mdb_val(sizeof(*this), const_cast<czr::free_key *> (this));
 }
