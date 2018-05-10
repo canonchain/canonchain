@@ -114,40 +114,35 @@ void czr::node::keepalive(std::string const & address_a, uint16_t port_a)
 	});
 }
 
-void czr::network::republish(czr::block_hash const & hash_a, std::shared_ptr<std::vector<uint8_t>> buffer_a, czr::endpoint endpoint_a)
+void czr::network::publish(MDB_txn * transaction, czr::publish & message)
 {
-	++outgoing.publish;
-	if (node.config.logging.network_publish_logging())
+	std::shared_ptr<std::vector<uint8_t>> buffer(new std::vector<uint8_t>);
 	{
-		BOOST_LOG(node.log) << boost::str(boost::format("Publishing %1% to %2%") % hash_a.to_string() % endpoint_a);
-	}
-	std::weak_ptr<czr::node> node_w(node.shared());
-	send_buffer(buffer_a->data(), buffer_a->size(), endpoint_a, [buffer_a, node_w, endpoint_a](boost::system::error_code const & ec, size_t size) {
-		if (auto node_l = node_w.lock())
-		{
-			if (ec && node_l->config.logging.network_logging())
-			{
-				BOOST_LOG(node_l->log) << boost::str(boost::format("Error sending publish: %1% to %2%") % ec.message() % endpoint_a);
-			}
-		}
-	});
-}
-
-//todo:republish block after validate it///////////////////
-void czr::network::republish_block(MDB_txn * transaction, std::shared_ptr<czr::block> block)
-{
-	czr::publish message(block);
-	std::shared_ptr<std::vector<uint8_t>> bytes(new std::vector<uint8_t>);
-	{
-		czr::vectorstream stream(*bytes);
+		czr::vectorstream stream(*buffer);
 		message.serialize(stream);
 	}
 
-	auto hash(block->hash());
+	auto hash(message.block->hash());
 	auto list(node.peers.list_sqrt());
 	for (auto i(list.begin()), n(list.end()); i != n; ++i)
 	{
-		republish(hash, bytes, *i);
+		auto endpoint(*i);
+
+		++outgoing.publish;
+		if (node.config.logging.network_publish_logging())
+		{
+			BOOST_LOG(node.log) << boost::str(boost::format("Publishing %1% to %2%") % hash.to_string() % endpoint);
+		}
+		std::weak_ptr<czr::node> node_w(node.shared());
+		send_buffer(buffer->data(), buffer->size(), endpoint, [buffer, node_w, endpoint](boost::system::error_code const & ec, size_t size) {
+			if (auto node_l = node_w.lock())
+			{
+				if (ec && node_l->config.logging.network_logging())
+				{
+					BOOST_LOG(node_l->log) << boost::str(boost::format("Error sending publish: %1% to %2%") % ec.message() % endpoint);
+				}
+			}
+		});
 	}
 	if (node.config.logging.network_logging())
 	{
@@ -185,23 +180,7 @@ namespace
 			++node.network.incoming.publish;
 			node.peers.contacted(sender, message_a.version_using);
 			node.peers.insert(sender, message_a.version_using);
-			node.process_active(message_a.block);
-		}
-		void bulk_pull(czr::bulk_pull const &) override
-		{
-			assert(false);
-		}
-		void bulk_pull_blocks(czr::bulk_pull_blocks const &) override
-		{
-			assert(false);
-		}
-		void bulk_push(czr::bulk_push const &) override
-		{
-			assert(false);
-		}
-		void frontier_req(czr::frontier_req const &) override
-		{
-			assert(false);
+			node.process_active(message_a);
 		}
 		czr::node & node;
 		czr::endpoint sender;
@@ -711,8 +690,8 @@ bool czr::node_config::deserialize_json(bool & upgraded_a, boost::property_tree:
 	return result;
 }
 
-czr::block_processor_item::block_processor_item(std::shared_ptr<czr::block> block_a) :
-	block(block_a)
+czr::block_processor_item::block_processor_item(czr::publish publish_a) :
+	publish(publish_a)
 {
 }
 
@@ -794,152 +773,113 @@ void czr::block_processor::process_receive_many(std::deque<czr::block_processor_
 			while (!blocks_processing.empty() && std::chrono::steady_clock::now() < cutoff)
 			{
 				auto item(blocks_processing.front());
+				auto block = item.publish.block;
 				blocks_processing.pop_front();
-				auto hash(item.block->hash());
-				auto process_result(process_receive_one(transaction, item.block));
+				auto hash(block->hash());
+				auto process_result(process_receive_one(transaction, item.publish));
 				switch (process_result.code)
 				{
-				case czr::process_result::progress:
-				{
-					progress.push_back(std::make_pair(item.block, process_result));
-				}
-				case czr::process_result::old:
-				{
-					auto cached(node.store.unchecked_get(transaction, hash));
-					for (auto i(cached.begin()), n(cached.end()); i != n; ++i)
+					case czr::process_result::ok:
 					{
-						node.store.unchecked_del(transaction, hash, **i);
-						blocks_processing.push_front(czr::block_processor_item(*i));
+						progress.push_back(std::make_pair(block, process_result));
 					}
-					std::lock_guard<std::mutex> lock(node.gap_cache.mutex);
-					node.gap_cache.blocks.get<1>().erase(hash);
-					break;
-				}
-				default:
-					break;
+					case czr::process_result::old:
+					{
+						//todo:check unhandle_message db if any unhandle message can be process again;
+
+						//auto cached(node.store.unchecked_get(transaction, hash));
+						//for (auto i(cached.begin()), n(cached.end()); i != n; ++i)
+						//{
+						//	node.store.unchecked_del(transaction, hash, **i);
+						//	blocks_processing.push_front(czr::block_processor_item(*i));
+						//}
+						//std::lock_guard<std::mutex> lock(node.gap_cache.mutex);
+						//node.gap_cache.blocks.get<1>().erase(hash);
+						break;
+					}
+					default:
+						break;
 				}
 			}
 		}
+
 		for (auto & i : progress)
 		{
 			node.observers.blocks(i.first, i.second);
 			if (i.second.amount > 0)
 			{
 				node.observers.account_balance(i.second.account, false);
-				if (!i.second.pending_account.is_zero())
-				{
-					node.observers.account_balance(i.second.pending_account, true);
-				}
 			}
 		}
 	}
 }
 
-czr::process_return czr::block_processor::process_receive_one(MDB_txn * transaction_a, std::shared_ptr<czr::block> block_a)
+czr::process_return czr::block_processor::process_receive_one(MDB_txn * transaction_a, czr::publish const & message)
 {
-	czr::process_return result;
-	result = node.ledger.process(transaction_a, *block_a);
+	czr::consensus consensus(node, node.ledger, transaction_a, [this](std::shared_ptr<czr::block> stable_block_a)
+	{
+	});
+
+	czr::process_return result(consensus.process(message));
+
 	switch (result.code)
 	{
-	case czr::process_result::progress:
-	{
-		if (node.config.logging.ledger_logging())
+		case czr::process_result::ok:
 		{
-			std::string block;
-			block_a->serialize_json(block);
-			BOOST_LOG(node.log) << boost::str(boost::format("Processing block %1% %2%") % block_a->hash().to_string() % block);
+			if (node.config.logging.ledger_logging())
+			{
+				std::string block;
+				message.block->serialize_json(block);
+				BOOST_LOG(node.log) << boost::str(boost::format("Processing block %1% %2%") % message.block->hash().to_string() % block);
+			}
+			break;
 		}
-		break;
-	}
-	case czr::process_result::gap_previous:
-	{
-		if (node.config.logging.ledger_logging())
+		case czr::process_result::old:
 		{
-			BOOST_LOG(node.log) << boost::str(boost::format("Gap previous for: %1%") % block_a->hash().to_string());
+			if (node.config.logging.ledger_duplicate_logging())
+			{
+				BOOST_LOG(node.log) << boost::str(boost::format("Old for: %1%") % message.block->hash().to_string());
+			}
+			break;
 		}
-		node.store.unchecked_put(transaction_a, block_a->previous(), block_a);
-		node.gap_cache.add(transaction_a, block_a);
-		break;
-	}
-	case czr::process_result::gap_source:
-	{
-		if (node.config.logging.ledger_logging())
+		case czr::process_result::missing_parents_and_previous:
 		{
-			BOOST_LOG(node.log) << boost::str(boost::format("Gap source for: %1%") % block_a->hash().to_string());
+			if (node.config.logging.ledger_logging())
+			{
+				BOOST_LOG(node.log) << boost::str(boost::format("Missing parents for: %1%") % message.block->hash().to_string());
+			}
+			std::vector<block_hash> missing_parents_and_previous(result.missing_parents_and_previous);
+			//todo: store message to unhandle_message db 
+			//todo: to request missing parents_and_previous
+			break;
 		}
-		node.store.unchecked_put(transaction_a, node.ledger.block_source(transaction_a, *block_a), block_a);
-		node.gap_cache.add(transaction_a, block_a);
-		break;
-	}
-	case czr::process_result::old:
-	{
-		if (node.config.logging.ledger_duplicate_logging())
+		case czr::process_result::missing_hash_tree_summary:
 		{
-			BOOST_LOG(node.log) << boost::str(boost::format("Old for: %1%") % block_a->hash().to_string());
+			if (node.config.logging.ledger_logging())
+			{
+				BOOST_LOG(node.log) << boost::str(boost::format("Missing parents for: %1%") % message.block->hash().to_string());
+			}
+			//todo:to request catchup
+			break;
 		}
-		break;
-	}
-	case czr::process_result::bad_signature:
-	{
-		if (node.config.logging.ledger_logging())
+		case czr::process_result::invalid_block:
 		{
-			BOOST_LOG(node.log) << boost::str(boost::format("Bad signature for: %1%") % block_a->hash().to_string());
+			if (node.config.logging.ledger_logging())
+			{
+				BOOST_LOG(node.log) << boost::str(boost::format("Invalid block: %1%, error message: %2%") % message.block->hash().to_string() % result.err_msg);
+			}
+
+			//todo:to cache invalid block
+			break;
 		}
-		break;
-	}
-	case czr::process_result::negative_spend:
-	{
-		if (node.config.logging.ledger_logging())
+		case czr::process_result::invalid_message:
 		{
-			BOOST_LOG(node.log) << boost::str(boost::format("Negative spend for: %1%") % block_a->hash().to_string());
+			if (node.config.logging.ledger_logging())
+			{
+				BOOST_LOG(node.log) << boost::str(boost::format("Invalid message: %1%") % result.err_msg);
+			}
+			break;
 		}
-		break;
-	}
-	case czr::process_result::unreceivable:
-	{
-		if (node.config.logging.ledger_logging())
-		{
-			BOOST_LOG(node.log) << boost::str(boost::format("Unreceivable for: %1%") % block_a->hash().to_string());
-		}
-		break;
-	}
-	case czr::process_result::not_receive_from_send:
-	{
-		if (node.config.logging.ledger_logging())
-		{
-			BOOST_LOG(node.log) << boost::str(boost::format("Not receive from send for: %1%") % block_a->hash().to_string());
-		}
-		break;
-	}
-	case czr::process_result::account_mismatch:
-	{
-		if (node.config.logging.ledger_logging())
-		{
-			BOOST_LOG(node.log) << boost::str(boost::format("Account mismatch for: %1%") % block_a->hash().to_string());
-		}
-		break;
-	}
-	case czr::process_result::opened_burn_account:
-	{
-		BOOST_LOG(node.log) << boost::str(boost::format("*** Rejecting open block for burn account ***: %1%") % block_a->hash().to_string());
-		break;
-	}
-	case czr::process_result::balance_mismatch:
-	{
-		if (node.config.logging.ledger_logging())
-		{
-			BOOST_LOG(node.log) << boost::str(boost::format("Balance mismatch for: %1%") % block_a->hash().to_string());
-		}
-		break;
-	}
-	case czr::process_result::block_position:
-	{
-		if (node.config.logging.ledger_logging())
-		{
-			BOOST_LOG(node.log) << boost::str(boost::format("Block %1% cannot follow predecessor %2%") % block_a->hash().to_string() % block_a->previous().to_string());
-		}
-		break;
-	}
 	}
 	return result;
 }
@@ -988,10 +928,6 @@ czr::node::node(czr::node_init & init_a, boost::asio::io_service & service_a, bo
 					block_a->serialize_json(block_text);
 					event.add("block", block_text);
 					event.add("amount", result_a.amount.to_string_dec());
-					if (result_a.is_send)
-					{
-						event.add("is_send", *result_a.is_send);
-					}
 					std::stringstream ostream;
 					boost::property_tree::write_json(ostream, event);
 					ostream.flush();
@@ -1091,7 +1027,7 @@ czr::node::node(czr::node_init & init_a, boost::asio::io_service & service_a, bo
 			BOOST_LOG(log) << "Constructing node";
 		}
 		czr::transaction transaction(store.environment, nullptr, true);
-		if (store.latest_begin(transaction) == store.latest_end())
+		if (store.account_begin(transaction) == store.account_end())
 		{
 			// Store was empty meaning we just created it, add the genesis block
 			czr::genesis genesis;
@@ -1176,17 +1112,10 @@ void czr::gap_cache::purge_old()
 	}
 }
 
-void czr::node::process_active(std::shared_ptr<czr::block> incoming)
+void czr::node::process_active(czr::publish const & message)
 {
-	block_arrival.add(incoming->hash());
-	block_processor.add(incoming);
-}
-
-czr::process_return czr::node::process(czr::block const & block_a)
-{
-	czr::transaction transaction(store.environment, nullptr, true);
-	auto result(ledger.process(transaction, block_a));
-	return result;
+	block_arrival.add(message.block->hash());
+	block_processor.add(message);
 }
 
 // Simulating with sqrt_broadcast_simulate shows we only need to broadcast to sqrt(total_peers) random peers in order to successfully publish to everyone with high probability
@@ -1374,15 +1303,6 @@ std::unique_ptr<czr::block> czr::node::block(czr::block_hash const & hash_a)
 {
 	czr::transaction transaction(store.environment, nullptr, false);
 	return store.block_get(transaction, hash_a);
-}
-
-std::pair<czr::uint128_t, czr::uint128_t> czr::node::balance_pending(czr::account const & account_a)
-{
-	std::pair<czr::uint128_t, czr::uint128_t> result;
-	czr::transaction transaction(store.environment, nullptr, false);
-	result.first = ledger.account_balance(transaction, account_a);
-	result.second = ledger.account_pending(transaction, account_a);
-	return result;
 }
 
 void czr::node::ongoing_keepalive()
@@ -1681,55 +1601,6 @@ uint64_t czr::node::generate_work(czr::uint256_union const & hash_a)
 
 void czr::node::add_initial_peers()
 {
-}
-
-namespace
-{
-	class confirmed_visitor : public czr::block_visitor
-	{
-	public:
-		confirmed_visitor(czr::node & node_a, std::shared_ptr<czr::block> block_a) :
-			node(node_a),
-			shared_block(block_a)
-		{
-		}
-		virtual ~confirmed_visitor() = default;
-		void block(czr::block const & block_a) override
-		{
-			auto account(block_a.hashables.link);
-			for (auto i(node.wallets.items.begin()), n(node.wallets.items.end()); i != n; ++i)
-			{
-				auto wallet(i->second);
-				if (wallet->exists(account))
-				{
-					czr::pending_info pending;
-					czr::transaction transaction(node.store.environment, nullptr, false);
-					auto error(node.store.pending_get(transaction, czr::pending_key(account, shared_block->hash()), pending));
-					if (!error)
-					{
-						auto node_l(node.shared());
-						auto amount(pending.amount.number());
-						wallet->receive_async(shared_block, amount, [](std::shared_ptr<czr::block>) {});
-					}
-					else
-					{
-						if (node.config.logging.ledger_duplicate_logging())
-						{
-							BOOST_LOG(node.log) << boost::str(boost::format("Block confirmed before timeout %1%") % shared_block->hash().to_string());
-						}
-					}
-				}
-			}
-		}
-		czr::node & node;
-		std::shared_ptr<czr::block> shared_block;
-	};
-}
-
-void czr::node::process_confirmed(std::shared_ptr<czr::block> confirmed_a)
-{
-	confirmed_visitor visitor(*this, confirmed_a);
-	confirmed_a->visit(visitor);
 }
 
 czr::endpoint czr::network::endpoint()
@@ -2099,7 +1970,6 @@ void czr::add_node_options(boost::program_options::options_description & descrip
 		("vacuum", "Compact database. If data_path is missing, the database in data directory is compacted.")
 		("snapshot", "Compact database and create snapshot, functions similar to vacuum but does not replace the existing database")
 		("data_path", boost::program_options::value<std::string>(), "Use the supplied path as the data directory")
-		("diagnostics", "Run internal diagnostics")
 		("key_create", "Generates a adhoc random keypair and prints it to stdout")
 		("key_expand", "Derive public key and account number from <key>")
 		("wallet_add_adhoc", "Insert <key> in to <wallet>")
@@ -2263,34 +2133,6 @@ bool czr::handle_node_options(boost::program_options::variables_map & vm)
 		catch (...)
 		{
 			std::cerr << "Snapshot Failed" << std::endl;
-		}
-	}
-	else if (vm.count("diagnostics"))
-	{
-		inactive_node node(data_path);
-		std::cout << "Testing hash function" << std::endl;
-		czr::raw_key key;
-		key.data.clear();
-		czr::block block(0, 0, 0, 0, key, 0, 0);
-		std::cout << "Testing key derivation function" << std::endl;
-		czr::raw_key junk1;
-		junk1.data.clear();
-		czr::uint256_union junk2(0);
-		czr::kdf kdf;
-		kdf.phs(junk1, "", junk2);
-		std::cout << "Dumping OpenCL information" << std::endl;
-		bool error(false);
-		czr::opencl_environment environment(error);
-		if (!error)
-		{
-			environment.dump(std::cout);
-			std::stringstream stream;
-			environment.dump(stream);
-			BOOST_LOG(node.logging.log) << stream.str();
-		}
-		else
-		{
-			std::cout << "Error initializing OpenCL" << std::endl;
 		}
 	}
 	else if (vm.count("key_create"))
@@ -2669,4 +2511,3 @@ czr::inactive_node::~inactive_node()
 {
 	node->stop();
 }
-

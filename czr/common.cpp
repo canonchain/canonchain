@@ -79,8 +79,6 @@ namespace
 	ledger_constants globals;
 }
 
-size_t constexpr czr::block::size;
-
 czr::keypair const & czr::zero_key(globals.zero_key);
 czr::keypair const & czr::test_genesis_key(globals.test_genesis_key);
 czr::account const & czr::czr_test_account(globals.czr_test_account);
@@ -122,7 +120,6 @@ std::unique_ptr<czr::block> czr::deserialize_block(MDB_val const & val_a)
 czr::account_info::account_info() :
 	head(0),
 	open_block(0),
-	balance(0),
 	modified(0),
 	block_count(0)
 {
@@ -131,14 +128,13 @@ czr::account_info::account_info() :
 czr::account_info::account_info(MDB_val const & val_a)
 {
 	assert(val_a.mv_size == sizeof(*this));
-	static_assert (sizeof(head) + sizeof(open_block) + sizeof(balance) + sizeof(modified) + sizeof(block_count) == sizeof(*this), "Class not packed");
+	static_assert (sizeof(head) + sizeof(open_block) + sizeof(modified) + sizeof(block_count) + sizeof(first_good_stable_mci) == sizeof(*this), "Class not packed");
 	std::copy(reinterpret_cast<uint8_t const *> (val_a.mv_data), reinterpret_cast<uint8_t const *> (val_a.mv_data) + sizeof(*this), reinterpret_cast<uint8_t *> (this));
 }
 
-czr::account_info::account_info(czr::block_hash const & head_a, czr::block_hash const & open_block_a, czr::amount const & balance_a, uint64_t modified_a, uint64_t block_count_a) :
+czr::account_info::account_info(czr::block_hash const & head_a, czr::block_hash const & open_block_a, uint64_t modified_a, uint64_t block_count_a) :
 	head(head_a),
 	open_block(open_block_a),
-	balance(balance_a),
 	modified(modified_a),
 	block_count(block_count_a)
 {
@@ -148,7 +144,6 @@ void czr::account_info::serialize(czr::stream & stream_a) const
 {
 	write(stream_a, head.bytes);
 	write(stream_a, open_block.bytes);
-	write(stream_a, balance.bytes);
 	write(stream_a, modified);
 	write(stream_a, block_count);
 }
@@ -161,14 +156,10 @@ bool czr::account_info::deserialize(czr::stream & stream_a)
 		error = read(stream_a, open_block.bytes);
 		if (!error)
 		{
-			error = read(stream_a, balance.bytes);
+			error = read(stream_a, modified);
 			if (!error)
 			{
-				error = read(stream_a, modified);
-				if (!error)
-				{
-					error = read(stream_a, block_count);
-				}
+				error = read(stream_a, block_count);
 			}
 		}
 	}
@@ -177,7 +168,7 @@ bool czr::account_info::deserialize(czr::stream & stream_a)
 
 bool czr::account_info::operator== (czr::account_info const & other_a) const
 {
-	return head == other_a.head && open_block == other_a.open_block && balance == other_a.balance && modified == other_a.modified && block_count == other_a.block_count;
+	return head == other_a.head && open_block == other_a.open_block && modified == other_a.modified && block_count == other_a.block_count;
 }
 
 bool czr::account_info::operator!= (czr::account_info const & other_a) const
@@ -188,136 +179,6 @@ bool czr::account_info::operator!= (czr::account_info const & other_a) const
 czr::mdb_val czr::account_info::val() const
 {
 	return czr::mdb_val(sizeof(*this), const_cast<czr::account_info *> (this));
-}
-
-
-czr::pending_info::pending_info() :
-	source(0),
-	amount(0)
-{
-}
-
-czr::pending_info::pending_info(MDB_val const & val_a)
-{
-	assert(val_a.mv_size == sizeof(*this));
-	static_assert (sizeof(source) + sizeof(amount) == sizeof(*this), "Packed class");
-	std::copy(reinterpret_cast<uint8_t const *> (val_a.mv_data), reinterpret_cast<uint8_t const *> (val_a.mv_data) + sizeof(*this), reinterpret_cast<uint8_t *> (this));
-}
-
-czr::pending_info::pending_info(czr::account const & source_a, czr::amount const & amount_a) :
-	source(source_a),
-	amount(amount_a)
-{
-}
-
-void czr::pending_info::serialize(czr::stream & stream_a) const
-{
-	czr::write(stream_a, source.bytes);
-	czr::write(stream_a, amount.bytes);
-}
-
-bool czr::pending_info::deserialize(czr::stream & stream_a)
-{
-	auto result(czr::read(stream_a, source.bytes));
-	if (!result)
-	{
-		result = czr::read(stream_a, amount.bytes);
-	}
-	return result;
-}
-
-bool czr::pending_info::operator== (czr::pending_info const & other_a) const
-{
-	return source == other_a.source && amount == other_a.amount;
-}
-
-czr::mdb_val czr::pending_info::val() const
-{
-	return czr::mdb_val(sizeof(*this), const_cast<czr::pending_info *> (this));
-}
-
-czr::pending_key::pending_key(czr::account const & account_a, czr::block_hash const & hash_a) :
-	account(account_a),
-	hash(hash_a)
-{
-}
-
-czr::pending_key::pending_key(MDB_val const & val_a)
-{
-	assert(val_a.mv_size == sizeof(*this));
-	static_assert (sizeof(account) + sizeof(hash) == sizeof(*this), "Packed class");
-	std::copy(reinterpret_cast<uint8_t const *> (val_a.mv_data), reinterpret_cast<uint8_t const *> (val_a.mv_data) + sizeof(*this), reinterpret_cast<uint8_t *> (this));
-}
-
-void czr::pending_key::serialize(czr::stream & stream_a) const
-{
-	czr::write(stream_a, account.bytes);
-	czr::write(stream_a, hash.bytes);
-}
-
-bool czr::pending_key::deserialize(czr::stream & stream_a)
-{
-	auto error(czr::read(stream_a, account.bytes));
-	if (!error)
-	{
-		error = czr::read(stream_a, hash.bytes);
-	}
-	return error;
-}
-
-bool czr::pending_key::operator== (czr::pending_key const & other_a) const
-{
-	return account == other_a.account && hash == other_a.hash;
-}
-
-czr::mdb_val czr::pending_key::val() const
-{
-	return czr::mdb_val(sizeof(*this), const_cast<czr::pending_key *> (this));
-}
-
-czr::block_info::block_info() :
-	account(0),
-	balance(0)
-{
-}
-
-czr::block_info::block_info(MDB_val const & val_a)
-{
-	assert(val_a.mv_size == sizeof(*this));
-	static_assert (sizeof(account) + sizeof(balance) == sizeof(*this), "Packed class");
-	std::copy(reinterpret_cast<uint8_t const *> (val_a.mv_data), reinterpret_cast<uint8_t const *> (val_a.mv_data) + sizeof(*this), reinterpret_cast<uint8_t *> (this));
-}
-
-czr::block_info::block_info(czr::account const & account_a, czr::amount const & balance_a) :
-	account(account_a),
-	balance(balance_a)
-{
-}
-
-void czr::block_info::serialize(czr::stream & stream_a) const
-{
-	czr::write(stream_a, account.bytes);
-	czr::write(stream_a, balance.bytes);
-}
-
-bool czr::block_info::deserialize(czr::stream & stream_a)
-{
-	auto error(czr::read(stream_a, account.bytes));
-	if (!error)
-	{
-		error = czr::read(stream_a, balance.bytes);
-	}
-	return error;
-}
-
-bool czr::block_info::operator== (czr::block_info const & other_a) const
-{
-	return account == other_a.account && balance == other_a.balance;
-}
-
-czr::mdb_val czr::block_info::val() const
-{
-	return czr::mdb_val(sizeof(*this), const_cast<czr::block_info *> (this));
 }
 
 czr::genesis::genesis()
@@ -340,10 +201,10 @@ czr::genesis::genesis()
 void czr::genesis::initialize(MDB_txn * transaction_a, czr::block_store & store_a) const
 {
 	auto hash_l(hash());
-	assert(store_a.latest_begin(transaction_a) == store_a.latest_end());
+	assert(store_a.account_begin(transaction_a) == store_a.account_end());
 	store_a.block_put(transaction_a, hash_l, *block);
 	store_a.block_state_put(transaction_a, hash_l, state);
-	store_a.account_put(transaction_a, genesis_account, { hash_l, block->hash(), std::numeric_limits<czr::uint128_t>::max(), czr::seconds_since_epoch(), 1 });
+	store_a.account_put(transaction_a, genesis_account, { hash_l, block->hash(), czr::seconds_since_epoch(), 1 });
 	store_a.checksum_put(transaction_a, 0, 0, hash_l);
 }
 
@@ -391,7 +252,7 @@ czr::uint256_union czr::witness_list_info::hash()
 	return result;
 }
 
-bool czr::witness_list_info::is_compatible(witness_list_info const & other_a)
+bool czr::witness_list_info::is_compatible(witness_list_info const & other_a) const
 {
 	uint8_t uncompatible_count;
 	for (auto w : witness_list)
@@ -407,7 +268,7 @@ bool czr::witness_list_info::is_compatible(witness_list_info const & other_a)
 	return true;
 }
 
-bool czr::witness_list_info::contains(czr::account const & account_a)
+bool czr::witness_list_info::contains(czr::account const & account_a) const
 {
 	auto iter = std::find(witness_list.begin(), witness_list.end(), account_a);
 	return iter != witness_list.end();
@@ -451,4 +312,89 @@ bool czr::free_key::operator==(czr::free_key const & other) const
 czr::mdb_val czr::free_key::val() const
 {
 	return czr::mdb_val(sizeof(*this), const_cast<czr::free_key *> (this));
+}
+
+czr::block_child_key::block_child_key(czr::block_hash const & hash_a, czr::block_hash const & child_hash_a) :
+	hash(hash_a),
+	child_hash(child_hash_a)
+{
+}
+
+czr::block_child_key::block_child_key(MDB_val const & val_a)
+{
+	assert(val_a.mv_size == sizeof(*this));
+	std::copy(reinterpret_cast<uint8_t const *> (val_a.mv_data), reinterpret_cast<uint8_t const *> (val_a.mv_data) + sizeof(*this), reinterpret_cast<uint8_t *> (this));
+}
+
+bool czr::block_child_key::operator==(czr::block_child_key const & other) const
+{
+	return hash == other.hash && child_hash == other.child_hash;
+}
+
+czr::mdb_val czr::block_child_key::val() const
+{
+	return czr::mdb_val(sizeof(*this), const_cast<czr::block_child_key *> (this));
+}
+
+czr::account_state::account_state() :
+	account(0),
+	block_hash(0),
+	pervious(0),
+	balance(0)
+{
+}
+
+czr::account_state::account_state(czr::account const & account_a, czr::block_hash const & block_hash_a, czr::account_state_hash const & pervious_a, czr::amount const & balance_a):
+	account(account_a),
+	block_hash(block_hash_a),
+	pervious(pervious_a),
+	balance(balance_a)
+{
+}
+
+czr::account_state::account_state(MDB_val const & val_a)
+{
+	assert(val_a.mv_size == sizeof(*this));
+	std::copy(reinterpret_cast<uint8_t const *> (val_a.mv_data), reinterpret_cast<uint8_t const *> (val_a.mv_data) + sizeof(*this), reinterpret_cast<uint8_t *> (this));
+}
+
+czr::mdb_val czr::account_state::val() const
+{
+	return czr::mdb_val(sizeof(*this), const_cast<czr::account_state *> (this));
+}
+
+czr::account_state_hash czr::account_state::hash()
+{
+	czr::account_state_hash result;
+	blake2b_state hash_l;
+	auto status(blake2b_init(&hash_l, sizeof(result.bytes)));
+	assert(status == 0);
+
+	blake2b_update(&hash_l, account.bytes.data(), sizeof(account.bytes));
+	blake2b_update(&hash_l, block_hash.bytes.data(), sizeof(block_hash.bytes));
+	blake2b_update(&hash_l, pervious.bytes.data(), sizeof(pervious.bytes));
+	blake2b_update(&hash_l, balance.bytes.data(), sizeof(balance.bytes));
+
+	status = blake2b_final(&hash_l, result.bytes.data(), sizeof(result.bytes));
+	assert(status == 0);
+
+	return result;
+}
+
+czr::skiplist_info::skiplist_info(std::vector<czr::block_hash> const & list_a) :
+	list(list_a)
+{
+}
+
+czr::skiplist_info::skiplist_info(MDB_val const &)
+{
+	assert(false);
+	//todo:serialize///////////////
+}
+
+czr::mdb_val czr::skiplist_info::val() const
+{
+	assert(false);
+	//todo:serialize///////////////
+	return czr::mdb_val(sizeof(*this), const_cast<czr::skiplist_info *> (this));
 }

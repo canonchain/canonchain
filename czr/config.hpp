@@ -18,8 +18,12 @@ enum class czr_networks
 czr::czr_networks const czr_network = czr_networks::ACTIVE_NETWORK;
 std::chrono::milliseconds const transaction_timeout = std::chrono::milliseconds (1000);
 
-size_t const count_witnesses = 12;
-size_t const max_witness_list_mutations = 1;
-size_t const majority_of_witnesses = count_witnesses / 2 + 1;
+size_t const witness_count(12);
+size_t const max_witness_list_mutations(1);
+size_t const majority_of_witnesses(witness_count / 2 + 1);
+
+size_t const max_parents_and_pervious_size(16);
+
+size_t const skiplist_divisor(10);
 
 }

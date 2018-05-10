@@ -242,6 +242,7 @@ SET (CZR_LIB_SOURCES
 	czr/lib/interface.cpp
 	czr/lib/numbers.cpp
 	czr/lib/numbers.hpp
+	czr/lib/utility.cpp
 	czr/lib/utility.hpp
 	czr/lib/work.hpp
 	czr/lib/work.cpp)
@@ -254,6 +255,8 @@ add_library (node
 	${SECURE_RPC_SOURCE}
 	czr/node/common.cpp
 	czr/node/common.hpp
+	czr/node/consensus.hpp
+	czr/node/consensus.cpp
 	czr/node/node.hpp
 	czr/node/node.cpp
 	czr/node/openclwork.cpp

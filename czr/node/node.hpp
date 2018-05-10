@@ -1,5 +1,7 @@
 #pragma once
 
+#include <czr/node/consensus.hpp>
+
 #include <czr/ledger.hpp>
 #include <czr/lib/work.hpp>
 #include <czr/node/wallet.hpp>
@@ -189,8 +191,7 @@ namespace czr
 		void receive();
 		void stop();
 		void receive_action(boost::system::error_code const &, size_t);
-		void republish_block(MDB_txn *, std::shared_ptr<czr::block>);
-		void republish(czr::block_hash const &, std::shared_ptr<std::vector<uint8_t>>, czr::endpoint);
+		void publish(MDB_txn * transaction, czr::publish & message);
 		void merge_peers(std::array<czr::endpoint, 8> const &);
 		void send_keepalive(czr::endpoint const &);
 		void send_buffer(uint8_t const *, size_t, czr::endpoint const &, std::function<void(boost::system::error_code const &, size_t)>);
@@ -299,8 +300,8 @@ namespace czr
 	class block_processor_item
 	{
 	public:
-		block_processor_item(std::shared_ptr<czr::block>);
-		std::shared_ptr<czr::block> block;
+		block_processor_item(czr::publish);
+		czr::publish publish;
 	};
 	// Processing blocks is a potentially long IO operation
 	// This class isolates block insertion from other operations like servicing network operations
@@ -314,8 +315,9 @@ namespace czr
 		void add(czr::block_processor_item const &);
 		void process_receive_many(czr::block_processor_item const &);
 		void process_receive_many(std::deque<czr::block_processor_item> &);
-		czr::process_return process_receive_one(MDB_txn *, std::shared_ptr<czr::block>);
+		czr::process_return process_receive_one(MDB_txn *, czr::publish const &);
 		void process_blocks();
+		czr::node & node;
 
 	private:
 		bool stopped;
@@ -323,7 +325,6 @@ namespace czr
 		std::deque<czr::block_processor_item> blocks;
 		std::mutex mutex;
 		std::condition_variable condition;
-		czr::node & node;
 	};
 	class node : public std::enable_shared_from_this<czr::node>
 	{
@@ -343,14 +344,11 @@ namespace czr
 		void stop();
 		std::shared_ptr<czr::node> shared();
 		int store_version();
-		void process_confirmed(std::shared_ptr<czr::block>);
-		void process_active(std::shared_ptr<czr::block>);
-		czr::process_return process(czr::block const &);
+		void process_active(czr::publish const &);
 		void keepalive_preconfigured(std::vector<std::string> const &);
 		czr::block_hash latest(czr::account const &);
 		czr::uint128_t balance(czr::account const &);
 		std::unique_ptr<czr::block> block(czr::block_hash const &);
-		std::pair<czr::uint128_t, czr::uint128_t> balance_pending(czr::account const &);
 		void ongoing_keepalive();
 		void ongoing_store_flush();
 		void backup_wallet();

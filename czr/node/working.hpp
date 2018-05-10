@@ -4,5 +4,5 @@
 
 namespace czr
 {
-	boost::filesystem::path app_path();
+boost::filesystem::path app_path ();
 }

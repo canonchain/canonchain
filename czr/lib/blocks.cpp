@@ -60,28 +60,35 @@ czr::block_hash czr::block::hash () const
 	return result;
 }
 
-czr::block_hashables::block_hashables (czr::account const & account_a, czr::block_hash const & previous_a, czr::amount const & balance_a, czr::uint256_union const & link_a) :
-account (account_a),
-previous (previous_a),
-balance (balance_a),
-link (link_a)
+czr::block_hashables::block_hashables(czr::account const & from_a, czr::account const & to_a, czr::amount const & amount_a, 
+	czr::block_hash const & previous_a, std::vector<czr::block_hash> const & parents_a, 
+	czr::block_hash const & witness_list_block_a, std::vector<czr::account> const & witness_list_a,
+	czr::summary_hash const & last_summary_a, czr::block_hash const & last_summary_block_a,
+	std::vector<uint8_t> const & data_a):
+from(from_a),
+to(to_a),
+amount (amount_a),
+previous(previous_a),
+parents(parents_a),
+witness_list_block(witness_list_block_a),
+witness_list(witness_list_a),
+last_summary(last_summary_a),
+last_summary_block(last_summary_block_a),
+data(data_a)
 {
-	//todo:add new fields/////////////////
+	//todo:need fee feild ???
 }
 
 czr::block_hashables::block_hashables (bool & error_a, czr::stream & stream_a)
 {
-	error_a = czr::read (stream_a, account);
+	//todo: add new feilds /////////////////
+	error_a = czr::read(stream_a, from);
 	if (!error_a)
 	{
-		error_a = czr::read (stream_a, previous);
+		error_a = czr::read(stream_a, to);
 		if (!error_a)
 		{
-			error_a = czr::read(stream_a, balance);
-			if (!error_a)
-			{
-				error_a = czr::read(stream_a, link);
-			}
+			error_a = czr::read(stream_a, amount);
 		}
 	}
 }
@@ -91,21 +98,16 @@ czr::block_hashables::block_hashables (bool & error_a, boost::property_tree::ptr
 	//todo: add new feilds /////////////////
 	try
 	{
-		auto account_l (tree_a.get<std::string> ("account"));
-		auto previous_l (tree_a.get<std::string> ("previous"));
-		auto balance_l (tree_a.get<std::string> ("balance"));
-		auto link_l (tree_a.get<std::string> ("link"));
-		error_a = account.decode_account (account_l);
+		auto from_l(tree_a.get<std::string>("from"));
+		auto to_l(tree_a.get<std::string>("to"));
+		auto amount_l (tree_a.get<std::string> ("amount"));
+		error_a = from.decode_account(from_l);
 		if (!error_a)
 		{
-			error_a = previous.decode_hex (previous_l);
+			error_a = to.decode_account(to_l);
 			if (!error_a)
 			{
-				error_a = balance.decode_dec(balance_l);
-				if (!error_a)
-				{
-					error_a = link.decode_account(link_l) && link.decode_hex(link_l);
-				}
+				error_a = amount.decode_dec(amount_l);
 			}
 		}
 	}
@@ -117,10 +119,12 @@ czr::block_hashables::block_hashables (bool & error_a, boost::property_tree::ptr
 
 void czr::block_hashables::hash (blake2b_state & hash_a) const
 {
-	blake2b_update (&hash_a, account.bytes.data (), sizeof (account.bytes));
-	blake2b_update (&hash_a, previous.bytes.data (), sizeof (previous.bytes));
-	blake2b_update (&hash_a, balance.bytes.data (), sizeof (balance.bytes));
-	blake2b_update (&hash_a, link.bytes.data (), sizeof (link.bytes));
+	blake2b_update(&hash_a, from.bytes.data(), sizeof(from.bytes));
+	blake2b_update(&hash_a, to.bytes.data(), sizeof(to.bytes));
+	blake2b_update(&hash_a, amount.bytes.data(), sizeof(amount.bytes));
+	blake2b_update(&hash_a, previous.bytes.data(), sizeof(previous.bytes));
+	for (auto p : parents)
+		blake2b_update(&hash_a, p.bytes.data(), sizeof(p.bytes));
 
 	if(witness_list.empty())
 		blake2b_update(&hash_a, witness_list_block.bytes.data(), sizeof(witness_list_block.bytes));
@@ -130,20 +134,22 @@ void czr::block_hashables::hash (blake2b_state & hash_a) const
 			blake2b_update(&hash_a, witness.bytes.data(), sizeof(witness.bytes));
 	}
 
+	blake2b_update(&hash_a, last_summary.bytes.data(), sizeof(last_summary.bytes));
 	blake2b_update(&hash_a, last_summary_block.bytes.data(), sizeof(last_summary_block.bytes));
-
-	for (auto p : parents)
-		blake2b_update(&hash_a, p.bytes.data(), sizeof(p.bytes));
 
 	blake2b_update(&hash_a, data.data(), sizeof(data));
 }
 
-czr::block::block (czr::account const & account_a, czr::block_hash const & previous_a, czr::amount const & balance_a, czr::uint256_union const & link_a, czr::raw_key const & prv_a, czr::public_key const & pub_a, uint64_t work_a) :
-hashables (account_a, previous_a, balance_a, link_a),
-signature (czr::sign_message (prv_a, pub_a, hash ())),
-work (work_a)
+czr::block::block(czr::account const & from_a, czr::account const & to_a, czr::amount const & amount_a, 
+	czr::block_hash const & previous_a, std::vector<czr::block_hash> const & parents_a, 
+	czr::block_hash const & witness_list_block_a, std::vector<czr::account> const & witness_list_a,
+	czr::summary_hash const & last_summary_a, czr::block_hash const & last_summary_block_a,
+	std::vector<uint8_t> const & data_a,
+	czr::raw_key const & prv_a, czr::public_key const & pub_a, uint64_t work_a):
+hashables(from_a, to_a, amount_a, previous_a, parents_a, witness_list_block_a, witness_list_a, last_summary_a, last_summary_block_a, data_a),
+signature(czr::sign_message(prv_a, pub_a, hash())),
+work(work_a)
 {
-	//todo:add new fields/////////////////
 }
 
 czr::block::block (bool & error_a, czr::stream & stream_a) :
@@ -197,13 +203,21 @@ czr::block_hash czr::block::previous () const
 	return hashables.previous;
 }
 
+std::vector<czr::block_hash> czr::block::parents_and_previous() const
+{
+	std::vector<czr::block_hash> list(hashables.parents);
+	if (!hashables.previous.is_zero() && std::find(list.begin(), list.end(), hashables.previous) == list.end())
+		list.push_back(hashables.previous);
+
+	return list;
+}
+
 void czr::block::serialize (czr::stream & stream_a) const
 {
 	//todo:serialize block///////////////
-	write (stream_a, hashables.account);
-	write (stream_a, hashables.previous);
-	write (stream_a, hashables.balance);
-	write (stream_a, hashables.link);
+	write (stream_a, hashables.from);
+	write (stream_a, hashables.to);
+	write (stream_a, hashables.amount);
 	write (stream_a, signature);
 	write (stream_a, boost::endian::native_to_big (work));
 }
@@ -212,11 +226,9 @@ void czr::block::serialize_json (std::string & string_a) const
 {
 	//todo:add new feilds///////////////
 	boost::property_tree::ptree tree;
-	tree.put ("account", hashables.account.to_account ());
-	tree.put ("previous", hashables.previous.to_string ());
-	tree.put ("balance", hashables.balance.to_string_dec ());
-	tree.put ("link", hashables.link.to_string ());
-	tree.put ("link_as_account", hashables.link.to_account ());
+	tree.put ("from", hashables.from.to_account());
+	tree.put ("to", hashables.to.to_account());
+	tree.put ("amount", hashables.amount.to_string_dec());
 	std::string signature_l;
 	signature.encode_hex (signature_l);
 	tree.put ("signature", signature_l);
@@ -229,24 +241,20 @@ void czr::block::serialize_json (std::string & string_a) const
 bool czr::block::deserialize (czr::stream & stream_a)
 {
 	//todo:deserialize block///////////////
-	auto error (read (stream_a, hashables.account));
+	auto error = read(stream_a, hashables.from);
 	if (!error)
 	{
-		error = read (stream_a, hashables.previous);
+		error = read(stream_a, hashables.to);
 		if (!error)
 		{
-			error = read(stream_a, hashables.balance);
+			error = read(stream_a, hashables.amount);
 			if (!error)
 			{
-				error = read(stream_a, hashables.link);
+				error = read(stream_a, signature);
 				if (!error)
 				{
-					error = read(stream_a, signature);
-					if (!error)
-					{
-						error = read(stream_a, work);
-						boost::endian::big_to_native_inplace(work);
-					}
+					error = read(stream_a, work);
+					boost::endian::big_to_native_inplace(work);
 				}
 			}
 		}
@@ -260,29 +268,24 @@ bool czr::block::deserialize_json (boost::property_tree::ptree const & tree_a)
 	try
 	{
 		//todo:add new feilds///////////////
-		auto account_l (tree_a.get<std::string> ("account"));
-		auto previous_l (tree_a.get<std::string> ("previous"));
-		auto balance_l (tree_a.get<std::string> ("balance"));
-		auto link_l (tree_a.get<std::string> ("link"));
+		auto from_l(tree_a.get<std::string>("from"));
+		auto to_l(tree_a.get<std::string>("to"));
+		auto amount_l (tree_a.get<std::string> ("amount"));
 		auto work_l (tree_a.get<std::string> ("work"));
 		auto signature_l (tree_a.get<std::string> ("signature"));
-		error = hashables.account.decode_account (account_l);
+		error = hashables.from.decode_account(from_l);
 		if (!error)
 		{
-			error = hashables.previous.decode_hex(previous_l);
+			error = hashables.to.decode_account(to_l);
 			if (!error)
 			{
-				error = hashables.balance.decode_dec(balance_l);
+				error = hashables.amount.decode_dec(amount_l);
 				if (!error)
 				{
-					error = hashables.link.decode_account(link_l) && hashables.link.decode_hex(link_l);
+					error = czr::from_string_hex(work_l, work);
 					if (!error)
 					{
-						error = czr::from_string_hex(work_l, work);
-						if (!error)
-						{
-							error = signature.decode_hex(signature_l);
-						}
+						error = signature.decode_hex(signature_l);
 					}
 				}
 			}
@@ -309,7 +312,7 @@ bool czr::block::operator== (czr::block const & other_a) const
 
 czr::block_hash czr::block::root () const
 {
-	return !hashables.previous.is_zero () ? hashables.previous : hashables.account;
+	return !previous().is_zero () ? previous() : hashables.from;
 }
 
 czr::signature czr::block::block_signature () const

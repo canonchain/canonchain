@@ -11,83 +11,83 @@ thread_local CryptoPP::AutoSeededRandomPool czr::random_pool;
 
 namespace
 {
-	char const * base58_reverse("~012345678~~~~~~~9:;<=>?@~ABCDE~FGHIJKLMNOP~~~~~~QRSTUVWXYZ[~\\]^_`abcdefghi");
-	uint8_t base58_decode(char value)
-	{
-		assert(value >= '0');
-		assert(value <= '~');
-		auto result(base58_reverse[value - 0x30] - 0x30);
-		return result;
-	}
-	char const * account_lookup("13456789abcdefghijkmnopqrstuwxyz");
-	char const * account_reverse("~0~1234567~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~89:;<=>?@AB~CDEFGHIJK~LMNO~~~~~");
-	char account_encode(uint8_t value)
-	{
-		assert(value < 32);
-		auto result(account_lookup[value]);
-		return result;
-	}
-	uint8_t account_decode(char value)
-	{
-		assert(value >= '0');
-		assert(value <= '~');
-		auto result(account_reverse[value - 0x30] - 0x30);
-		return result;
-	}
+char const * base58_reverse ("~012345678~~~~~~~9:;<=>?@~ABCDE~FGHIJKLMNOP~~~~~~QRSTUVWXYZ[~\\]^_`abcdefghi");
+uint8_t base58_decode (char value)
+{
+	assert (value >= '0');
+	assert (value <= '~');
+	auto result (base58_reverse[value - 0x30] - 0x30);
+	return result;
+}
+char const * account_lookup ("13456789abcdefghijkmnopqrstuwxyz");
+char const * account_reverse ("~0~1234567~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~89:;<=>?@AB~CDEFGHIJK~LMNO~~~~~");
+char account_encode (uint8_t value)
+{
+	assert (value < 32);
+	auto result (account_lookup[value]);
+	return result;
+}
+uint8_t account_decode (char value)
+{
+	assert (value >= '0');
+	assert (value <= '~');
+	auto result (account_reverse[value - 0x30] - 0x30);
+	return result;
+}
 }
 
-void czr::uint256_union::encode_account(std::string & destination_a) const
+void czr::uint256_union::encode_account (std::string & destination_a) const
 {
-	assert(destination_a.empty());
-	destination_a.reserve(64);
-	uint64_t check(0);
+	assert (destination_a.empty ());
+	destination_a.reserve (64);
+	uint64_t check (0);
 	blake2b_state hash;
-	blake2b_init(&hash, 5);
-	blake2b_update(&hash, bytes.data(), bytes.size());
-	blake2b_final(&hash, reinterpret_cast<uint8_t *> (&check), 5);
-	czr::uint512_t number_l(number());
+	blake2b_init (&hash, 5);
+	blake2b_update (&hash, bytes.data (), bytes.size ());
+	blake2b_final (&hash, reinterpret_cast<uint8_t *> (&check), 5);
+	czr::uint512_t number_l (number ());
 	number_l <<= 40;
-	number_l |= czr::uint512_t(check);
-	for (auto i(0); i < 60; ++i)
+	number_l |= czr::uint512_t (check);
+	for (auto i (0); i < 60; ++i)
 	{
-		auto r(number_l.convert_to<uint8_t>() & 0x1f);
+		auto r (number_l.convert_to<uint8_t> () & 0x1f);
 		number_l >>= 5;
-		destination_a.push_back(account_encode(r));
+		destination_a.push_back (account_encode (r));
 	}
-	destination_a.append("_rzc"); // czr_
-	std::reverse(destination_a.begin(), destination_a.end());
+	destination_a.append ("_rzc"); // czr_
+	std::reverse (destination_a.begin (), destination_a.end ());
 }
 
-std::string czr::uint256_union::to_account_split() const
+std::string czr::uint256_union::to_account_split () const
 {
-	auto result(to_account());
-	assert(result.size() == 64);
-	result.insert(32, "\n");
+	auto result (to_account ());
+	assert (result.size () == 64);
+	result.insert (32, "\n");
 	return result;
 }
 
-std::string czr::uint256_union::to_account() const
+std::string czr::uint256_union::to_account () const
 {
 	std::string result;
-	encode_account(result);
+	encode_account (result);
 	return result;
 }
 
-bool czr::uint256_union::decode_account(std::string const & source_a)
+bool czr::uint256_union::decode_account (std::string const & source_a)
 {
-	auto error(source_a.size() != 64);
+	auto error (source_a.size () != 64);
 	if (!error)
 	{
 		if (source_a[0] == 'c' && source_a[1] == 'z' && source_a[2] == 'r' && (source_a[3] == '_' || source_a[3] == '-'))
 		{
 			czr::uint512_t number_l;
-			for (auto i(source_a.begin() + 4), j(source_a.end()); !error && i != j; ++i)
+			for (auto i (source_a.begin () + 4), j (source_a.end ()); !error && i != j; ++i)
 			{
-				uint8_t character(*i);
+				uint8_t character (*i);
 				error = character < 0x30 || character >= 0x80;
 				if (!error)
 				{
-					uint8_t byte(account_decode(character));
+					uint8_t byte (account_decode (character));
 					error = byte == '~';
 					if (!error)
 					{
@@ -98,14 +98,14 @@ bool czr::uint256_union::decode_account(std::string const & source_a)
 			}
 			if (!error)
 			{
-				*this = (number_l >> 40).convert_to<czr::uint256_t>();
-				uint64_t check(number_l.convert_to<uint64_t>());
+				*this = (number_l >> 40).convert_to<czr::uint256_t> ();
+				uint64_t check (number_l.convert_to<uint64_t> ());
 				check &= 0xffffffffff;
-				uint64_t validation(0);
+				uint64_t validation (0);
 				blake2b_state hash;
-				blake2b_init(&hash, 5);
-				blake2b_update(&hash, bytes.data(), bytes.size());
-				blake2b_final(&hash, reinterpret_cast<uint8_t *> (&validation), 5);
+				blake2b_init (&hash, 5);
+				blake2b_update (&hash, bytes.data (), bytes.size ());
+				blake2b_final (&hash, reinterpret_cast<uint8_t *> (&validation), 5);
 				error = check != validation;
 			}
 		}
@@ -117,12 +117,12 @@ bool czr::uint256_union::decode_account(std::string const & source_a)
 	return error;
 }
 
-czr::uint256_union::uint256_union(czr::uint256_t const & number_a)
+czr::uint256_union::uint256_union (czr::uint256_t const & number_a)
 {
-	czr::uint256_t number_l(number_a);
-	for (auto i(bytes.rbegin()), n(bytes.rend()); i != n; ++i)
+	czr::uint256_t number_l (number_a);
+	for (auto i (bytes.rbegin ()), n (bytes.rend ()); i != n; ++i)
 	{
-		*i = ((number_l) & 0xff).convert_to<uint8_t>();
+		*i = ((number_l)&0xff).convert_to<uint8_t> ();
 		number_l >>= 8;
 	}
 }
@@ -133,34 +133,49 @@ bool czr::uint256_union::operator== (czr::uint256_union const & other_a) const
 }
 
 // Construct a uint256_union = AES_ENC_CTR (cleartext, key, iv)
-void czr::uint256_union::encrypt(czr::raw_key const & cleartext, czr::raw_key const & key, uint128_union const & iv)
+void czr::uint256_union::encrypt (czr::raw_key const & cleartext, czr::raw_key const & key, uint128_union const & iv)
 {
-	CryptoPP::AES::Encryption alg(key.data.bytes.data(), sizeof(key.data.bytes));
-	CryptoPP::CTR_Mode_ExternalCipher::Encryption enc(alg, iv.bytes.data());
-	enc.ProcessData(bytes.data(), cleartext.data.bytes.data(), sizeof(cleartext.data.bytes));
+	CryptoPP::AES::Encryption alg (key.data.bytes.data (), sizeof (key.data.bytes));
+	CryptoPP::CTR_Mode_ExternalCipher::Encryption enc (alg, iv.bytes.data ());
+	enc.ProcessData (bytes.data (), cleartext.data.bytes.data (), sizeof (cleartext.data.bytes));
 }
 
-bool czr::uint256_union::is_zero() const
+bool czr::uint256_union::is_zero () const
 {
 	return qwords[0] == 0 && qwords[1] == 0 && qwords[2] == 0 && qwords[3] == 0;
 }
 
-std::string czr::uint256_union::to_string() const
+std::string czr::uint256_union::to_string () const
 {
 	std::string result;
-	encode_hex(result);
+	encode_hex (result);
 	return result;
 }
 
 bool czr::uint256_union::operator< (czr::uint256_union const & other_a) const
 {
-	return number() < other_a.number();
+	return number () < other_a.number ();
+}
+
+bool czr::uint256_union::operator> (czr::uint256_union const & other_a) const
+{
+	return number() > other_a.number();
+}
+
+bool czr::uint256_union::operator<= (czr::uint256_union const & other_a) const
+{
+	return number() <= other_a.number();
+}
+
+bool czr::uint256_union::operator>= (czr::uint256_union const & other_a) const
+{
+	return number() >= other_a.number();
 }
 
 czr::uint256_union & czr::uint256_union::operator^= (czr::uint256_union const & other_a)
 {
-	auto j(other_a.qwords.begin());
-	for (auto i(qwords.begin()), n(qwords.end()); i != n; ++i, ++j)
+	auto j (other_a.qwords.begin ());
+	for (auto i (qwords.begin ()), n (qwords.end ()); i != n; ++i, ++j)
 	{
 		*i ^= *j;
 	}
@@ -170,29 +185,29 @@ czr::uint256_union & czr::uint256_union::operator^= (czr::uint256_union const & 
 czr::uint256_union czr::uint256_union::operator^ (czr::uint256_union const & other_a) const
 {
 	czr::uint256_union result;
-	auto k(result.qwords.begin());
-	for (auto i(qwords.begin()), j(other_a.qwords.begin()), n(qwords.end()); i != n; ++i, ++j, ++k)
+	auto k (result.qwords.begin ());
+	for (auto i (qwords.begin ()), j (other_a.qwords.begin ()), n (qwords.end ()); i != n; ++i, ++j, ++k)
 	{
 		*k = *i ^ *j;
 	}
 	return result;
 }
 
-czr::uint256_union::uint256_union(std::string const & hex_a)
+czr::uint256_union::uint256_union (std::string const & hex_a)
 {
-	decode_hex(hex_a);
+	decode_hex (hex_a);
 }
 
-void czr::uint256_union::clear()
+void czr::uint256_union::clear ()
 {
-	qwords.fill(0);
+	qwords.fill (0);
 }
 
-czr::uint256_t czr::uint256_union::number() const
+czr::uint256_t czr::uint256_union::number () const
 {
 	czr::uint256_t result;
-	auto shift(0);
-	for (auto i(bytes.begin()), n(bytes.end()); i != n; ++i)
+	auto shift (0);
+	for (auto i (bytes.begin ()), n (bytes.end ()); i != n; ++i)
 	{
 		result <<= shift;
 		result |= *i;
@@ -201,28 +216,28 @@ czr::uint256_t czr::uint256_union::number() const
 	return result;
 }
 
-void czr::uint256_union::encode_hex(std::string & text) const
+void czr::uint256_union::encode_hex (std::string & text) const
 {
-	assert(text.empty());
+	assert (text.empty ());
 	std::stringstream stream;
-	stream << std::hex << std::noshowbase << std::setw(64) << std::setfill('0');
-	stream << number();
-	text = stream.str();
+	stream << std::hex << std::noshowbase << std::setw (64) << std::setfill ('0');
+	stream << number ();
+	text = stream.str ();
 }
 
-bool czr::uint256_union::decode_hex(std::string const & text)
+bool czr::uint256_union::decode_hex (std::string const & text)
 {
-	auto error(false);
-	if (!text.empty() && text.size() <= 64)
+	auto error (false);
+	if (!text.empty () && text.size () <= 64)
 	{
-		std::stringstream stream(text);
+		std::stringstream stream (text);
 		stream << std::hex << std::noshowbase;
 		czr::uint256_t number_l;
 		try
 		{
 			stream >> number_l;
 			*this = number_l;
-			if (!stream.eof())
+			if (!stream.eof ())
 			{
 				error = true;
 			}
@@ -239,28 +254,28 @@ bool czr::uint256_union::decode_hex(std::string const & text)
 	return error;
 }
 
-void czr::uint256_union::encode_dec(std::string & text) const
+void czr::uint256_union::encode_dec (std::string & text) const
 {
-	assert(text.empty());
+	assert (text.empty ());
 	std::stringstream stream;
 	stream << std::dec << std::noshowbase;
-	stream << number();
-	text = stream.str();
+	stream << number ();
+	text = stream.str ();
 }
 
-bool czr::uint256_union::decode_dec(std::string const & text)
+bool czr::uint256_union::decode_dec (std::string const & text)
 {
-	auto error(text.size() > 78 || (text.size() > 1 && text[0] == '0') || (text.size() > 0 && text[0] == '-'));
+	auto error (text.size () > 78 || (text.size () > 1 && text[0] == '0') || (text.size () > 0 && text[0] == '-'));
 	if (!error)
 	{
-		std::stringstream stream(text);
+		std::stringstream stream (text);
 		stream << std::dec << std::noshowbase;
 		czr::uint256_t number_l;
 		try
 		{
 			stream >> number_l;
 			*this = number_l;
-			if (!stream.eof())
+			if (!stream.eof ())
 			{
 				error = true;
 			}
@@ -273,9 +288,9 @@ bool czr::uint256_union::decode_dec(std::string const & text)
 	return error;
 }
 
-czr::uint256_union::uint256_union(uint64_t value0)
+czr::uint256_union::uint256_union (uint64_t value0)
 {
-	*this = czr::uint256_t(value0);
+	*this = czr::uint256_t (value0);
 }
 
 bool czr::uint256_union::operator!= (czr::uint256_union const & other_a) const
@@ -288,26 +303,26 @@ bool czr::uint512_union::operator== (czr::uint512_union const & other_a) const
 	return bytes == other_a.bytes;
 }
 
-czr::uint512_union::uint512_union(czr::uint512_t const & number_a)
+czr::uint512_union::uint512_union (czr::uint512_t const & number_a)
 {
-	czr::uint512_t number_l(number_a);
-	for (auto i(bytes.rbegin()), n(bytes.rend()); i != n; ++i)
+	czr::uint512_t number_l (number_a);
+	for (auto i (bytes.rbegin ()), n (bytes.rend ()); i != n; ++i)
 	{
-		*i = ((number_l) & 0xff).convert_to<uint8_t>();
+		*i = ((number_l)&0xff).convert_to<uint8_t> ();
 		number_l >>= 8;
 	}
 }
 
-void czr::uint512_union::clear()
+void czr::uint512_union::clear ()
 {
-	bytes.fill(0);
+	bytes.fill (0);
 }
 
-czr::uint512_t czr::uint512_union::number() const
+czr::uint512_t czr::uint512_union::number () const
 {
 	czr::uint512_t result;
-	auto shift(0);
-	for (auto i(bytes.begin()), n(bytes.end()); i != n; ++i)
+	auto shift (0);
+	for (auto i (bytes.begin ()), n (bytes.end ()); i != n; ++i)
 	{
 		result <<= shift;
 		result |= *i;
@@ -316,28 +331,28 @@ czr::uint512_t czr::uint512_union::number() const
 	return result;
 }
 
-void czr::uint512_union::encode_hex(std::string & text) const
+void czr::uint512_union::encode_hex (std::string & text) const
 {
-	assert(text.empty());
+	assert (text.empty ());
 	std::stringstream stream;
-	stream << std::hex << std::noshowbase << std::setw(128) << std::setfill('0');
-	stream << number();
-	text = stream.str();
+	stream << std::hex << std::noshowbase << std::setw (128) << std::setfill ('0');
+	stream << number ();
+	text = stream.str ();
 }
 
-bool czr::uint512_union::decode_hex(std::string const & text)
+bool czr::uint512_union::decode_hex (std::string const & text)
 {
-	auto error(text.size() > 128);
+	auto error (text.size () > 128);
 	if (!error)
 	{
-		std::stringstream stream(text);
+		std::stringstream stream (text);
 		stream << std::hex << std::noshowbase;
 		czr::uint512_t number_l;
 		try
 		{
 			stream >> number_l;
 			*this = number_l;
-			if (!stream.eof())
+			if (!stream.eof ())
 			{
 				error = true;
 			}
@@ -362,16 +377,16 @@ czr::uint512_union & czr::uint512_union::operator^= (czr::uint512_union const & 
 	return *this;
 }
 
-std::string czr::uint512_union::to_string() const
+std::string czr::uint512_union::to_string () const
 {
 	std::string result;
-	encode_hex(result);
+	encode_hex (result);
 	return result;
 }
 
-czr::raw_key::~raw_key()
+czr::raw_key::~raw_key ()
 {
-	data.clear();
+	data.clear ();
 }
 
 bool czr::raw_key::operator== (czr::raw_key const & other_a) const
@@ -385,52 +400,52 @@ bool czr::raw_key::operator!= (czr::raw_key const & other_a) const
 }
 
 // This this = AES_DEC_CTR (ciphertext, key, iv)
-void czr::raw_key::decrypt(czr::uint256_union const & ciphertext, czr::raw_key const & key_a, uint128_union const & iv)
+void czr::raw_key::decrypt (czr::uint256_union const & ciphertext, czr::raw_key const & key_a, uint128_union const & iv)
 {
-	CryptoPP::AES::Encryption alg(key_a.data.bytes.data(), sizeof(key_a.data.bytes));
-	CryptoPP::CTR_Mode_ExternalCipher::Decryption dec(alg, iv.bytes.data());
-	dec.ProcessData(data.bytes.data(), ciphertext.bytes.data(), sizeof(ciphertext.bytes));
+	CryptoPP::AES::Encryption alg (key_a.data.bytes.data (), sizeof (key_a.data.bytes));
+	CryptoPP::CTR_Mode_ExternalCipher::Decryption dec (alg, iv.bytes.data ());
+	dec.ProcessData (data.bytes.data (), ciphertext.bytes.data (), sizeof (ciphertext.bytes));
 }
 
-czr::uint512_union czr::sign_message(czr::raw_key const & private_key, czr::public_key const & public_key, czr::uint256_union const & message)
+czr::uint512_union czr::sign_message (czr::raw_key const & private_key, czr::public_key const & public_key, czr::uint256_union const & message)
 {
 	czr::uint512_union result;
-	ed25519_sign(message.bytes.data(), sizeof(message.bytes), private_key.data.bytes.data(), public_key.bytes.data(), result.bytes.data());
+	ed25519_sign (message.bytes.data (), sizeof (message.bytes), private_key.data.bytes.data (), public_key.bytes.data (), result.bytes.data ());
 	return result;
 }
 
-void czr::deterministic_key(czr::uint256_union const & seed_a, uint32_t index_a, czr::uint256_union & prv_a)
+void czr::deterministic_key (czr::uint256_union const & seed_a, uint32_t index_a, czr::uint256_union & prv_a)
 {
 	blake2b_state hash;
-	blake2b_init(&hash, prv_a.bytes.size());
-	blake2b_update(&hash, seed_a.bytes.data(), seed_a.bytes.size());
-	czr::uint256_union index(index_a);
-	blake2b_update(&hash, reinterpret_cast<uint8_t *> (&index.dwords[7]), sizeof(uint32_t));
-	blake2b_final(&hash, prv_a.bytes.data(), prv_a.bytes.size());
+	blake2b_init (&hash, prv_a.bytes.size ());
+	blake2b_update (&hash, seed_a.bytes.data (), seed_a.bytes.size ());
+	czr::uint256_union index (index_a);
+	blake2b_update (&hash, reinterpret_cast<uint8_t *> (&index.dwords[7]), sizeof (uint32_t));
+	blake2b_final (&hash, prv_a.bytes.data (), prv_a.bytes.size ());
 }
 
-bool czr::validate_message(czr::public_key const & public_key, czr::uint256_union const & message, czr::uint512_union const & signature)
+bool czr::validate_message (czr::public_key const & public_key, czr::uint256_union const & message, czr::uint512_union const & signature)
 {
-	auto result(0 != ed25519_sign_open(message.bytes.data(), sizeof(message.bytes), public_key.bytes.data(), signature.bytes.data()));
+	auto result (0 != ed25519_sign_open (message.bytes.data (), sizeof (message.bytes), public_key.bytes.data (), signature.bytes.data ()));
 	return result;
 }
 
-czr::uint128_union::uint128_union(std::string const & string_a)
+czr::uint128_union::uint128_union (std::string const & string_a)
 {
-	decode_hex(string_a);
+	decode_hex (string_a);
 }
 
-czr::uint128_union::uint128_union(uint64_t value_a)
+czr::uint128_union::uint128_union (uint64_t value_a)
 {
-	*this = czr::uint128_t(value_a);
+	*this = czr::uint128_t (value_a);
 }
 
-czr::uint128_union::uint128_union(czr::uint128_t const & value_a)
+czr::uint128_union::uint128_union (czr::uint128_t const & value_a)
 {
-	czr::uint128_t number_l(value_a);
-	for (auto i(bytes.rbegin()), n(bytes.rend()); i != n; ++i)
+	czr::uint128_t number_l (value_a);
+	for (auto i (bytes.rbegin ()), n (bytes.rend ()); i != n; ++i)
 	{
-		*i = ((number_l) & 0xff).convert_to<uint8_t>();
+		*i = ((number_l)&0xff).convert_to<uint8_t> ();
 		number_l >>= 8;
 	}
 }
@@ -447,19 +462,19 @@ bool czr::uint128_union::operator!= (czr::uint128_union const & other_a) const
 
 bool czr::uint128_union::operator< (czr::uint128_union const & other_a) const
 {
-	return number() < other_a.number();
+	return number () < other_a.number ();
 }
 
 bool czr::uint128_union::operator> (czr::uint128_union const & other_a) const
 {
-	return number() > other_a.number();
+	return number () > other_a.number ();
 }
 
-czr::uint128_t czr::uint128_union::number() const
+czr::uint128_t czr::uint128_union::number () const
 {
 	czr::uint128_t result;
-	auto shift(0);
-	for (auto i(bytes.begin()), n(bytes.end()); i != n; ++i)
+	auto shift (0);
+	for (auto i (bytes.begin ()), n (bytes.end ()); i != n; ++i)
 	{
 		result <<= shift;
 		result |= *i;
@@ -468,28 +483,28 @@ czr::uint128_t czr::uint128_union::number() const
 	return result;
 }
 
-void czr::uint128_union::encode_hex(std::string & text) const
+void czr::uint128_union::encode_hex (std::string & text) const
 {
-	assert(text.empty());
+	assert (text.empty ());
 	std::stringstream stream;
-	stream << std::hex << std::noshowbase << std::setw(32) << std::setfill('0');
-	stream << number();
-	text = stream.str();
+	stream << std::hex << std::noshowbase << std::setw (32) << std::setfill ('0');
+	stream << number ();
+	text = stream.str ();
 }
 
-bool czr::uint128_union::decode_hex(std::string const & text)
+bool czr::uint128_union::decode_hex (std::string const & text)
 {
-	auto error(text.size() > 32);
+	auto error (text.size () > 32);
 	if (!error)
 	{
-		std::stringstream stream(text);
+		std::stringstream stream (text);
 		stream << std::hex << std::noshowbase;
 		czr::uint128_t number_l;
 		try
 		{
 			stream >> number_l;
 			*this = number_l;
-			if (!stream.eof())
+			if (!stream.eof ())
 			{
 				error = true;
 			}
@@ -502,29 +517,29 @@ bool czr::uint128_union::decode_hex(std::string const & text)
 	return error;
 }
 
-void czr::uint128_union::encode_dec(std::string & text) const
+void czr::uint128_union::encode_dec (std::string & text) const
 {
-	assert(text.empty());
+	assert (text.empty ());
 	std::stringstream stream;
 	stream << std::dec << std::noshowbase;
-	stream << number();
-	text = stream.str();
+	stream << number ();
+	text = stream.str ();
 }
 
-bool czr::uint128_union::decode_dec(std::string const & text)
+bool czr::uint128_union::decode_dec (std::string const & text)
 {
-	auto error(text.size() > 39 || (text.size() > 1 && text[0] == '0') || (text.size() > 0 && text[0] == '-'));
+	auto error (text.size () > 39 || (text.size () > 1 && text[0] == '0') || (text.size () > 0 && text[0] == '-'));
 	if (!error)
 	{
-		std::stringstream stream(text);
+		std::stringstream stream (text);
 		stream << std::dec << std::noshowbase;
 		boost::multiprecision::checked_uint128_t number_l;
 		try
 		{
 			stream >> number_l;
-			czr::uint128_t unchecked(number_l);
+			czr::uint128_t unchecked (number_l);
 			*this = unchecked;
-			if (!stream.eof())
+			if (!stream.eof ())
 			{
 				error = true;
 			}
@@ -537,7 +552,7 @@ bool czr::uint128_union::decode_dec(std::string const & text)
 	return error;
 }
 
-void format_frac(std::ostringstream & stream, czr::uint128_t value, czr::uint128_t scale, int precision)
+void format_frac (std::ostringstream & stream, czr::uint128_t value, czr::uint128_t scale, int precision)
 {
 	auto reduce = scale;
 	auto rem = value;
@@ -551,9 +566,9 @@ void format_frac(std::ostringstream & stream, czr::uint128_t value, czr::uint128
 	}
 }
 
-void format_dec(std::ostringstream & stream, czr::uint128_t value, char group_sep, const std::string & groupings)
+void format_dec (std::ostringstream & stream, czr::uint128_t value, char group_sep, const std::string & groupings)
 {
-	auto largestPow10 = czr::uint256_t(1);
+	auto largestPow10 = czr::uint256_t (1);
 	int dec_count = 1;
 	while (1)
 	{
@@ -583,7 +598,7 @@ void format_dec(std::ostringstream & stream, czr::uint128_t value, char group_se
 			group_count++;
 			if (group_count > groupings[group_index])
 			{
-				group_index = std::min(group_index + 1, (int)groupings.length() - 1);
+				group_index = std::min (group_index + 1, (int)groupings.length () - 1);
 				group_count = 1;
 				emit_group[i] = true;
 			}
@@ -594,7 +609,7 @@ void format_dec(std::ostringstream & stream, czr::uint128_t value, char group_se
 		}
 	}
 
-	auto reduce = czr::uint128_t(largestPow10);
+	auto reduce = czr::uint128_t (largestPow10);
 	czr::uint128_t rem = value;
 	while (reduce > 0)
 	{
@@ -610,7 +625,7 @@ void format_dec(std::ostringstream & stream, czr::uint128_t value, char group_se
 	}
 }
 
-std::string format_balance(czr::uint128_t balance, czr::uint128_t scale, int precision, bool group_digits, char thousands_sep, char decimal_point, std::string & grouping)
+std::string format_balance (czr::uint128_t balance, czr::uint128_t scale, int precision, bool group_digits, char thousands_sep, char decimal_point, std::string & grouping)
 {
 	std::ostringstream stream;
 	auto int_part = balance / scale;
@@ -637,52 +652,52 @@ std::string format_balance(czr::uint128_t balance, czr::uint128_t scale, int pre
 	}
 	else
 	{
-		format_dec(stream, int_part, group_digits && grouping.length() > 0 ? thousands_sep : 0, grouping);
+		format_dec (stream, int_part, group_digits && grouping.length () > 0 ? thousands_sep : 0, grouping);
 		if (precision > 0 && frac_part > 0)
 		{
 			stream << decimal_point;
-			format_frac(stream, frac_part, scale, precision);
+			format_frac (stream, frac_part, scale, precision);
 		}
 	}
-	return stream.str();
+	return stream.str ();
 }
 
-std::string czr::uint128_union::format_balance(czr::uint128_t scale, int precision, bool group_digits)
+std::string czr::uint128_union::format_balance (czr::uint128_t scale, int precision, bool group_digits)
 {
-	auto thousands_sep = std::use_facet<std::numpunct<char>>(std::locale()).thousands_sep();
-	auto decimal_point = std::use_facet<std::numpunct<char>>(std::locale()).decimal_point();
+	auto thousands_sep = std::use_facet<std::numpunct<char>> (std::locale ()).thousands_sep ();
+	auto decimal_point = std::use_facet<std::numpunct<char>> (std::locale ()).decimal_point ();
 	std::string grouping = "\3";
-	return ::format_balance(number(), scale, precision, group_digits, thousands_sep, decimal_point, grouping);
+	return ::format_balance (number (), scale, precision, group_digits, thousands_sep, decimal_point, grouping);
 }
 
-std::string czr::uint128_union::format_balance(czr::uint128_t scale, int precision, bool group_digits, const std::locale & locale)
+std::string czr::uint128_union::format_balance (czr::uint128_t scale, int precision, bool group_digits, const std::locale & locale)
 {
-	auto thousands_sep = std::use_facet<std::moneypunct<char>>(locale).thousands_sep();
-	auto decimal_point = std::use_facet<std::moneypunct<char>>(locale).decimal_point();
-	std::string grouping = std::use_facet<std::moneypunct<char>>(locale).grouping();
-	return ::format_balance(number(), scale, precision, group_digits, thousands_sep, decimal_point, grouping);
+	auto thousands_sep = std::use_facet<std::moneypunct<char>> (locale).thousands_sep ();
+	auto decimal_point = std::use_facet<std::moneypunct<char>> (locale).decimal_point ();
+	std::string grouping = std::use_facet<std::moneypunct<char>> (locale).grouping ();
+	return ::format_balance (number (), scale, precision, group_digits, thousands_sep, decimal_point, grouping);
 }
 
-void czr::uint128_union::clear()
+void czr::uint128_union::clear ()
 {
-	qwords.fill(0);
+	qwords.fill (0);
 }
 
-bool czr::uint128_union::is_zero() const
+bool czr::uint128_union::is_zero () const
 {
 	return qwords[0] == 0 && qwords[1] == 0;
 }
 
-std::string czr::uint128_union::to_string() const
+std::string czr::uint128_union::to_string () const
 {
 	std::string result;
-	encode_hex(result);
+	encode_hex (result);
 	return result;
 }
 
-std::string czr::uint128_union::to_string_dec() const
+std::string czr::uint128_union::to_string_dec () const
 {
 	std::string result;
-	encode_dec(result);
+	encode_dec (result);
 	return result;
 }
