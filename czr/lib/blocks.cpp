@@ -95,21 +95,102 @@ czr::block_hashables::block_hashables (bool & error_a, czr::stream & stream_a)
 
 czr::block_hashables::block_hashables (bool & error_a, boost::property_tree::ptree const & tree_a)
 {
-	//todo: add new feilds /////////////////
+	deserialize_json(error_a, tree_a);
+}
+
+void czr::block_hashables::serialize_json(boost::property_tree::ptree tree_a, std::string & string_a) const
+{
+	tree_a.put("from", from.to_account());
+	tree_a.put("to", to.to_account());
+	tree_a.put("amount", amount.to_string_dec());
+	tree_a.put("previous", previous.to_string());
+
+	boost::property_tree::ptree parents_tree;
+	for (czr::block_hash p : parents)
+		parents_tree.put("", p.to_string());
+	tree_a.put_child("parents", parents_tree);
+
+	tree_a.put("witness_list_block", witness_list_block.to_string());
+
+	boost::property_tree::ptree witness_list_tree;
+	for (czr::account w : witness_list)
+		witness_list_tree.put("", w.to_account());
+	tree_a.put_child("witness_list", witness_list_tree);
+
+	tree_a.put("last_summary", last_summary.to_string());
+	tree_a.put("last_summary_block", last_summary_block.to_string());
+
+	std::string data_str;	//todo:serialize data to string
+	tree_a.put("data", data_str);
+}
+
+void czr::block_hashables::deserialize_json(bool & error_a, boost::property_tree::ptree const & tree_a)
+{
 	try
 	{
 		auto from_l(tree_a.get<std::string>("from"));
-		auto to_l(tree_a.get<std::string>("to"));
-		auto amount_l (tree_a.get<std::string> ("amount"));
 		error_a = from.decode_account(from_l);
-		if (!error_a)
+		if (error_a)
+			return;
+
+		auto to_l(tree_a.get<std::string>("to"));
+		error_a = to.decode_account(to_l);
+		if (error_a)
+			return;
+
+		auto amount_l(tree_a.get<std::string>("amount"));
+		error_a = amount.decode_dec(amount_l);
+		if (error_a)
+			return;
+
+		auto previous_l(tree_a.get<std::string>("previous"));
+		error_a = previous.decode_hex(previous_l);
+		if (error_a)
+			return;
+
+		auto parents_l(tree_a.get_child("parents"));
+		for (auto p : parents_l)
 		{
-			error_a = to.decode_account(to_l);
-			if (!error_a)
-			{
-				error_a = amount.decode_dec(amount_l);
-			}
+			czr::block_hash parent;
+			error_a = parent.decode_hex(p.second.data());
+			if (error_a)
+				break;
+			parents.push_back(parent);
 		}
+		if (error_a)
+			return;
+
+		auto witness_list_block_l(tree_a.get<std::string>("witness_list_block"));
+		error_a = witness_list_block.decode_hex(witness_list_block_l);
+		if (error_a)
+			return;
+
+		auto witness_list_l(tree_a.get_child("witness_list"));
+		for (auto w : witness_list_l)
+		{
+			czr::account witness;
+			error_a = witness.decode_account(w.second.data());
+			if (error_a)
+				break;
+			witness_list.push_back(witness);
+		}
+
+		if (error_a)
+			return;
+
+		auto last_summary_l(tree_a.get<std::string>("last_summary"));
+		error_a = last_summary.decode_hex(last_summary_l);
+		if (error_a)
+			return;
+
+		auto last_summary_block_l(tree_a.get<std::string>("last_summary_block"));
+		error_a = last_summary_block.decode_hex(last_summary_block_l);
+		if (error_a)
+			return;
+
+		//todo:derialize dat from string to bytes;
+		auto data_l(tree_a.get<std::string>("data"));
+		//error_a = data.derialize(data_l) 
 	}
 	catch (std::runtime_error const &)
 	{
@@ -173,13 +254,13 @@ hashables (error_a, tree_a)
 	{
 		try
 		{
-			auto signature_l (tree_a.get<std::string> ("signature"));
-			auto work_l (tree_a.get<std::string> ("work"));
+			auto work_l(tree_a.get<std::string>("work"));
 			error_a = czr::from_string_hex(work_l, work);
-			if (!error_a)
-			{
-				error_a = signature.decode_hex(signature_l);
-			}
+			if (error_a)
+				return;
+
+			auto signature_l(tree_a.get<std::string>("signature"));
+			error_a = signature.decode_hex(signature_l);
 		}
 		catch (std::runtime_error const &)
 		{
@@ -222,22 +303,6 @@ void czr::block::serialize (czr::stream & stream_a) const
 	write (stream_a, boost::endian::native_to_big (work));
 }
 
-void czr::block::serialize_json (std::string & string_a) const
-{
-	//todo:add new feilds///////////////
-	boost::property_tree::ptree tree;
-	tree.put ("from", hashables.from.to_account());
-	tree.put ("to", hashables.to.to_account());
-	tree.put ("amount", hashables.amount.to_string_dec());
-	std::string signature_l;
-	signature.encode_hex (signature_l);
-	tree.put ("signature", signature_l);
-	tree.put ("work", czr::to_string_hex (work));
-	std::stringstream ostream;
-	boost::property_tree::write_json (ostream, tree);
-	string_a = ostream.str ();
-}
-
 bool czr::block::deserialize (czr::stream & stream_a)
 {
 	//todo:deserialize block///////////////
@@ -262,40 +327,42 @@ bool czr::block::deserialize (czr::stream & stream_a)
 	return error;
 }
 
-bool czr::block::deserialize_json (boost::property_tree::ptree const & tree_a)
+void czr::block::serialize_json(std::string & string_a) const
 {
-	auto error (false);
+	boost::property_tree::ptree tree;
+
+	hashables.serialize_json(tree, string_a);
+
+	std::string signature_l;
+	signature.encode_hex(signature_l);
+	tree.put("signature", signature_l);
+	tree.put("work", czr::to_string_hex(work));
+	std::stringstream ostream;
+	boost::property_tree::write_json(ostream, tree);
+	string_a = ostream.str();
+}
+
+void czr::block::deserialize_json (bool & error_a, boost::property_tree::ptree const & tree_a)
+{
 	try
 	{
-		//todo:add new feilds///////////////
-		auto from_l(tree_a.get<std::string>("from"));
-		auto to_l(tree_a.get<std::string>("to"));
-		auto amount_l (tree_a.get<std::string> ("amount"));
+		hashables.deserialize_json(error_a, tree_a);
+		if (error_a)
+			return;
+
 		auto work_l (tree_a.get<std::string> ("work"));
-		auto signature_l (tree_a.get<std::string> ("signature"));
-		error = hashables.from.decode_account(from_l);
-		if (!error)
-		{
-			error = hashables.to.decode_account(to_l);
-			if (!error)
-			{
-				error = hashables.amount.decode_dec(amount_l);
-				if (!error)
-				{
-					error = czr::from_string_hex(work_l, work);
-					if (!error)
-					{
-						error = signature.decode_hex(signature_l);
-					}
-				}
-			}
-		}
+		error_a = czr::from_string_hex(work_l, work);
+		if (error_a)
+			return;
+
+		auto signature_l(tree_a.get<std::string>("signature"));
+		error_a = signature.decode_hex(signature_l);
+
 	}
 	catch (std::runtime_error const &)
 	{
-		error = true;
+		error_a = true;
 	}
-	return error;
 }
 
 void czr::block::visit (czr::block_visitor & visitor_a) const

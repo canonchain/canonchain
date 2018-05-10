@@ -40,6 +40,8 @@ public:
 		std::vector<uint8_t> const & data_a);
 	block_hashables (bool &, czr::stream &);
 	block_hashables (bool &, boost::property_tree::ptree const &);
+	void serialize_json(boost::property_tree::ptree tree_a, std::string & string_a) const;
+	void deserialize_json(bool & error_a, boost::property_tree::ptree const & tree_a);
 	void hash (blake2b_state &) const;
 
 	czr::account from;
@@ -76,7 +78,8 @@ public:
 	void serialize(czr::stream &) const;
 	void serialize_json(std::string &) const;
 	bool deserialize(czr::stream &);
-	bool deserialize_json(boost::property_tree::ptree const &);
+	void deserialize_json(bool & error_a, boost::property_tree::ptree const & tree_a);
+
 	void visit(czr::block_visitor &) const;
 	czr::signature block_signature() const;
 	void signature_set(czr::uint512_union const &);

@@ -33,8 +33,29 @@ namespace
 })%%%";
 
 	char const * live_genesis_data = R"%%%({
-	"source": "E89208DD038FBB269987689621D52292AE9C35941A7484756ECCED92A65093BA",
-	"account": "czr_3t6k35gi95xu6tergt6p69ck76ogmitsa8mnijtpxm9fkcm736xtoncuohr3",
+    "from":"0000000000000000000000000000000000000000000000000000000000000000",
+    "to":"czr_3t6k35gi95xu6tergt6p69ck76ogmitsa8mnijtpxm9fkcm736xtoncuohr3",
+    "amount":"1000000",
+    "previous":"000000000000000000000000000000000000000000000000000000000000",
+    "parents":[],
+    "witness_list_block":"0000000000000000000000000000000000000000000000000000000000000000",
+    "witness_list":[
+		"czr_3t6k35gi95xu6tergt6p69ck76ogmitsa8mnijtpxm9fkcm736xtoncuoh01",
+		"czr_3t6k35gi95xu6tergt6p69ck76ogmitsa8mnijtpxm9fkcm736xtoncuoh02",
+		"czr_3t6k35gi95xu6tergt6p69ck76ogmitsa8mnijtpxm9fkcm736xtoncuoh03",
+		"czr_3t6k35gi95xu6tergt6p69ck76ogmitsa8mnijtpxm9fkcm736xtoncuoh04",
+		"czr_3t6k35gi95xu6tergt6p69ck76ogmitsa8mnijtpxm9fkcm736xtoncuoh05",
+		"czr_3t6k35gi95xu6tergt6p69ck76ogmitsa8mnijtpxm9fkcm736xtoncuoh06",
+		"czr_3t6k35gi95xu6tergt6p69ck76ogmitsa8mnijtpxm9fkcm736xtoncuoh07",
+		"czr_3t6k35gi95xu6tergt6p69ck76ogmitsa8mnijtpxm9fkcm736xtoncuoh08",
+		"czr_3t6k35gi95xu6tergt6p69ck76ogmitsa8mnijtpxm9fkcm736xtoncuoh09",
+		"czr_3t6k35gi95xu6tergt6p69ck76ogmitsa8mnijtpxm9fkcm736xtoncuoh10",
+		"czr_3t6k35gi95xu6tergt6p69ck76ogmitsa8mnijtpxm9fkcm736xtoncuoh11",
+		"czr_3t6k35gi95xu6tergt6p69ck76ogmitsa8mnijtpxm9fkcm736xtoncuoh12",
+    ],
+    "last_summary":"0000000000000000000000000000000000000000000000000000000000000000",
+    "last_summary_block":"0000000000000000000000000000000000000000000000000000000000000000",
+    "data":"",
 	"work": "62f05417dd3fb691",
 	"signature": "9F0C933C8ADE004D808EA1985FA746A7E95BA2A38F867640F53EC8F180BDFE9E2C1268DEAD7C2664F356E37ABA362BC58E46DBA03E523A7B5A19E4B6EB12BB02"
 })%%%";
@@ -183,6 +204,8 @@ czr::mdb_val czr::account_info::val() const
 
 czr::genesis::genesis()
 {
+	//todo:genesis
+
 	boost::property_tree::ptree tree;
 	std::stringstream istream(czr::genesis_block);
 	boost::property_tree::read_json(istream, tree);
@@ -200,6 +223,7 @@ czr::genesis::genesis()
 
 void czr::genesis::initialize(MDB_txn * transaction_a, czr::block_store & store_a) const
 {
+	//todo:genesis initialize
 	auto hash_l(hash());
 	assert(store_a.account_begin(transaction_a) == store_a.account_end());
 	store_a.block_put(transaction_a, hash_l, *block);
