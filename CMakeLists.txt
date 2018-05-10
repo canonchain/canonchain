@@ -242,7 +242,6 @@ SET (CZR_LIB_SOURCES
 	czr/lib/interface.cpp
 	czr/lib/numbers.cpp
 	czr/lib/numbers.hpp
-	czr/lib/utility.cpp
 	czr/lib/utility.hpp
 	czr/lib/work.hpp
 	czr/lib/work.cpp)
