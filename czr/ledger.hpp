@@ -29,6 +29,14 @@ namespace czr
 		void checksum_update(MDB_txn *, czr::block_hash const &);
 		czr::checksum checksum(MDB_txn *, czr::account const &, czr::account const &);
 		void dump_account_chain(czr::account const &);
+
+		czr::block_hash determine_best_parent(MDB_txn * transaction_a, std::vector<czr::block_hash> const & pblock_hashs, czr::witness_list_info const & wl_info);
+		uint64_t determine_witness_level(MDB_txn * transaction_a, czr::block_hash const & best_parent_hash, czr::witness_list_info const & wl_info);
+		bool check_witness_list_mutations_along_mc(MDB_txn * transaction_a, czr::block_hash const & best_parent_hash, czr::block const & block_a);
+		void find_unstable_child_blocks(MDB_txn * transaction_a, czr::block_hash const & stable_hash, czr::block_hash & mc_child_hash, std::shared_ptr<std::vector<czr::block_hash>> branch_child_hashs);
+		uint64_t find_mc_min_wl(MDB_txn * transaction_a, czr::block_hash const & best_block_hash, czr::witness_list_info const & witness_list);
+		bool check_stable_from_later(MDB_txn * transaction_a, czr::block_hash const & earlier_hash, czr::block_hash const & later_hash);
+
 		static czr::uint128_t const unit;
 		czr::block_store & store;
 	};

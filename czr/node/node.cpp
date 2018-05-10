@@ -816,7 +816,7 @@ void czr::block_processor::process_receive_many(std::deque<czr::block_processor_
 
 czr::process_return czr::block_processor::process_receive_one(MDB_txn * transaction_a, czr::publish const & message)
 {
-	czr::consensus consensus(node, node.ledger, transaction_a, [this](std::shared_ptr<czr::block> stable_block_a)
+	czr::consensus consensus(node, transaction_a, [this](std::shared_ptr<czr::block> stable_block_a)
 	{
 	});
 

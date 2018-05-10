@@ -188,7 +188,6 @@ public:
 	std::vector<czr::block_hash> missing_parents_and_previous;
 	czr::account account;
 	czr::amount amount;
-	bool is_fork;
 };
 
 /**
