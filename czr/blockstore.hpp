@@ -126,7 +126,7 @@ namespace czr
 		void main_chain_put(MDB_txn *, uint64_t const &, czr::block_hash const &);
 		void main_chain_del(MDB_txn *, uint64_t const &);
 
-		void last_stable_mci_put(MDB_txn *, uint64_t);
+		void last_stable_mci_put(MDB_txn * transaction_a, uint64_t const & last_stable_mci_value);
 		uint64_t last_stable_mci_get(MDB_txn *);
 
 		czr::store_iterator block_child_begin(MDB_txn * transaction_a, czr::block_child_key const & key_a);
@@ -138,6 +138,9 @@ namespace czr
 		bool fork_successor_get(MDB_txn *, czr::block_hash const &, czr::block_hash);
 		void fork_successor_put(MDB_txn *, czr::block_hash const &, czr::block_hash const &);
 		void fork_successor_del(MDB_txn *, czr::block_hash const &);
+
+		bool genesis_hash_get(MDB_txn * transaction_a, czr::block_hash & genesis_hash);
+		void genesis_hash_put(MDB_txn * transaction_a, czr::block_hash const & genesis_hash);
 
 		void flush(MDB_txn *);
 		std::mutex cache_mutex;
@@ -189,6 +192,9 @@ namespace czr
 		//key -> value
 		MDB_dbi prop;
 
+		
+		//genesis hash key
+		static czr::uint256_union const genesis_hash_key;
 		//last statble main chain index key
 		static czr::uint256_union const last_stable_mci_key;
 	};

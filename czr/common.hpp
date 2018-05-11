@@ -6,6 +6,7 @@
 #include <boost/property_tree/ptree.hpp>
 
 #include <unordered_map>
+#include <set>
 
 #include <blake2/blake2.h>
 
@@ -124,7 +125,7 @@ namespace czr
 	{
 	public:
 		account_state();
-		account_state(czr::account const &, czr::block_hash const &,czr::account_state_hash const &, czr::amount const &);
+		account_state(czr::account const & account_a, czr::block_hash const & block_hash_a, czr::account_state_hash const & pervious_a, czr::amount const & balance_a);
 		account_state(MDB_val const &);
 		czr::mdb_val val() const;
 		czr::account_state_hash hash();
@@ -141,6 +142,16 @@ namespace czr
 		skiplist_info(MDB_val const &);
 		czr::mdb_val val() const;
 		std::vector<czr::block_hash> list;
+	};
+
+	class summary
+	{
+	public:
+		static czr::summary_hash gen_summary_hash(czr::block_hash const & block_hash,
+			std::vector<czr::summary_hash> const & parent_hashs,
+			std::set<czr::summary_hash> const & skip_list,
+			bool const & is_fork, bool const & is_error, bool const & is_fail,
+			czr::account_state_hash const & from_state_hash, czr::account_state_hash const & to_state_hash);
 	};
 
 	extern czr::keypair const & zero_key;
@@ -162,10 +173,7 @@ namespace czr
 	class genesis
 	{
 	public:
-		explicit genesis();
-		void initialize(MDB_txn *, czr::block_store &) const;
-		czr::block_hash hash() const;
-		std::unique_ptr<czr::block> block;
-		czr::block_state state;
+		static void try_initialize(MDB_txn * transaction_a, czr::block_store & store_a);
+		static czr::block_hash block_hash;
 	};
 }

@@ -32,7 +32,7 @@ czr::process_return czr::consensus::validate(czr::publish const & message)
 		return result;
 	}
 
-	std::unique_ptr<czr::block> block(message.block.get());
+	std::shared_ptr<czr::block> block(message.block);
 	auto hash(block->hash());
 
 	//todo:to check if block is in invalid block cache;
@@ -108,7 +108,7 @@ czr::process_return czr::consensus::validate(czr::publish const & message)
 			}
 		}
 
-		czr::summary_hash calc_summary_hash = gen_summary_hash(hash, p_summary_hashs, summary_skiplist, 
+		czr::summary_hash calc_summary_hash = czr::summary::gen_summary_hash(hash, p_summary_hashs, summary_skiplist, 
 			message.is_fork, message.is_invalid, message.is_fail, message.from_state, message.to_state);
 
 		if (message.summary_hash != calc_summary_hash)
@@ -143,7 +143,7 @@ czr::process_return czr::consensus::validate(czr::publish const & message)
 	}
 	if (result.missing_parents_and_previous.size() > 0)
 	{
-		//todo:check any of missing parents is known bad block, if so return invalid block;
+		//todo:check any of missing parents is known invalid block, if so return invalid block;
 
 		result.code = czr::process_result::missing_parents_and_previous;
 		return result;
@@ -199,6 +199,9 @@ czr::process_return czr::consensus::validate(czr::publish const & message)
 		return result;
 	}
 
+	assert(last_summary_block_state.main_chain_index);
+	uint64_t last_summary_mci = *last_summary_block_state.main_chain_index;
+
 	uint64_t max_parent_limci;
 	for (czr::block_hash & pblock_hash : block->parents_and_previous())
 	{
@@ -213,8 +216,6 @@ czr::process_return czr::consensus::validate(czr::publish const & message)
 		}
 	}
 
-	assert(last_summary_block_state.main_chain_index);
-	uint64_t last_summary_mci = *last_summary_block_state.main_chain_index;
 	if (last_summary_mci > max_parent_limci)
 	{
 		result.code = czr::process_result::invalid_block;
@@ -425,9 +426,13 @@ czr::process_return czr::consensus::validate(czr::publish const & message)
 		czr::block_state parent_last_summary_state;
 		bool error(ledger.store.block_state_get(transaction, pblock->hashables.last_summary_block, parent_last_summary_state));
 		assert(!error);
-		assert(parent_last_summary_state.main_chain_index);
-		if (*parent_last_summary_state.main_chain_index > max_parent_last_summary_mci)
-			max_parent_last_summary_mci = *parent_last_summary_state.main_chain_index;
+
+		if (parent_last_summary_state.level > 0) //not genesis
+		{
+			assert(parent_last_summary_state.main_chain_index);
+			if (*parent_last_summary_state.main_chain_index > max_parent_last_summary_mci)
+				max_parent_last_summary_mci = *parent_last_summary_state.main_chain_index;
+		}
 	}
 	if (last_summary_mci < max_parent_last_summary_mci)
 	{
@@ -993,7 +998,7 @@ void czr::consensus::advance_mc_stable_block(czr::block_hash const & mc_stable_h
 			ledger.store.skiplist_put(transaction, block_hash, czr::skiplist_info(block_skiplist));
 
 			//summary hash
-			czr::summary_hash summary_hash = gen_summary_hash(block_hash, p_summary_hashs, summary_skiplist,
+			czr::summary_hash summary_hash = czr::summary::gen_summary_hash(block_hash, p_summary_hashs, summary_skiplist,
 				block_state.is_fork, block_state.is_invalid, block_state.is_fail, block_state.from_state, block_state.to_state);
 			ledger.store.block_summary_put(transaction, block_hash, summary_hash);
 			ledger.store.summary_block_put(transaction, summary_hash, block_hash);
@@ -1138,32 +1143,6 @@ void czr::consensus::update_stable_block(czr::block_hash const & block_hash, uin
 	{
 		update_stable_block(pblock_hash, mc_index, stable_block_hashs);
 	}
-}
-
-czr::summary_hash czr::consensus::gen_summary_hash(czr::block_hash const & block_hash, std::vector<czr::summary_hash> const & parent_hashs, 
-	std::set<czr::summary_hash> const & skiplist, bool const & is_fork, bool const & is_invalid, bool const & is_fail,
-	czr::account_state_hash const & from_state_hash, czr::account_state_hash const & to_state_hash)
-{
-	czr::summary_hash result;
-	blake2b_state hash_l;
-	auto status(blake2b_init(&hash_l, sizeof(result.bytes)));
-	assert(status == 0);
-
-	blake2b_update(&hash_l, block_hash.bytes.data(), sizeof(block_hash.bytes));
-	for (auto & parent : parent_hashs)
-		blake2b_update(&hash_l, parent.bytes.data(), sizeof(parent.bytes));
-	for (auto & s : skiplist)
-		blake2b_update(&hash_l, s.bytes.data(), sizeof(s.bytes));
-	blake2b_update(&hash_l, &is_fork, sizeof(is_fork));
-	blake2b_update(&hash_l, &is_invalid, sizeof(is_invalid));
-	blake2b_update(&hash_l, &is_fail, sizeof(is_fail));
-	blake2b_update(&hash_l, from_state_hash.bytes.data(), sizeof(from_state_hash));
-	blake2b_update(&hash_l, to_state_hash.bytes.data(), sizeof(to_state_hash));
-
-	status = blake2b_final(&hash_l, result.bytes.data(), sizeof(result.bytes));
-	assert(status == 0);
-
-	return result;
 }
 
 std::vector<uint64_t> czr::consensus::cal_skip_list_mcis(uint64_t const & mci)

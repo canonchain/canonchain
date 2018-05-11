@@ -1027,12 +1027,7 @@ czr::node::node(czr::node_init & init_a, boost::asio::io_service & service_a, bo
 			BOOST_LOG(log) << "Constructing node";
 		}
 		czr::transaction transaction(store.environment, nullptr, true);
-		if (store.account_begin(transaction) == store.account_end())
-		{
-			// Store was empty meaning we just created it, add the genesis block
-			czr::genesis genesis;
-			genesis.initialize(transaction, store);
-		}
+		czr::genesis::try_initialize(transaction, store);
 	}
 }
 

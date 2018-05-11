@@ -381,15 +381,19 @@ bool czr::ledger::check_stable_from_later(MDB_txn * transaction_a, czr::block_ha
 	assert(later_block != nullptr);
 
 	//get max later limci 
-	uint64_t max_later_limci;
+	uint64_t max_later_parents_limci;
 	for (czr::block_hash & l_pblock_hash : later_block->parents_and_previous())
 	{
 		czr::block_state l_pblock_state;
 		bool error(store.block_state_get(transaction_a, l_pblock_hash, l_pblock_state));
-		assert(!error && l_pblock_state.latest_included_mc_index);
+		assert(!error);
 
-		if (*l_pblock_state.latest_included_mc_index > max_later_limci)
-			max_later_limci = *l_pblock_state.latest_included_mc_index;
+		if (l_pblock_state.level > 0) //not genesis
+		{
+			assert(l_pblock_state.latest_included_mc_index);
+			if (*l_pblock_state.latest_included_mc_index > max_later_parents_limci)
+				max_later_parents_limci = *l_pblock_state.latest_included_mc_index;
+		}
 	}
 
 	//get later best parent //test: does best parent need compatible?

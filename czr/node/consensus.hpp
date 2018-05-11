@@ -24,6 +24,7 @@ namespace czr
 		czr::ledger & ledger;
 		MDB_txn * transaction;
 		std::function<void(std::shared_ptr<czr::block>)> block_stable_observer;
+
 	private:
 		czr::process_return validate(czr::publish const & message);
 		void save_block(czr::block const & block_a);
@@ -34,7 +35,6 @@ namespace czr
 		void advance_mc_stable_block(czr::block_hash const & mc_stable_hash, uint64_t const & mci);
 		void rollback(czr::block_hash const &);
 		void change_successor(czr::block_hash const &);
-		czr::summary_hash gen_summary_hash(czr::block_hash const & block_hash, std::vector<czr::summary_hash> const & parent_hashs, std::set<czr::summary_hash> const & skip_list, bool const & is_fork, bool const & is_error, bool const & is_fail, czr::account_state_hash const & from_state_hash, czr::account_state_hash const & to_state_hash);
 		std::vector<uint64_t> cal_skip_list_mcis(uint64_t const &);
 	};
 }

@@ -853,7 +853,7 @@ void czr::block_store::main_chain_del(MDB_txn * transaction_a, uint64_t const & 
 }
 
 
-void czr::block_store::last_stable_mci_put(MDB_txn * transaction_a, uint64_t  last_stable_mci_value)
+void czr::block_store::last_stable_mci_put(MDB_txn * transaction_a, uint64_t const & last_stable_mci_value)
 {
 	auto status(mdb_put(transaction_a, prop, czr::mdb_val(last_stable_mci_key), czr::mdb_val(last_stable_mci_value), 0));
 	assert(status == 0);
@@ -882,6 +882,7 @@ void czr::block_store::block_child_put(MDB_txn * transaction_a, czr::block_child
 	assert(status == 0);
 }
 
+
 bool czr::block_store::skiplist_get(MDB_txn * transaction_a, czr::block_hash const & hash_a, czr::skiplist_info skiplist_a)
 {
 	czr::mdb_val value;
@@ -904,6 +905,7 @@ void czr::block_store::skiplist_put(MDB_txn * transaction_a, czr::block_hash con
 	auto status(mdb_put(transaction_a, skiplist, czr::mdb_val(hash_a), skiplist_a.val(), 0));
 	assert(status == 0);
 }
+
 
 bool czr::block_store::fork_successor_get(MDB_txn * transaction_a, czr::block_hash const & pervious_hash_a, czr::block_hash hash_a)
 {
@@ -935,4 +937,28 @@ void czr::block_store::fork_successor_del(MDB_txn * transaction_a, czr::block_ha
 }
 
 
-czr::uint256_union const czr::block_store::last_stable_mci_key(0);
+bool czr::block_store::genesis_hash_get(MDB_txn * transaction_a, czr::block_hash & genesis_hash)
+{
+	czr::mdb_val value;
+	auto status(mdb_get(transaction_a, prop, czr::mdb_val(genesis_hash_key), value));
+	bool result;
+	if (status == MDB_NOTFOUND)
+	{
+		result = true;
+	}
+	else
+	{
+		genesis_hash = value.uint256();
+		assert(!result);
+	}
+	return result;
+}
+
+void czr::block_store::genesis_hash_put(MDB_txn * transaction_a, czr::block_hash const & genesis_hash)
+{
+	auto status(mdb_put(transaction_a, prop, czr::mdb_val(genesis_hash_key), czr::mdb_val(genesis_hash), 0));
+	assert(status == 0);
+}
+
+czr::uint256_union const czr::block_store::genesis_hash_key(0); 
+czr::uint256_union const czr::block_store::last_stable_mci_key(1);
