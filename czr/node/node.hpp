@@ -255,9 +255,7 @@ namespace czr
 	{
 	public:
 		node_init();
-		bool error();
-		bool block_store_init;
-		bool wallet_init;
+		bool error;
 	};
 	class node_config
 	{

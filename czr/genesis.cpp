@@ -3,8 +3,8 @@
 #include <boost/property_tree/json_parser.hpp>
 
 char const * test_genesis_data = R"%%%({
-    "from":"0000000000000000000000000000000000000000000000000000000000000000",
-    "to":"czr_3t6k35gi95xu6tergt6p69ck76ogmitsa8mnijtpxm9fkcm736xtoncuohr1",
+    "from":"czr_3e3j5tkog48pnny9dmfzj1r16pg8t1e76dz5tmac6iq689wyjfpiij4txtdo",
+    "to":"czr_3e3j5tkog48pnny9dmfzj1r16pg8t1e76dz5tmac6iq689wyjfpiij4txtdo",
     "amount":"1000000",
     "previous":"000000000000000000000000000000000000000000000000000000000000",
     "parents":[],
@@ -21,7 +21,7 @@ char const * test_genesis_data = R"%%%({
 		"czr_3t6k35gi95xu6tergt6p69ck76ogmitsa8mnijtpxm9fkcm736xtoncuoh09",
 		"czr_3t6k35gi95xu6tergt6p69ck76ogmitsa8mnijtpxm9fkcm736xtoncuoh10", 
 		"czr_3t6k35gi95xu6tergt6p69ck76ogmitsa8mnijtpxm9fkcm736xtoncuoh11",
-		"czr_3t6k35gi95xu6tergt6p69ck76ogmitsa8mnijtpxm9fkcm736xtoncuoh12",
+		"czr_3t6k35gi95xu6tergt6p69ck76ogmitsa8mnijtpxm9fkcm736xtoncuoh12"
     ],
     "last_summary":"0000000000000000000000000000000000000000000000000000000000000000",
     "last_summary_block":"0000000000000000000000000000000000000000000000000000000000000000",
@@ -31,8 +31,8 @@ char const * test_genesis_data = R"%%%({
 })%%%";
 
 char const * beta_genesis_data = R"%%%({
-    "from":"0000000000000000000000000000000000000000000000000000000000000000",
-    "to":"czr_3t6k35gi95xu6tergt6p69ck76ogmitsa8mnijtpxm9fkcm736xtoncuohr2",
+    "from":"czr_11rjpbh1t9ixgwkdqbfxcawobwgusz13sg595ocytdbkrxcbzekkcqkc3dn1",
+    "to":"czr_11rjpbh1t9ixgwkdqbfxcawobwgusz13sg595ocytdbkrxcbzekkcqkc3dn1",
     "amount":"1000000",
     "previous":"000000000000000000000000000000000000000000000000000000000000",
     "parents":[],
@@ -49,7 +49,7 @@ char const * beta_genesis_data = R"%%%({
 		"czr_3t6k35gi95xu6tergt6p69ck76ogmitsa8mnijtpxm9fkcm736xtoncuoh09",
 		"czr_3t6k35gi95xu6tergt6p69ck76ogmitsa8mnijtpxm9fkcm736xtoncuoh10",
 		"czr_3t6k35gi95xu6tergt6p69ck76ogmitsa8mnijtpxm9fkcm736xtoncuoh11",
-		"czr_3t6k35gi95xu6tergt6p69ck76ogmitsa8mnijtpxm9fkcm736xtoncuoh12",
+		"czr_3t6k35gi95xu6tergt6p69ck76ogmitsa8mnijtpxm9fkcm736xtoncuoh12"
     ],
     "last_summary":"0000000000000000000000000000000000000000000000000000000000000000",
     "last_summary_block":"0000000000000000000000000000000000000000000000000000000000000000",
@@ -59,25 +59,25 @@ char const * beta_genesis_data = R"%%%({
 })%%%";
 
 char const * live_genesis_data = R"%%%({
-    "from":"0000000000000000000000000000000000000000000000000000000000000000",
+    "from":"czr_3t6k35gi95xu6tergt6p69ck76ogmitsa8mnijtpxm9fkcm736xtoncuohr3",
     "to":"czr_3t6k35gi95xu6tergt6p69ck76ogmitsa8mnijtpxm9fkcm736xtoncuohr3",
     "amount":"1000000",
     "previous":"000000000000000000000000000000000000000000000000000000000000",
     "parents":[],
     "witness_list_block":"0000000000000000000000000000000000000000000000000000000000000000",
     "witness_list":[
-		"czr_3t6k35gi95xu6tergt6p69ck76ogmitsa8mnijtpxm9fkcm736xtoncuoh01",
-		"czr_3t6k35gi95xu6tergt6p69ck76ogmitsa8mnijtpxm9fkcm736xtoncuoh02",
-		"czr_3t6k35gi95xu6tergt6p69ck76ogmitsa8mnijtpxm9fkcm736xtoncuoh03",
-		"czr_3t6k35gi95xu6tergt6p69ck76ogmitsa8mnijtpxm9fkcm736xtoncuoh04",
-		"czr_3t6k35gi95xu6tergt6p69ck76ogmitsa8mnijtpxm9fkcm736xtoncuoh05",
-		"czr_3t6k35gi95xu6tergt6p69ck76ogmitsa8mnijtpxm9fkcm736xtoncuoh06",
-		"czr_3t6k35gi95xu6tergt6p69ck76ogmitsa8mnijtpxm9fkcm736xtoncuoh07",
-		"czr_3t6k35gi95xu6tergt6p69ck76ogmitsa8mnijtpxm9fkcm736xtoncuoh08",
-		"czr_3t6k35gi95xu6tergt6p69ck76ogmitsa8mnijtpxm9fkcm736xtoncuoh09",
-		"czr_3t6k35gi95xu6tergt6p69ck76ogmitsa8mnijtpxm9fkcm736xtoncuoh10",
-		"czr_3t6k35gi95xu6tergt6p69ck76ogmitsa8mnijtpxm9fkcm736xtoncuoh11",
-		"czr_3t6k35gi95xu6tergt6p69ck76ogmitsa8mnijtpxm9fkcm736xtoncuoh12",
+		"czr_3t6k35gi95xu6tergt6p69ck76ogmitsa8mnijtpxm9fkcm736xtoncuohr3",
+		"czr_3t6k35gi95xu6tergt6p69ck76ogmitsa8mnijtpxm9fkcm736xtoncuohr3",
+		"czr_3t6k35gi95xu6tergt6p69ck76ogmitsa8mnijtpxm9fkcm736xtoncuohr3",
+		"czr_3t6k35gi95xu6tergt6p69ck76ogmitsa8mnijtpxm9fkcm736xtoncuohr3",
+		"czr_3t6k35gi95xu6tergt6p69ck76ogmitsa8mnijtpxm9fkcm736xtoncuohr3",
+		"czr_3t6k35gi95xu6tergt6p69ck76ogmitsa8mnijtpxm9fkcm736xtoncuohr3",
+		"czr_3t6k35gi95xu6tergt6p69ck76ogmitsa8mnijtpxm9fkcm736xtoncuohr3",
+		"czr_3t6k35gi95xu6tergt6p69ck76ogmitsa8mnijtpxm9fkcm736xtoncuohr3",
+		"czr_3t6k35gi95xu6tergt6p69ck76ogmitsa8mnijtpxm9fkcm736xtoncuohr3",
+		"czr_3t6k35gi95xu6tergt6p69ck76ogmitsa8mnijtpxm9fkcm736xtoncuohr3",
+		"czr_3t6k35gi95xu6tergt6p69ck76ogmitsa8mnijtpxm9fkcm736xtoncuohr3",
+		"czr_3t6k35gi95xu6tergt6p69ck76ogmitsa8mnijtpxm9fkcm736xtoncuohr3"
     ],
     "last_summary":"0000000000000000000000000000000000000000000000000000000000000000",
     "last_summary_block":"0000000000000000000000000000000000000000000000000000000000000000",
@@ -88,7 +88,7 @@ char const * live_genesis_data = R"%%%({
 
 void czr::genesis::try_initialize(MDB_txn * transaction_a, czr::block_store & store_a)
 {
-	bool exists(store_a.genesis_hash_get(transaction_a, block_hash));
+	bool exists(!store_a.genesis_hash_get(transaction_a, block_hash));
 	if (exists)
 		return;
 
@@ -97,7 +97,10 @@ void czr::genesis::try_initialize(MDB_txn * transaction_a, czr::block_store & st
 
 	boost::property_tree::ptree tree;
 	boost::property_tree::read_json(istream, tree);
-	std::unique_ptr<czr::block> block(czr::deserialize_block_json(tree));
+	bool error;
+	std::unique_ptr<czr::block> block(new czr::block(error, tree));
+	if (error)
+		throw std::runtime_error("deserialize genesis block error");
 
 	block_hash = block->hash();
 	store_a.genesis_hash_put(transaction_a, block_hash);

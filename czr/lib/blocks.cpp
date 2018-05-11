@@ -218,7 +218,7 @@ void czr::block_hashables::hash (blake2b_state & hash_a) const
 	blake2b_update(&hash_a, last_summary.bytes.data(), sizeof(last_summary.bytes));
 	blake2b_update(&hash_a, last_summary_block.bytes.data(), sizeof(last_summary_block.bytes));
 
-	blake2b_update(&hash_a, data.data(), sizeof(data));
+	blake2b_update(&hash_a, data.data(), data.size());
 }
 
 czr::block::block(czr::account const & from_a, czr::account const & to_a, czr::amount const & amount_a, 

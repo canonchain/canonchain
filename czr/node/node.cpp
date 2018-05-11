@@ -527,14 +527,8 @@ bool czr::logging::log_to_cerr() const
 }
 
 czr::node_init::node_init() :
-	block_store_init(false),
-	wallet_init(false)
+	error(false)
 {
-}
-
-bool czr::node_init::error()
-{
-	return block_store_init || wallet_init;
 }
 
 czr::node_config::node_config() :
@@ -894,10 +888,10 @@ czr::node::node(czr::node_init & init_a, boost::asio::io_service & service_a, bo
 	config(config_a),
 	alarm(alarm_a),
 	work(work_a),
-	store(init_a.block_store_init, application_path_a / "data.ldb", config_a.lmdb_max_dbs),
+	store(init_a.error, application_path_a / "data.ldb", config_a.lmdb_max_dbs),
 	gap_cache(*this),
 	ledger(store),
-	wallets(init_a.block_store_init, *this),
+	wallets(init_a.error, *this),
 	network(*this, config.peering_port),
 	peers(network.endpoint()),
 	application_path(application_path_a),
@@ -1020,14 +1014,23 @@ czr::node::node(czr::node_init & init_a, boost::asio::io_service & service_a, bo
 
 	BOOST_LOG(log) << "Node starting, version: " << CANONCHAIN_VERSION_MAJOR << "." << CANONCHAIN_VERSION_MINOR;
 	BOOST_LOG(log) << boost::str(boost::format("Work pool running %1% threads") % work.threads.size());
-	if (!init_a.error())
+	if (!init_a.error)
 	{
 		if (config.logging.node_lifetime_tracing())
 		{
 			BOOST_LOG(log) << "Constructing node";
 		}
-		czr::transaction transaction(store.environment, nullptr, true);
-		czr::genesis::try_initialize(transaction, store);
+
+		try
+		{
+			czr::transaction transaction(store.environment, nullptr, true);
+			czr::genesis::try_initialize(transaction, store);
+		}
+		catch (const std::runtime_error & e)
+		{
+			BOOST_LOG(log) << boost::str(boost::format("Init genesis error: %1%") % e.what());
+			init_a.error = true;
+		}
 	}
 }
 

@@ -92,7 +92,7 @@ void czr_daemon::daemon::run(boost::filesystem::path const & data_path)
 		try
 		{
 			auto node(std::make_shared<czr::node>(init, service, data_path, alarm, config.node, opencl_work));
-			if (!init.error())
+			if (!init.error)
 			{
 				node->start();
 				std::unique_ptr<czr::rpc> rpc = get_rpc(service, *node, config.rpc);
