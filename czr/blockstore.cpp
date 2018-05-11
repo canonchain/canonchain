@@ -192,7 +192,6 @@ czr::block_store::block_store(bool & error_a, boost::filesystem::path const & pa
 	account_state(0),
 	latest_account_state(0),
 	unchecked(0),
-	checksum(0),
 	block_witnesslist(0),
 	witnesslisthash_block(0),
 	block_state(0),
@@ -213,7 +212,6 @@ czr::block_store::block_store(bool & error_a, boost::filesystem::path const & pa
 		error_a |= mdb_dbi_open(transaction, "latest_account_state", MDB_CREATE, &latest_account_state) != 0;
 		error_a |= mdb_dbi_open(transaction, "blocks", MDB_CREATE, &blocks) != 0;
 		error_a |= mdb_dbi_open(transaction, "unchecked", MDB_CREATE | MDB_DUPSORT, &unchecked) != 0;
-		error_a |= mdb_dbi_open(transaction, "checksum", MDB_CREATE, &checksum) != 0;
 		error_a |= mdb_dbi_open(transaction, "meta", MDB_CREATE, &meta) != 0;
 		error_a |= mdb_dbi_open(transaction, "block_witnesslist", MDB_CREATE, &block_witnesslist) != 0;
 		error_a |= mdb_dbi_open(transaction, "witnesslisthash_block", MDB_CREATE, &witnesslisthash_block) != 0;
@@ -226,11 +224,6 @@ czr::block_store::block_store(bool & error_a, boost::filesystem::path const & pa
 		error_a |= mdb_dbi_open(transaction, "skiplist", MDB_CREATE, &skiplist) != 0;
 		error_a |= mdb_dbi_open(transaction, "fork_successor", MDB_CREATE, &fork_successor) != 0;
 		error_a |= mdb_dbi_open(transaction, "prop", MDB_CREATE, &prop) != 0;
-
-		if (!error_a)
-		{
-			checksum_put(transaction, 0, 0, 0);
-		}
 	}
 }
 
@@ -581,46 +574,6 @@ czr::store_iterator czr::block_store::unchecked_end()
 	czr::store_iterator result(nullptr);
 	return result;
 }
-
-
-void czr::block_store::checksum_put(MDB_txn * transaction_a, uint64_t prefix, uint8_t mask, czr::uint256_union const & hash_a)
-{
-	assert((prefix & 0xff) == 0);
-	uint64_t key(prefix | mask);
-	auto status(mdb_put(transaction_a, checksum, czr::mdb_val(sizeof(key), &key), czr::mdb_val(hash_a), 0));
-	assert(status == 0);
-}
-
-bool czr::block_store::checksum_get(MDB_txn * transaction_a, uint64_t prefix, uint8_t mask, czr::uint256_union & hash_a)
-{
-	assert((prefix & 0xff) == 0);
-	uint64_t key(prefix | mask);
-	czr::mdb_val value;
-	auto status(mdb_get(transaction_a, checksum, czr::mdb_val(sizeof(key), &key), value));
-	assert(status == 0 || status == MDB_NOTFOUND);
-	bool result;
-	if (status == 0)
-	{
-		result = false;
-		czr::bufferstream stream(reinterpret_cast<uint8_t const *> (value.data()), value.size());
-		auto error(czr::read(stream, hash_a));
-		assert(!error);
-	}
-	else
-	{
-		result = true;
-	}
-	return result;
-}
-
-void czr::block_store::checksum_del(MDB_txn * transaction_a, uint64_t prefix, uint8_t mask)
-{
-	assert((prefix & 0xff) == 0);
-	uint64_t key(prefix | mask);
-	auto status(mdb_del(transaction_a, checksum, czr::mdb_val(sizeof(key), &key), nullptr));
-	assert(status == 0);
-}
-
 
 void czr::block_store::flush(MDB_txn * transaction_a)
 {

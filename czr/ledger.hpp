@@ -26,8 +26,6 @@ namespace czr
 		bool block_exists(czr::block_hash const &);
 		void change_account_latest(MDB_txn *, czr::account const &, czr::block_hash const &, uint64_t const &);
 		void try_set_account_good_stable_mci(MDB_txn * transaction_a, czr::account const & account_a, uint64_t good_stable_mci);
-		void checksum_update(MDB_txn *, czr::block_hash const &);
-		czr::checksum checksum(MDB_txn *, czr::account const &, czr::account const &);
 		void dump_account_chain(czr::account const &);
 
 		czr::block_hash determine_best_parent(MDB_txn * transaction_a, std::vector<czr::block_hash> const & pblock_hashs, czr::witness_list_info const & wl_info);

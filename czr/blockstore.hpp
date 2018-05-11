@@ -92,10 +92,6 @@ namespace czr
 		size_t unchecked_count(MDB_txn *);
 		std::unordered_multimap<czr::block_hash, std::shared_ptr<czr::block>> unchecked_cache;
 
-		void checksum_put(MDB_txn *, uint64_t, uint8_t, czr::checksum const &);
-		bool checksum_get(MDB_txn *, uint64_t, uint8_t, czr::checksum &);
-		void checksum_del(MDB_txn *, uint64_t, uint8_t);
-
 		bool block_summary_get(MDB_txn *, czr::block_hash const &, czr::summary_hash &);
 		void block_summary_put(MDB_txn *, czr::block_hash const &, czr::summary_hash const &);
 
@@ -161,8 +157,6 @@ namespace czr
 		MDB_dbi blocks;
 		// block_hash -> block                                          // Unchecked bootstrap blocks
 		MDB_dbi unchecked;
-		// (uint56_t, uint8_t) -> block_hash                            // Mapping of region to checksum
-		MDB_dbi checksum;
 		// uint256_union -> ?											// Meta information about block store
 		MDB_dbi meta;
 

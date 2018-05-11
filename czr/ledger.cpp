@@ -1,7 +1,7 @@
 #include <czr/blockstore.hpp>
 #include <czr/ledger.hpp>
 #include <czr/node/common.hpp>
-
+#include <czr/genesis.hpp>
 #include <queue>
 #include <unordered_set>
 
@@ -79,14 +79,6 @@ czr::block_hash czr::ledger::latest_root(MDB_txn * transaction_a, czr::account c
 	return result;
 }
 
-czr::checksum czr::ledger::checksum(MDB_txn * transaction_a, czr::account const & begin_a, czr::account const & end_a)
-{
-	czr::checksum result;
-	auto error(store.checksum_get(transaction_a, 0, 0, result));
-	assert(!error);
-	return result;
-}
-
 void czr::ledger::dump_account_chain(czr::account const & account_a)
 {
 	czr::transaction transaction(store.environment, nullptr, false);
@@ -100,36 +92,22 @@ void czr::ledger::dump_account_chain(czr::account const & account_a)
 	}
 }
 
-void czr::ledger::checksum_update(MDB_txn * transaction_a, czr::block_hash const & hash_a)
-{
-	czr::checksum value;
-	auto error(store.checksum_get(transaction_a, 0, 0, value));
-	assert(!error);
-	value ^= hash_a;
-	store.checksum_put(transaction_a, 0, 0, value);
-}
-
 void czr::ledger::change_account_latest(MDB_txn * transaction_a, czr::account const & account_a, czr::block_hash const & hash_a, uint64_t const & block_count_a)
 {
 	czr::account_info info;
 	auto exists(!store.account_get(transaction_a, account_a, info));
-	if (exists)
-	{
-		checksum_update(transaction_a, info.head);
-	}
-	else
+	if (!exists)
 	{
 		assert(store.block_get(transaction_a, hash_a)->previous().is_zero());
 		info.open_block = hash_a;
 	}
+
 	if (!hash_a.is_zero())
 	{
 		info.head = hash_a;
 		info.modified = czr::seconds_since_epoch();
 		info.block_count = block_count_a;
 		store.account_put(transaction_a, account_a, info);
-
-		checksum_update(transaction_a, hash_a);
 	}
 	else
 	{
@@ -228,14 +206,14 @@ uint64_t czr::ledger::determine_witness_level(MDB_txn * transaction_a, czr::bloc
 	uint64_t witnessed_level(0);
 	while (true)
 	{
+		//genesis
+		if (next_best_pblock_hash == czr::genesis::block_hash)
+			break;
+
 		std::unique_ptr<czr::block> next_best_pblock(store.block_get(transaction_a, next_best_pblock_hash));
 		czr::block_state next_best_pblock_state;
 		bool bpstate_error(store.block_state_get(transaction_a, next_best_pblock_hash, next_best_pblock_state));
 		assert(!bpstate_error);
-
-		//genesis
-		if (next_best_pblock_state.level == 0)
-			break;
 
 		auto account = next_best_pblock->hashables.from;
 		if (wl_info.contains(account))
@@ -367,14 +345,15 @@ uint64_t czr::ledger::find_mc_min_wl(MDB_txn * transaction_a, czr::block_hash co
 
 bool czr::ledger::check_stable_from_later(MDB_txn * transaction_a, czr::block_hash const & earlier_hash, czr::block_hash const & later_hash)
 {
-	czr::block_state check_block_state;
-	bool error(store.block_state_get(transaction_a, earlier_hash, check_block_state));
+	//genesis
+	if (earlier_hash == czr::genesis::block_hash)
+		return true;
+
+	czr::block_state earlier_block_state;
+	bool error(store.block_state_get(transaction_a, earlier_hash, earlier_block_state));
 	assert(!error);
 
-	//genesis
-	if (check_block_state.level == 0)
-		return true;
-	if (check_block_state.is_free)
+	if (earlier_block_state.is_free)
 		return false;
 
 	std::unique_ptr<czr::block> later_block(store.block_get(transaction_a, later_hash));
@@ -382,36 +361,36 @@ bool czr::ledger::check_stable_from_later(MDB_txn * transaction_a, czr::block_ha
 
 	//get max later limci 
 	uint64_t max_later_parents_limci;
-	for (czr::block_hash & l_pblock_hash : later_block->parents_and_previous())
+	for (czr::block_hash & later_pblock_hash : later_block->parents_and_previous())
 	{
-		czr::block_state l_pblock_state;
-		bool error(store.block_state_get(transaction_a, l_pblock_hash, l_pblock_state));
+		czr::block_state later_pblock_state;
+		bool error(store.block_state_get(transaction_a, later_pblock_hash, later_pblock_state));
 		assert(!error);
 
-		if (l_pblock_state.level > 0) //not genesis
+		if (later_pblock_state.level > 0) //not genesis
 		{
-			assert(l_pblock_state.latest_included_mc_index);
-			if (*l_pblock_state.latest_included_mc_index > max_later_parents_limci)
-				max_later_parents_limci = *l_pblock_state.latest_included_mc_index;
+			assert(later_pblock_state.latest_included_mc_index);
+			if (*later_pblock_state.latest_included_mc_index > max_later_parents_limci)
+				max_later_parents_limci = *later_pblock_state.latest_included_mc_index;
 		}
 	}
 
 	//get later best parent //test: does best parent need compatible?
-	czr::witness_list_info l_wl_info(block_witness_list(transaction_a, *later_block));
-	czr::block_hash l_best_pblock_hash(determine_best_parent(transaction_a, later_block->hashables.parents, l_wl_info));
+	czr::witness_list_info later_wl_info(block_witness_list(transaction_a, *later_block));
+	czr::block_hash later_best_pblock_hash(determine_best_parent(transaction_a, later_block->hashables.parents, later_wl_info));
 
 	//get check block best parent's witness list
-	czr::block_hash check_best_parent_hash(check_block_state.best_parent);
-	std::unique_ptr<czr::block> check_best_parent_block = store.block_get(transaction_a, check_best_parent_hash);
-	czr::witness_list_info check_wl_info(block_witness_list(transaction_a, *check_best_parent_block));
+	czr::block_hash earlier_best_parent_hash(earlier_block_state.best_parent);
+	std::unique_ptr<czr::block> earlier_best_parent_block = store.block_get(transaction_a, earlier_best_parent_hash);
+	czr::witness_list_info earlier_wl_info(block_witness_list(transaction_a, *earlier_best_parent_block));
 
 	//find min witness level
-	uint64_t min_wl(find_mc_min_wl(transaction_a, l_best_pblock_hash, check_wl_info));
+	uint64_t min_wl(find_mc_min_wl(transaction_a, later_best_pblock_hash, earlier_wl_info));
 
 	//find unstable child blocks
 	czr::block_hash mc_child_hash;
 	std::shared_ptr<std::vector<czr::block_hash>> temp_branch_child_hashs(new std::vector<czr::block_hash>);
-	find_unstable_child_blocks(transaction_a, check_best_parent_hash, mc_child_hash, temp_branch_child_hashs);
+	find_unstable_child_blocks(transaction_a, earlier_best_parent_hash, mc_child_hash, temp_branch_child_hashs);
 
 	//remove non-included branch children
 	std::unique_ptr<std::vector<czr::block_hash>> branch_child_hashs(new std::vector<czr::block_hash>);

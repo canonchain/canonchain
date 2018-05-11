@@ -1,7 +1,7 @@
 #include <czr/node/node.hpp>
-
 #include <czr/node/common.hpp>
 #include <czr/node/rpc.hpp>
+#include <czr/genesis.hpp>
 
 #include <algorithm>
 #include <future>

@@ -1,120 +1,8 @@
 #include <czr/common.hpp>
-
 #include <czr/blockstore.hpp>
 #include <czr/node/common.hpp>
-
-#include <boost/property_tree/json_parser.hpp>
-
 #include <queue>
-
 #include <ed25519-donna/ed25519.h>
-
-// Genesis keys for network variants
-namespace
-{
-	char const * test_private_key_data = "34F0A37AAD20F4A260F0A5B3CB3D7FB50673212263E58A380BC10474BB039CE4";
-	char const * test_public_key_data = "B0311EA55708D6A53C75CDBF88300259C6D018522FE3D4D0A242E431F9E8B6D0"; // czr_3e3j5tkog48pnny9dmfzj1r16pg8t1e76dz5tmac6iq689wyjfpiij4txtdo
-	char const * beta_public_key_data = "0311B25E0D1E1D7724BBA5BD523954F1DBCFC01CB8671D55ED2D32C7549FB252"; // czr_11rjpbh1t9ixgwkdqbfxcawobwgusz13sg595ocytdbkrxcbzekkcqkc3dn1
-	char const * live_public_key_data = "E89208DD038FBB269987689621D52292AE9C35941A7484756ECCED92A65093BA"; // czr_3t6k35gi95xu6tergt6p69ck76ogmitsa8mnijtpxm9fkcm736xtoncuohr3
-
-																											//todo:modify genesis_data///////////////////////
-	char const * test_genesis_data = R"%%%({
-	"source": "B0311EA55708D6A53C75CDBF88300259C6D018522FE3D4D0A242E431F9E8B6D0",
-	"account": "czr_3e3j5tkog48pnny9dmfzj1r16pg8t1e76dz5tmac6iq689wyjfpiij4txtdo",
-	"work": "9680625b39d3363d",
-	"signature": "ECDA914373A2F0CA1296475BAEE40500A7F0A7AD72A5A80C81D7FAB7F6C802B2CC7DB50F5DD0FB25B2EF11761FA7344A158DD5A700B21BD47DE5BD0F63153A02"
-})%%%";
-
-	char const * beta_genesis_data = R"%%%({
-	"source": "0311B25E0D1E1D7724BBA5BD523954F1DBCFC01CB8671D55ED2D32C7549FB252",
-	"account": "czr_11rjpbh1t9ixgwkdqbfxcawobwgusz13sg595ocytdbkrxcbzekkcqkc3dn1",
-	"work": "869e17b2bfa36639",
-	"signature": "34DF447C7F185673128C3516A657DFEC7906F16C68FB5A8879432E2E4FB908C8ED0DD24BBECFAB3C7852898231544A421DC8CB636EF66C82E1245083EB08EA0F"
-})%%%";
-
-	char const * live_genesis_data = R"%%%({
-    "from":"0000000000000000000000000000000000000000000000000000000000000000",
-    "to":"czr_3t6k35gi95xu6tergt6p69ck76ogmitsa8mnijtpxm9fkcm736xtoncuohr3",
-    "amount":"1000000",
-    "previous":"000000000000000000000000000000000000000000000000000000000000",
-    "parents":[],
-    "witness_list_block":"0000000000000000000000000000000000000000000000000000000000000000",
-    "witness_list":[
-		"czr_3t6k35gi95xu6tergt6p69ck76ogmitsa8mnijtpxm9fkcm736xtoncuoh01",
-		"czr_3t6k35gi95xu6tergt6p69ck76ogmitsa8mnijtpxm9fkcm736xtoncuoh02",
-		"czr_3t6k35gi95xu6tergt6p69ck76ogmitsa8mnijtpxm9fkcm736xtoncuoh03",
-		"czr_3t6k35gi95xu6tergt6p69ck76ogmitsa8mnijtpxm9fkcm736xtoncuoh04",
-		"czr_3t6k35gi95xu6tergt6p69ck76ogmitsa8mnijtpxm9fkcm736xtoncuoh05",
-		"czr_3t6k35gi95xu6tergt6p69ck76ogmitsa8mnijtpxm9fkcm736xtoncuoh06",
-		"czr_3t6k35gi95xu6tergt6p69ck76ogmitsa8mnijtpxm9fkcm736xtoncuoh07",
-		"czr_3t6k35gi95xu6tergt6p69ck76ogmitsa8mnijtpxm9fkcm736xtoncuoh08",
-		"czr_3t6k35gi95xu6tergt6p69ck76ogmitsa8mnijtpxm9fkcm736xtoncuoh09",
-		"czr_3t6k35gi95xu6tergt6p69ck76ogmitsa8mnijtpxm9fkcm736xtoncuoh10",
-		"czr_3t6k35gi95xu6tergt6p69ck76ogmitsa8mnijtpxm9fkcm736xtoncuoh11",
-		"czr_3t6k35gi95xu6tergt6p69ck76ogmitsa8mnijtpxm9fkcm736xtoncuoh12",
-    ],
-    "last_summary":"0000000000000000000000000000000000000000000000000000000000000000",
-    "last_summary_block":"0000000000000000000000000000000000000000000000000000000000000000",
-    "data":"",
-	"work": "62f05417dd3fb691",
-	"signature": "9F0C933C8ADE004D808EA1985FA746A7E95BA2A38F867640F53EC8F180BDFE9E2C1268DEAD7C2664F356E37ABA362BC58E46DBA03E523A7B5A19E4B6EB12BB02"
-})%%%";
-
-	class ledger_constants
-	{
-	public:
-		ledger_constants() :
-			zero_key("0"),
-			test_genesis_key(test_private_key_data),
-			czr_test_account(test_public_key_data),
-			czr_beta_account(beta_public_key_data),
-			czr_live_account(live_public_key_data),
-			czr_test_genesis(test_genesis_data),
-			czr_beta_genesis(beta_genesis_data),
-			czr_live_genesis(live_genesis_data),
-			genesis_account(czr::czr_network == czr::czr_networks::czr_test_network ? czr_test_account : czr::czr_network == czr::czr_networks::czr_beta_network ? czr_beta_account : czr_live_account),
-			genesis_block(czr::czr_network == czr::czr_networks::czr_test_network ? czr_test_genesis : czr::czr_network == czr::czr_networks::czr_beta_network ? czr_beta_genesis : czr_live_genesis),
-			genesis_amount(std::numeric_limits<czr::uint128_t>::max()),
-			burn_account(0)
-		{
-			CryptoPP::AutoSeededRandomPool random_pool;
-			// Randomly generating these mean no two nodes will ever have the same sentinel values which protects against some insecure algorithms
-			random_pool.GenerateBlock(not_a_block.bytes.data(), not_a_block.bytes.size());
-			random_pool.GenerateBlock(not_an_account.bytes.data(), not_an_account.bytes.size());
-		}
-		czr::keypair zero_key;
-		czr::keypair test_genesis_key;
-		czr::account czr_test_account;
-		czr::account czr_beta_account;
-		czr::account czr_live_account;
-		std::string czr_test_genesis;
-		std::string czr_beta_genesis;
-		std::string czr_live_genesis;
-		czr::account genesis_account;
-		std::string genesis_block;
-		czr::uint128_t genesis_amount;
-		czr::block_hash not_a_block;
-		czr::account not_an_account;
-		czr::account burn_account;
-	};
-	ledger_constants globals;
-}
-
-czr::keypair const & czr::zero_key(globals.zero_key);
-czr::keypair const & czr::test_genesis_key(globals.test_genesis_key);
-czr::account const & czr::czr_test_account(globals.czr_test_account);
-czr::account const & czr::czr_beta_account(globals.czr_beta_account);
-czr::account const & czr::czr_live_account(globals.czr_live_account);
-std::string const & czr::czr_test_genesis(globals.czr_test_genesis);
-std::string const & czr::czr_beta_genesis(globals.czr_beta_genesis);
-std::string const & czr::czr_live_genesis(globals.czr_live_genesis);
-
-czr::account const & czr::genesis_account(globals.genesis_account);
-std::string const & czr::genesis_block(globals.genesis_block);
-czr::uint128_t const & czr::genesis_amount(globals.genesis_amount);
-czr::block_hash const & czr::not_a_block(globals.not_a_block);
-czr::block_hash const & czr::not_an_account(globals.not_an_account);
-czr::account const & czr::burn_account(globals.burn_account);
 
 // Create a new random keypair
 czr::keypair::keypair()
@@ -129,13 +17,6 @@ czr::keypair::keypair(std::string const & prv_a)
 	auto error(prv.data.decode_hex(prv_a));
 	assert(!error);
 	ed25519_publickey(prv.data.bytes.data(), pub.bytes.data());
-}
-
-
-std::unique_ptr<czr::block> czr::deserialize_block(MDB_val const & val_a)
-{
-	czr::bufferstream stream(reinterpret_cast<uint8_t const *> (val_a.mv_data), val_a.mv_size);
-	return deserialize_block(stream);
 }
 
 czr::account_info::account_info() :
@@ -201,66 +82,6 @@ czr::mdb_val czr::account_info::val() const
 {
 	return czr::mdb_val(sizeof(*this), const_cast<czr::account_info *> (this));
 }
-
-void czr::genesis::try_initialize(MDB_txn * transaction_a, czr::block_store & store_a)
-{
-	bool exists(store_a.genesis_hash_get(transaction_a, block_hash));
-	if (exists)
-		return;
-
-	boost::property_tree::ptree tree;
-	std::stringstream istream(czr::genesis_block);
-	boost::property_tree::read_json(istream, tree);
-	std::unique_ptr<czr::block> block(czr::deserialize_block_json(tree));
-
-	block_hash = block->hash();
-	store_a.genesis_hash_put(transaction_a, block_hash);
-	store_a.block_put(transaction_a, block_hash, *block);
-
-	//block state
-	czr::block_state block_state;
-	block_state.is_fork = false;
-	block_state.is_invalid = false;
-	block_state.is_fail = false;
-	block_state.is_free = true;
-	block_state.is_on_main_chain = 1;
-	block_state.main_chain_index = 0;
-	block_state.latest_included_mc_index = boost::none;
-	block_state.is_stable = 1;
-	block_state.level = 0;
-	block_state.witnessed_level = 0;
-	block_state.best_parent = 0;
-	block_state.creation_date = std::chrono::system_clock::now(); //todo:
-	block_state.from_state = 0;
-	block_state.to_state = 0;
-	store_a.block_state_put(transaction_a, block_hash, block_state);
-
-	//to account state
-	czr::account_state to_state(block->hashables.to, block_hash, 0, block->hashables.amount);
-	store_a.account_state_put(transaction_a, to_state.hash(), to_state);
-
-	//witness list
-	czr::witness_list_info wl_info(block->hashables.witness_list);
-	store_a.block_witnesslist_put(transaction_a, block_hash, wl_info);
-	auto wl_hash(wl_info.hash());
-	if (!store_a.witnesslisthash_block_exists(transaction_a, wl_hash))
-	{
-		store_a.witnesslisthash_block_put(transaction_a, wl_hash, block_hash);
-	}
-
-	//summary hash
-	std::vector<czr::summary_hash> p_summary_hashs; //no parents
-	std::set<czr::summary_hash> summary_skiplist; //no skiplist
-	czr::summary_hash summary_hash = czr::summary::gen_summary_hash(block_hash, p_summary_hashs, summary_skiplist,
-		block_state.is_fork, block_state.is_invalid, block_state.is_fail, block_state.from_state, block_state.to_state);
-	store_a.block_summary_put(transaction_a, block_hash, summary_hash);
-	store_a.summary_block_put(transaction_a, summary_hash, block_hash);
-
-
-	store_a.checksum_put(transaction_a, 0, 0, block_hash);
-}
-
-czr::block_hash czr::genesis::block_hash(0);
 
 czr::witness_list_info::witness_list_info()
 {
@@ -471,5 +292,11 @@ czr::summary_hash czr::summary::gen_summary_hash(czr::block_hash const & block_h
 	assert(status == 0);
 
 	return result;
+}
+
+std::unique_ptr<czr::block> czr::deserialize_block(MDB_val const & val_a)
+{
+	czr::bufferstream stream(reinterpret_cast<uint8_t const *> (val_a.mv_data), val_a.mv_size);
+	return deserialize_block(stream);
 }
 

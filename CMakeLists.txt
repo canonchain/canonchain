@@ -230,6 +230,8 @@ add_library (secure
 	czr/common.hpp
 	czr/blockstore.cpp
 	czr/blockstore.hpp
+	czr/genesis.cpp
+	czr/genesis.hpp
 	czr/ledger.cpp
 	czr/ledger.hpp
 	czr/node/utility.cpp

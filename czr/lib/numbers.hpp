@@ -92,7 +92,6 @@ using account = uint256_union;
 using public_key = uint256_union;
 using private_key = uint256_union;
 using secret_key = uint256_union;
-using checksum = uint256_union;
 using witness_list_hash = uint256_union;
 
 class raw_key

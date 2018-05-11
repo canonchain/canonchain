@@ -1,5 +1,6 @@
 
 #include <czr/node/consensus.hpp>
+#include <czr/genesis.hpp>
 
 czr::consensus::consensus(czr::node & node_a, MDB_txn * transaction, std::function<void(std::shared_ptr<czr::block>)> block_stable_observer_a) :
 	node(node_a),
@@ -205,11 +206,11 @@ czr::process_return czr::consensus::validate(czr::publish const & message)
 	uint64_t max_parent_limci;
 	for (czr::block_hash & pblock_hash : block->parents_and_previous())
 	{
-		czr::block_state pblock_state;
-		bool error(ledger.store.block_state_get(transaction, pblock_hash, pblock_state));
-		assert(!error);
-		if (pblock_state.level > 0) //not genesis
+		if (pblock_hash != czr::genesis::block_hash)
 		{
+			czr::block_state pblock_state;
+			bool error(ledger.store.block_state_get(transaction, pblock_hash, pblock_state));
+			assert(!error);
 			assert(pblock_state.latest_included_mc_index);
 			if (*pblock_state.latest_included_mc_index > max_parent_limci)
 				max_parent_limci = *pblock_state.latest_included_mc_index;
@@ -423,12 +424,12 @@ czr::process_return czr::consensus::validate(czr::publish const & message)
 	{
 		std::unique_ptr<czr::block> pblock = ledger.store.block_get(transaction, pblock_hash);
 		assert(pblock != nullptr);
-		czr::block_state parent_last_summary_state;
-		bool error(ledger.store.block_state_get(transaction, pblock->hashables.last_summary_block, parent_last_summary_state));
-		assert(!error);
 
-		if (parent_last_summary_state.level > 0) //not genesis
+		if (block->hashables.last_summary_block != czr::genesis::block_hash) //not genesis
 		{
+			czr::block_state parent_last_summary_state;
+			bool error(ledger.store.block_state_get(transaction, pblock->hashables.last_summary_block, parent_last_summary_state));
+			assert(!error);
 			assert(parent_last_summary_state.main_chain_index);
 			if (*parent_last_summary_state.main_chain_index > max_parent_last_summary_mci)
 				max_parent_last_summary_mci = *parent_last_summary_state.main_chain_index;
@@ -536,10 +537,11 @@ void czr::consensus::update_main_chain(czr::block const & block_a)
 	czr::free_key free_key = free_iter->first.value;
 	czr::block_hash free_block_hash(free_key.hash_asc);
 
+	if(free_block_hash == czr::genesis::block_hash) //genesis block
+		return;
+
 	czr::block_state free_block_state;
 	ledger.store.block_state_get(transaction, free_block_hash, free_block_state);
-	if (free_block_state.level == 0) //genesis block
-		return;
 
 	czr::block_hash last_best_pblock_state_hash(free_block_hash);
 	czr::block_state last_best_pblock_state(free_block_state);

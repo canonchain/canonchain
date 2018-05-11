@@ -3,8 +3,6 @@
 #include <czr/lib/blocks.hpp>
 #include <czr/node/utility.hpp>
 
-#include <boost/property_tree/ptree.hpp>
-
 #include <unordered_map>
 #include <set>
 
@@ -38,8 +36,6 @@ namespace czr
 		czr::public_key pub;
 		czr::raw_key prv;
 	};
-
-	std::unique_ptr<czr::block> deserialize_block(MDB_val const &);
 
 	/**
 	* Latest information about an account
@@ -154,26 +150,5 @@ namespace czr
 			czr::account_state_hash const & from_state_hash, czr::account_state_hash const & to_state_hash);
 	};
 
-	extern czr::keypair const & zero_key;
-	extern czr::keypair const & test_genesis_key;
-	extern czr::account const & czr_test_account;
-	extern czr::account const & czr_beta_account;
-	extern czr::account const & czr_live_account;
-	extern std::string const & czr_test_genesis;
-	extern std::string const & czr_beta_genesis;
-	extern std::string const & czr_live_genesis;
-	extern std::string const & genesis_block;
-	extern czr::account const & genesis_account;
-	extern czr::account const & burn_account;
-	extern czr::uint128_t const & genesis_amount;
-	// A block hash that compares inequal to any real block hash
-	extern czr::block_hash const & not_a_block;
-	// An account number that compares inequal to any real account number
-	extern czr::block_hash const & not_an_account;
-	class genesis
-	{
-	public:
-		static void try_initialize(MDB_txn * transaction_a, czr::block_store & store_a);
-		static czr::block_hash block_hash;
-	};
+	std::unique_ptr<czr::block> deserialize_block(MDB_val const &);
 }

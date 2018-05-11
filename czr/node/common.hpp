@@ -102,7 +102,7 @@ public:
 	virtual void visit (czr::message_visitor &) const = 0;
 	bool ipv4_only ();
 	void ipv4_only_set (bool);
-	static std::array<uint8_t, 2> constexpr magic_number = czr::czr_network == czr::czr_networks::czr_test_network ? std::array<uint8_t, 2> ({ 'R', 'A' }) : czr::czr_network == czr::czr_networks::czr_beta_network ? std::array<uint8_t, 2> ({ 'R', 'B' }) : std::array<uint8_t, 2> ({ 'R', 'C' });
+	static std::array<uint8_t, 2> constexpr magic_number = czr::czr_network == czr::czr_networks::czr_test_network ? std::array<uint8_t, 2> ({ 'C', 'A' }) : czr::czr_network == czr::czr_networks::czr_beta_network ? std::array<uint8_t, 2> ({ 'C', 'B' }) : std::array<uint8_t, 2> ({ 'C', 'C' });
 	uint8_t version_max;
 	uint8_t version_using;
 	uint8_t version_min;
