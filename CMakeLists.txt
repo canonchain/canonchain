@@ -258,6 +258,8 @@ add_library (node
 	czr/node/common.hpp
 	czr/node/consensus.hpp
 	czr/node/consensus.cpp
+	czr/node/composer.hpp
+	czr/node/composer.cpp
 	czr/node/node.hpp
 	czr/node/node.cpp
 	czr/node/openclwork.cpp

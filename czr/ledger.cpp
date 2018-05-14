@@ -155,7 +155,7 @@ czr::witness_list_info czr::ledger::block_witness_list(MDB_txn * transaction_a, 
 	czr::witness_list_info wl_info;
 	if (block_a.hashables.witness_list.empty())
 	{
-		auto wl_not_found(store.block_witnesslist_get(transaction_a, block_a.hashables.witness_list_block, wl_info));
+		auto wl_not_found(store.block_witness_list_get(transaction_a, block_a.hashables.witness_list_block, wl_info));
 		assert(!wl_not_found);
 	}
 	else

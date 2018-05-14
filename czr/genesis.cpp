@@ -130,11 +130,11 @@ void czr::genesis::try_initialize(MDB_txn * transaction_a, czr::block_store & st
 
 	//witness list
 	czr::witness_list_info wl_info(block->hashables.witness_list);
-	store_a.block_witnesslist_put(transaction_a, block_hash, wl_info);
+	store_a.block_witness_list_put(transaction_a, block_hash, wl_info);
 	auto wl_hash(wl_info.hash());
-	if (!store_a.witnesslisthash_block_exists(transaction_a, wl_hash))
+	if (!store_a.witness_list_hash_block_exists(transaction_a, wl_hash))
 	{
-		store_a.witnesslisthash_block_put(transaction_a, wl_hash, block_hash);
+		store_a.witness_list_hash_block_put(transaction_a, wl_hash, block_hash);
 	}
 
 	//summary hash

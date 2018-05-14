@@ -192,8 +192,8 @@ czr::block_store::block_store(bool & error_a, boost::filesystem::path const & pa
 	account_state(0),
 	latest_account_state(0),
 	unchecked(0),
-	block_witnesslist(0),
-	witnesslisthash_block(0),
+	block_witness_list(0),
+	witness_list_hash_block(0),
 	block_state(0),
 	free(0),
 	unstable(0),
@@ -213,8 +213,8 @@ czr::block_store::block_store(bool & error_a, boost::filesystem::path const & pa
 		error_a |= mdb_dbi_open(transaction, "blocks", MDB_CREATE, &blocks) != 0;
 		error_a |= mdb_dbi_open(transaction, "unchecked", MDB_CREATE | MDB_DUPSORT, &unchecked) != 0;
 		error_a |= mdb_dbi_open(transaction, "meta", MDB_CREATE, &meta) != 0;
-		error_a |= mdb_dbi_open(transaction, "block_witnesslist", MDB_CREATE, &block_witnesslist) != 0;
-		error_a |= mdb_dbi_open(transaction, "witnesslisthash_block", MDB_CREATE, &witnesslisthash_block) != 0;
+		error_a |= mdb_dbi_open(transaction, "block_witness_list", MDB_CREATE, &block_witness_list) != 0;
+		error_a |= mdb_dbi_open(transaction, "witness_list_hash_block", MDB_CREATE, &witness_list_hash_block) != 0;
 		error_a |= mdb_dbi_open(transaction, "block_state", MDB_CREATE, &block_state) != 0;
 		error_a |= mdb_dbi_open(transaction, "free", MDB_CREATE, &free) != 0;
 		error_a |= mdb_dbi_open(transaction, "unstable", MDB_CREATE, &unstable) != 0;
@@ -645,10 +645,10 @@ void czr::block_store::summary_block_put(MDB_txn * transaction_a, czr::summary_h
 }
 
 
-bool czr::block_store::witnesslisthash_block_get(MDB_txn * transaction_a, czr::witness_list_hash const & hash_a, czr::block_hash & block_a)
+bool czr::block_store::witness_list_hash_block_get(MDB_txn * transaction_a, czr::witness_list_hash const & hash_a, czr::block_hash & block_a)
 {
 	czr::mdb_val value;
-	auto status(mdb_get(transaction_a, witnesslisthash_block, czr::mdb_val(hash_a), value));
+	auto status(mdb_get(transaction_a, witness_list_hash_block, czr::mdb_val(hash_a), value));
 	assert(status == 0 || status == MDB_NOTFOUND);
 	bool result;
 	if (status == MDB_NOTFOUND)
@@ -663,23 +663,23 @@ bool czr::block_store::witnesslisthash_block_get(MDB_txn * transaction_a, czr::w
 	return result;
 }
 
-bool czr::block_store::witnesslisthash_block_exists(MDB_txn * transaction_a, czr::witness_list_hash const & hash_a)
+bool czr::block_store::witness_list_hash_block_exists(MDB_txn * transaction_a, czr::witness_list_hash const & hash_a)
 {
-	czr::store_iterator iterator(transaction_a, witnesslisthash_block, czr::mdb_val(hash_a));
+	czr::store_iterator iterator(transaction_a, witness_list_hash_block, czr::mdb_val(hash_a));
 	return iterator != czr::store_iterator(nullptr) && iterator->first.uint256() == hash_a;
 }
 
-void czr::block_store::witnesslisthash_block_put(MDB_txn * transaction_a, czr::witness_list_hash const & hash_a, czr::block_hash const & block_a)
+void czr::block_store::witness_list_hash_block_put(MDB_txn * transaction_a, czr::witness_list_hash const & hash_a, czr::block_hash const & block_a)
 {
-	auto status(mdb_put(transaction_a, witnesslisthash_block, czr::mdb_val(hash_a), czr::mdb_val(block_a), 0));
+	auto status(mdb_put(transaction_a, witness_list_hash_block, czr::mdb_val(hash_a), czr::mdb_val(block_a), 0));
 	assert(status == 0);
 }
 
 
-bool czr::block_store::block_witnesslist_get(MDB_txn * transaction_a, czr::block_hash const & hash_a, czr::witness_list_info & info_a)
+bool czr::block_store::block_witness_list_get(MDB_txn * transaction_a, czr::block_hash const & hash_a, czr::witness_list_info & info_a)
 {
 	czr::mdb_val value;
-	auto status(mdb_get(transaction_a, block_witnesslist, czr::mdb_val(hash_a), value));
+	auto status(mdb_get(transaction_a, block_witness_list, czr::mdb_val(hash_a), value));
 	assert(status == 0 || status == MDB_NOTFOUND);
 	bool result;
 	if (status == MDB_NOTFOUND)
@@ -694,9 +694,9 @@ bool czr::block_store::block_witnesslist_get(MDB_txn * transaction_a, czr::block
 	return result;
 }
 
-void czr::block_store::block_witnesslist_put(MDB_txn * transaction_a, czr::block_hash const & hash_a, czr::witness_list_info const & info_a)
+void czr::block_store::block_witness_list_put(MDB_txn * transaction_a, czr::block_hash const & hash_a, czr::witness_list_info const & info_a)
 {
-	auto status(mdb_put(transaction_a, block_witnesslist, czr::mdb_val(hash_a), info_a.val(), 0));
+	auto status(mdb_put(transaction_a, block_witness_list, czr::mdb_val(hash_a), info_a.val(), 0));
 	assert(status == 0);
 }
 
@@ -913,5 +913,30 @@ void czr::block_store::genesis_hash_put(MDB_txn * transaction_a, czr::block_hash
 	assert(status == 0);
 }
 
+
+bool czr::block_store::my_witness_list_get(MDB_txn * transaction_a, czr::witness_list_info my_wl_info)
+{
+	czr::mdb_val value;
+	auto status(mdb_get(transaction_a, prop, czr::mdb_val(my_witness_list_key), value));
+	bool result;
+	if (status == MDB_NOTFOUND)
+	{
+		result = true;
+	}
+	else
+	{
+		my_wl_info = czr::witness_list_info(value);
+		assert(!result);
+	}
+	return result;
+}
+
+void czr::block_store::my_witness_list_put(MDB_txn * transaction_a, czr::witness_list_info my_wl_info)
+{
+	auto status(mdb_put(transaction_a, prop, czr::mdb_val(my_witness_list_key), my_wl_info.val(), 0));
+	assert(status == 0);
+}
+
 czr::uint256_union const czr::block_store::genesis_hash_key(0); 
 czr::uint256_union const czr::block_store::last_stable_mci_key(1);
+czr::uint256_union const czr::block_store::my_witness_list_key(2);

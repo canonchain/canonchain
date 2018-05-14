@@ -76,6 +76,7 @@ last_summary(last_summary_a),
 last_summary_block(last_summary_block_a),
 data(data_a)
 {
+	//todo:add timestamp
 	//todo:need fee feild ???
 }
 

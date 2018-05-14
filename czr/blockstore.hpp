@@ -98,12 +98,12 @@ namespace czr
 		bool summary_block_get(MDB_txn *, czr::summary_hash const &, czr::block_hash &);
 		void summary_block_put(MDB_txn *, czr::summary_hash const &, czr::block_hash const &);
 
-		bool witnesslisthash_block_get(MDB_txn *, czr::witness_list_hash const &, czr::block_hash &);
-		bool witnesslisthash_block_exists(MDB_txn * transaction_a, czr::witness_list_hash const & hash_a);
-		void witnesslisthash_block_put(MDB_txn *, czr::witness_list_hash const &, czr::block_hash const &);
+		bool witness_list_hash_block_get(MDB_txn *, czr::witness_list_hash const &, czr::block_hash &);
+		bool witness_list_hash_block_exists(MDB_txn * transaction_a, czr::witness_list_hash const & hash_a);
+		void witness_list_hash_block_put(MDB_txn *, czr::witness_list_hash const &, czr::block_hash const &);
 
-		bool block_witnesslist_get(MDB_txn *, czr::block_hash const &, czr::witness_list_info &);
-		void block_witnesslist_put(MDB_txn *, czr::block_hash const &, czr::witness_list_info const &);
+		bool block_witness_list_get(MDB_txn *, czr::block_hash const &, czr::witness_list_info &);
+		void block_witness_list_put(MDB_txn *, czr::block_hash const &, czr::witness_list_info const &);
 
 		czr::store_iterator free_begin(MDB_txn *);
 		void free_put(MDB_txn *, czr::free_key const &);
@@ -138,6 +138,9 @@ namespace czr
 		bool genesis_hash_get(MDB_txn * transaction_a, czr::block_hash & genesis_hash);
 		void genesis_hash_put(MDB_txn * transaction_a, czr::block_hash const & genesis_hash);
 
+		bool my_witness_list_get(MDB_txn * transaction_a, czr::witness_list_info my_wl_info);
+		void my_witness_list_put(MDB_txn * transaction_a, czr::witness_list_info my_wl_info);
+
 		void flush(MDB_txn *);
 		std::mutex cache_mutex;
 
@@ -160,10 +163,10 @@ namespace czr
 		// uint256_union -> ?											// Meta information about block store
 		MDB_dbi meta;
 
-		//block hash -> witnesslist
-		MDB_dbi block_witnesslist;
-		//witnesslist hash -> block hash
-		MDB_dbi witnesslisthash_block;
+		//block hash -> witness_list
+		MDB_dbi block_witness_list;
+		//witness_list hash -> block hash
+		MDB_dbi witness_list_hash_block;
 		//block hash -> block state
 		MDB_dbi block_state;
 		//block hash , child block hash -> nullptr
@@ -191,5 +194,7 @@ namespace czr
 		static czr::uint256_union const genesis_hash_key;
 		//last statble main chain index key
 		static czr::uint256_union const last_stable_mci_key;
-	};
+		//my witness list key
+		static czr::uint256_union const my_witness_list_key;
+};
 }

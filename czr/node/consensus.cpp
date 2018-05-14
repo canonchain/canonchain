@@ -310,7 +310,7 @@ czr::process_return czr::consensus::validate(czr::publish const & message)
 			return result;
 		}
 
-		bool wl_info_exists(!ledger.store.block_witnesslist_get(transaction, block->hashables.witness_list_block, wl_info));
+		bool wl_info_exists(!ledger.store.block_witness_list_get(transaction, block->hashables.witness_list_block, wl_info));
 		if (!wl_info_exists)
 		{
 			result.code = czr::process_result::invalid_block;
@@ -942,13 +942,13 @@ void czr::consensus::advance_mc_stable_block(czr::block_hash const & mc_stable_h
 					if (block->hashables.witness_list.size() > 0)
 					{
 						czr::witness_list_info wl_info(block->hashables.witness_list);
-						ledger.store.block_witnesslist_put(transaction, block_hash, wl_info);
+						ledger.store.block_witness_list_put(transaction, block_hash, wl_info);
 
 						auto wl_hash(wl_info.hash());
-						if (!ledger.store.witnesslisthash_block_exists(transaction, wl_hash))
+						if (!ledger.store.witness_list_hash_block_exists(transaction, wl_hash))
 						{
 							//save witness list hash -> block hash
-							ledger.store.witnesslisthash_block_put(transaction, wl_hash, block_hash);
+							ledger.store.witness_list_hash_block_put(transaction, wl_hash, block_hash);
 						}
 					}
 				}
