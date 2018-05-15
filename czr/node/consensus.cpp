@@ -389,7 +389,7 @@ czr::process_return czr::consensus::validate(czr::publish const & message)
 #pragma endregion
 
 #pragma region  check if last summary block is stable in view of parents and previous
-	bool is_last_summary_stable = ledger.check_stable_from_later(transaction, last_summary_block_hash, hash);
+	bool is_last_summary_stable = ledger.check_stable_from_later_blocks(transaction, last_summary_block_hash, block->parents_and_previous());
 	if (!is_last_summary_stable)
 	{
 		result.code = czr::process_result::invalid_block;

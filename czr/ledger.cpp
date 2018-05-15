@@ -343,7 +343,7 @@ uint64_t czr::ledger::find_mc_min_wl(MDB_txn * transaction_a, czr::block_hash co
 	return min_wl;
 }
 
-bool czr::ledger::check_stable_from_later(MDB_txn * transaction_a, czr::block_hash const & earlier_hash, czr::block_hash const & later_hash)
+bool czr::ledger::check_stable_from_later(MDB_txn * transaction_a, czr::block_hash const & earlier_hash, std::vector<czr::block_hash> const & later_hashs)
 {
 	//genesis
 	if (earlier_hash == czr::genesis::block_hash)
@@ -356,28 +356,36 @@ bool czr::ledger::check_stable_from_later(MDB_txn * transaction_a, czr::block_ha
 	if (earlier_block_state.is_free)
 		return false;
 
-	std::unique_ptr<czr::block> later_block(store.block_get(transaction_a, later_hash));
-	assert(later_block != nullptr);
-
-	//get max later limci 
 	uint64_t max_later_parents_limci;
-	for (czr::block_hash & later_pblock_hash : later_block->parents_and_previous())
+	czr::block_hash best_later_hash;
+	czr::block_state best_later_state;
+	for (czr::block_hash const & later_hash : later_hashs)
 	{
-		czr::block_state later_pblock_state;
-		bool error(store.block_state_get(transaction_a, later_pblock_hash, later_pblock_state));
+		czr::block_state later_state;
+		bool error(store.block_state_get(transaction_a, later_hash, later_state));
 		assert(!error);
 
-		if (later_pblock_state.level > 0) //not genesis
+		//get max later limci 
+		if (later_state.level > 0) //not genesis
 		{
-			assert(later_pblock_state.latest_included_mc_index);
-			if (*later_pblock_state.latest_included_mc_index > max_later_parents_limci)
-				max_later_parents_limci = *later_pblock_state.latest_included_mc_index;
+			assert(later_state.latest_included_mc_index);
+			if (*later_state.latest_included_mc_index > max_later_parents_limci)
+				max_later_parents_limci = *later_state.latest_included_mc_index;
+		}
+
+		//get best later hash
+		if (best_later_hash.is_zero()
+			|| (later_state.witnessed_level > best_later_state.witnessed_level)
+			|| (later_state.witnessed_level == best_later_state.witnessed_level
+				&& later_state.level < best_later_state.level)
+			|| (later_state.witnessed_level == best_later_state.witnessed_level
+				&& later_state.level == best_later_state.level
+				&& later_hash < best_later_hash))
+		{
+			best_later_hash = later_hash;
+			best_later_state = later_state;
 		}
 	}
-
-	//get later best parent //test: does best parent need compatible?
-	czr::witness_list_info later_wl_info(block_witness_list(transaction_a, *later_block));
-	czr::block_hash later_best_pblock_hash(determine_best_parent(transaction_a, later_block->hashables.parents, later_wl_info));
 
 	//get check block best parent's witness list
 	czr::block_hash earlier_best_parent_hash(earlier_block_state.best_parent);
@@ -385,7 +393,7 @@ bool czr::ledger::check_stable_from_later(MDB_txn * transaction_a, czr::block_ha
 	czr::witness_list_info earlier_wl_info(block_witness_list(transaction_a, *earlier_best_parent_block));
 
 	//find min witness level
-	uint64_t min_wl(find_mc_min_wl(transaction_a, later_best_pblock_hash, earlier_wl_info));
+	uint64_t min_wl(find_mc_min_wl(transaction_a, best_later_hash, earlier_wl_info));
 
 	//find unstable child blocks
 	czr::block_hash mc_child_hash;
