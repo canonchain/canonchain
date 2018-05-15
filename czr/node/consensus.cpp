@@ -559,11 +559,20 @@ void czr::consensus::update_main_chain(czr::block const & block_a)
 	}
 	assert(last_best_pblock_state.main_chain_index);
 
-	uint64_t last_mc_index(*last_best_pblock_state.main_chain_index);
+	uint64_t last_mci(*last_best_pblock_state.main_chain_index);
 
-#pragma region delete old main chain block whose main chain index larger than last_mc_index
+	//check stable mci not retreat
+	uint64_t last_stable_mci = ledger.store.last_stable_mci_get(transaction);
+	if (last_mci < last_stable_mci)
+	{
+		std::string msg(boost::str(boost::format("stable mci retreat, last added block: %1%, last mci: %2%, last stable mci: %3%") % block_a.hash().to_string() % last_mci % last_stable_mci));
+		BOOST_LOG(node.log) << msg;
+		throw std::runtime_error(msg);
+	}
 
-	for (czr::store_iterator i(ledger.store.main_chain_begin(transaction, last_mc_index + 1)), n(nullptr); i != n; ++i)
+#pragma region delete old main chain block whose main chain index larger than last_mci
+
+	for (czr::store_iterator i(ledger.store.main_chain_begin(transaction, last_mci + 1)), n(nullptr); i != n; ++i)
 	{
 		czr::block_hash old_mc_block_hash(i->second.uint256());
 		czr::block_state old_mc_block_state;
@@ -574,28 +583,28 @@ void czr::consensus::update_main_chain(czr::block const & block_a)
 		old_mc_block_state.main_chain_index = boost::none;
 		ledger.store.block_state_put(transaction, old_mc_block_hash, old_mc_block_state);
 
-		uint64_t old_mc_block_mc_index(i->first.uint64());
-		ledger.store.main_chain_del(transaction, old_mc_block_mc_index);
+		uint64_t old_mc_block_mci(i->first.uint64());
+		ledger.store.main_chain_del(transaction, old_mc_block_mci);
 	}
 
 #pragma endregion
 
 #pragma region update main chain index
 
-	uint64_t mc_index(last_mc_index);
+	uint64_t new_mci(last_mci);
 	for (auto iter(new_mc_block_states->begin()); iter != new_mc_block_states->end(); iter++)
 	{
 		auto pair(*iter);
-		mc_index++;
+		new_mci++;
 		czr::block_hash new_mc_block_hash(pair.first);
 		czr::block_state new_mc_block_state(pair.second);
 		new_mc_block_state.is_on_main_chain = true;
-		new_mc_block_state.main_chain_index = mc_index;
+		new_mc_block_state.main_chain_index = new_mci;
 		ledger.store.block_state_put(transaction, new_mc_block_hash, new_mc_block_state);
-		ledger.store.main_chain_put(transaction, mc_index, new_mc_block_hash);
+		ledger.store.main_chain_put(transaction, new_mci, new_mc_block_hash);
 
 		std::shared_ptr<std::unordered_set<czr::block_hash>> updated_hashs;
-		update_parent_mc_index(new_mc_block_hash, mc_index, updated_hashs);
+		update_parent_mci(new_mc_block_hash, new_mci, updated_hashs);
 	}
 
 #pragma endregion
@@ -610,7 +619,7 @@ void czr::consensus::update_main_chain(czr::block const & block_a)
 		czr::block_state state;
 		bool error(ledger.store.block_state_get(transaction, block_hash, state));
 		assert(!error);
-		if (!state.main_chain_index || (*state.main_chain_index) > last_mc_index)
+		if (!state.main_chain_index || (*state.main_chain_index) > last_mci)
 			to_update_limci_blocks->insert(std::make_pair(block_hash, state));
 	}
 
@@ -1099,7 +1108,7 @@ void czr::consensus::change_successor(czr::block_hash const & block_hash)
 	}
 }
 
-void czr::consensus::update_parent_mc_index(czr::block_hash const & hash_a, uint64_t const & mc_index, std::shared_ptr<std::unordered_set<czr::block_hash>> updated_hashs)
+void czr::consensus::update_parent_mci(czr::block_hash const & hash_a, uint64_t const & mci, std::shared_ptr<std::unordered_set<czr::block_hash>> updated_hashs)
 {
 	std::unique_ptr<czr::block> block = ledger.store.block_get(transaction, hash_a);
 	assert(block != nullptr);
@@ -1111,18 +1120,18 @@ void czr::consensus::update_parent_mc_index(czr::block_hash const & hash_a, uint
 		czr::block_state pblock_state;
 		bool pblock_state_error(ledger.store.block_state_get(transaction, pblock_hash, pblock_state));
 		assert(!pblock_state_error);
-		if (pblock_state.main_chain_index && *pblock_state.main_chain_index < mc_index)
+		if (pblock_state.main_chain_index && *pblock_state.main_chain_index < mci)
 			continue;
-		pblock_state.main_chain_index = mc_index;
+		pblock_state.main_chain_index = mci;
 		ledger.store.block_state_put(transaction, pblock_hash, pblock_state);
 
 		updated_hashs->insert(pblock_hash);
 
-		update_parent_mc_index(pblock_hash, mc_index, updated_hashs);
+		update_parent_mci(pblock_hash, mci, updated_hashs);
 	}
 }
 
-void czr::consensus::update_stable_block(czr::block_hash const & block_hash, uint64_t const & mc_index, std::shared_ptr<std::set<czr::block_hash>> stable_block_hashs)
+void czr::consensus::update_stable_block(czr::block_hash const & block_hash, uint64_t const & mci, std::shared_ptr<std::set<czr::block_hash>> stable_block_hashs)
 {
 	//has updated
 	if (stable_block_hashs->find(block_hash) != stable_block_hashs->end())
@@ -1135,7 +1144,7 @@ void czr::consensus::update_stable_block(czr::block_hash const & block_hash, uin
 	if (state.level == 0)
 		return;
 	assert(state.main_chain_index);
-	if (*state.main_chain_index != mc_index)
+	if (*state.main_chain_index != mci)
 		return;
 
 	stable_block_hashs->insert(block_hash);
@@ -1143,7 +1152,7 @@ void czr::consensus::update_stable_block(czr::block_hash const & block_hash, uin
 	std::unique_ptr<czr::block> block(ledger.store.block_get(transaction, block_hash));
 	for (czr::block_hash & pblock_hash : block->parents_and_previous())
 	{
-		update_stable_block(pblock_hash, mc_index, stable_block_hashs);
+		update_stable_block(pblock_hash, mci, stable_block_hashs);
 	}
 }
 
