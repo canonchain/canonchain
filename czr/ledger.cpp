@@ -236,8 +236,16 @@ uint64_t czr::ledger::determine_witness_level(MDB_txn * transaction_a, czr::bloc
 	return witnessed_level;
 }
 
-// the MC for this function is the MC built from this unit, not our current MC
 bool czr::ledger::check_witness_list_mutations_along_mc(MDB_txn * transaction_a, czr::block_hash const & best_parent_hash, czr::block const & block_a)
+{
+	czr::witness_list_info wl_info(block_witness_list(transaction_a, block_a));
+	return check_witness_list_mutations_along_mc(transaction_a, best_parent_hash, wl_info, 
+		block_a.hashables.witness_list_block, block_a.hashables.last_summary_block);
+}
+
+// the MC for this function is the MC built from this unit, not our current MC
+bool czr::ledger::check_witness_list_mutations_along_mc(MDB_txn * transaction_a, czr::block_hash const & best_parent_hash, 
+	czr::witness_list_info const & wl_info, czr::block_hash const & witness_list_block_hash, czr::block_hash const & last_summary_block_hash)
 {
 	czr::block_hash next_mc_hash(best_parent_hash);
 
@@ -247,17 +255,16 @@ bool czr::ledger::check_witness_list_mutations_along_mc(MDB_txn * transaction_a,
 		assert(mc_block != nullptr);
 
 		// the parent has the same witness list and the parent has already passed the MC compatibility test
-		if (!block_a.hashables.witness_list_block.is_zero() && block_a.hashables.witness_list_block == mc_block->hashables.witness_list_block)
+		if (!witness_list_block_hash.is_zero() && witness_list_block_hash == mc_block->hashables.witness_list_block)
 			break;
 		else
 		{
-			czr::witness_list_info wl_info(block_witness_list(transaction_a, block_a));
 			czr::witness_list_info mc_wl_info(block_witness_list(transaction_a, *mc_block));
 			if (!wl_info.is_compatible(mc_wl_info))
 				return false;
 		}
 
-		if (mc_block->hash() == block_a.hashables.last_summary_block)
+		if (mc_block->hash() == last_summary_block_hash)
 			break;
 
 		czr::block_state mc_state;
@@ -266,7 +273,7 @@ bool czr::ledger::check_witness_list_mutations_along_mc(MDB_txn * transaction_a,
 
 		if (mc_state.best_parent.is_zero())
 		{
-			auto msg(boost::str(boost::format("check_witness_list_mutations_along_mc, checked block: %1%, no best parent of block %2%") % block_a.hash().to_string() % next_mc_hash.to_string()));
+			auto msg(boost::str(boost::format("check_witness_list_mutations_along_mc, best parent block: %1%, no best parent of block %2%") % best_parent_hash.to_string() % next_mc_hash.to_string()));
 			throw std::runtime_error(msg);
 		}
 

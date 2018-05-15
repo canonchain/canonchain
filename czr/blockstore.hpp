@@ -98,9 +98,10 @@ namespace czr
 		bool summary_block_get(MDB_txn *, czr::summary_hash const &, czr::block_hash &);
 		void summary_block_put(MDB_txn *, czr::summary_hash const &, czr::block_hash const &);
 
-		bool witness_list_hash_block_get(MDB_txn *, czr::witness_list_hash const &, czr::block_hash &);
-		bool witness_list_hash_block_exists(MDB_txn * transaction_a, czr::witness_list_hash const & hash_a);
-		void witness_list_hash_block_put(MDB_txn *, czr::witness_list_hash const &, czr::block_hash const &);
+		bool witness_list_hash_block_get(MDB_txn * transaction_a, czr::witness_list_key const & key_a, czr::block_hash & block_a);
+		czr::store_iterator witness_list_hash_block_begin(MDB_txn * transaction_a, czr::witness_list_key const & key_a);
+		bool witness_list_hash_block_exists(MDB_txn * transaction_a, czr::witness_list_key const & key_a);
+		void witness_list_hash_block_put(MDB_txn * transaction_a, czr::witness_list_key const & key_a, czr::block_hash const & block_a);
 
 		bool block_witness_list_get(MDB_txn *, czr::block_hash const &, czr::witness_list_info &);
 		void block_witness_list_put(MDB_txn *, czr::block_hash const &, czr::witness_list_info const &);

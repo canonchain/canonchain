@@ -106,7 +106,7 @@ czr::mdb_val czr::witness_list_info::val() const
 	return czr::mdb_val(sizeof(*this), const_cast<czr::witness_list_info *> (this));
 }
 
-czr::uint256_union czr::witness_list_info::hash()
+czr::witness_list_hash czr::witness_list_info::hash()
 {
 	czr::uint256_union result;
 	blake2b_state hash_l;
@@ -141,6 +141,26 @@ bool czr::witness_list_info::contains(czr::account const & account_a) const
 {
 	auto iter = std::find(witness_list.begin(), witness_list.end(), account_a);
 	return iter != witness_list.end();
+}
+
+czr::witness_list_key::witness_list_key(czr::witness_list_hash const & hash_a, uint64_t const & mci_a) :
+	hash(hash_a),
+	mci(mci_a)
+{
+}
+
+czr::witness_list_key::witness_list_key(MDB_val const &)
+{
+}
+
+bool czr::witness_list_key::operator==(czr::witness_list_key const &) const
+{
+	return false;
+}
+
+czr::mdb_val czr::witness_list_key::val() const
+{
+	return czr::mdb_val();
 }
 
 czr::block_state::block_state()

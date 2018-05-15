@@ -953,11 +953,11 @@ void czr::consensus::advance_mc_stable_block(czr::block_hash const & mc_stable_h
 						czr::witness_list_info wl_info(block->hashables.witness_list);
 						ledger.store.block_witness_list_put(transaction, block_hash, wl_info);
 
-						auto wl_hash(wl_info.hash());
-						if (!ledger.store.witness_list_hash_block_exists(transaction, wl_hash))
+						czr::witness_list_key wl_key(wl_info.hash(), mci);
+						if (!ledger.store.witness_list_hash_block_exists(transaction, wl_key))
 						{
-							//save witness list hash -> block hash
-							ledger.store.witness_list_hash_block_put(transaction, wl_hash, block_hash);
+							//save witness list hash, mci -> block hash
+							ledger.store.witness_list_hash_block_put(transaction, wl_key, block_hash);
 						}
 					}
 				}

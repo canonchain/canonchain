@@ -67,7 +67,7 @@ namespace czr
 		witness_list_info(MDB_val const &);
 		witness_list_info(std::vector<czr::account> const &);
 		czr::mdb_val val() const;
-		czr::uint256_union hash();
+		czr::witness_list_hash hash();
 		bool is_compatible(witness_list_info const &) const;
 		bool contains(czr::account const &) const;
 		std::vector<czr::account> witness_list;
@@ -82,6 +82,17 @@ namespace czr
 		uint64_t witnessed_level_desc;
 		uint64_t level_asc;
 		czr::block_hash hash_asc;
+	};
+
+	class witness_list_key
+	{
+	public:
+		witness_list_key(czr::witness_list_hash const & hash_a, uint64_t const & mci_a);
+		witness_list_key(MDB_val const &);
+		bool operator== (czr::witness_list_key const &) const;
+		czr::mdb_val val() const;
+		czr::witness_list_hash hash;
+		uint64_t mci;
 	};
 
 	class block_state

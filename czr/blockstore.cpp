@@ -645,10 +645,10 @@ void czr::block_store::summary_block_put(MDB_txn * transaction_a, czr::summary_h
 }
 
 
-bool czr::block_store::witness_list_hash_block_get(MDB_txn * transaction_a, czr::witness_list_hash const & hash_a, czr::block_hash & block_a)
+bool czr::block_store::witness_list_hash_block_get(MDB_txn * transaction_a, czr::witness_list_key const & key_a, czr::block_hash & block_a)
 {
 	czr::mdb_val value;
-	auto status(mdb_get(transaction_a, witness_list_hash_block, czr::mdb_val(hash_a), value));
+	auto status(mdb_get(transaction_a, witness_list_hash_block, key_a.val(), value));
 	assert(status == 0 || status == MDB_NOTFOUND);
 	bool result;
 	if (status == MDB_NOTFOUND)
@@ -663,15 +663,21 @@ bool czr::block_store::witness_list_hash_block_get(MDB_txn * transaction_a, czr:
 	return result;
 }
 
-bool czr::block_store::witness_list_hash_block_exists(MDB_txn * transaction_a, czr::witness_list_hash const & hash_a)
+czr::store_iterator czr::block_store::witness_list_hash_block_begin(MDB_txn * transaction_a, czr::witness_list_key const & key_a)
 {
-	czr::store_iterator iterator(transaction_a, witness_list_hash_block, czr::mdb_val(hash_a));
-	return iterator != czr::store_iterator(nullptr) && iterator->first.uint256() == hash_a;
+	czr::store_iterator iterator(transaction_a, witness_list_hash_block, key_a.val());
+	return iterator;
 }
 
-void czr::block_store::witness_list_hash_block_put(MDB_txn * transaction_a, czr::witness_list_hash const & hash_a, czr::block_hash const & block_a)
+bool czr::block_store::witness_list_hash_block_exists(MDB_txn * transaction_a, czr::witness_list_key const & key_a)
 {
-	auto status(mdb_put(transaction_a, witness_list_hash_block, czr::mdb_val(hash_a), czr::mdb_val(block_a), 0));
+	czr::store_iterator iterator(transaction_a, witness_list_hash_block, key_a.val());
+	return iterator != czr::store_iterator(nullptr) && czr::witness_list_key(iterator->first) == key_a;
+}
+
+void czr::block_store::witness_list_hash_block_put(MDB_txn * transaction_a, czr::witness_list_key const & key_a, czr::block_hash const & block_a)
+{
+	auto status(mdb_put(transaction_a, witness_list_hash_block, key_a.val(), czr::mdb_val(block_a), 0));
 	assert(status == 0);
 }
 
