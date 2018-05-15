@@ -388,7 +388,7 @@ czr::process_return czr::consensus::validate(czr::publish const & message)
 
 #pragma endregion
 
-#pragma region  check if last summary block is stable in view of parents and previous
+#pragma region  check if last summary block is stable in view of parents and previous and mci not retreat
 	bool is_last_summary_stable = ledger.check_stable_from_later_blocks(transaction, last_summary_block_hash, block->parents_and_previous());
 	if (!is_last_summary_stable)
 	{

@@ -345,6 +345,8 @@ uint64_t czr::ledger::find_mc_min_wl(MDB_txn * transaction_a, czr::block_hash co
 
 bool czr::ledger::check_stable_from_later_blocks(MDB_txn * transaction_a, czr::block_hash const & earlier_hash, std::vector<czr::block_hash> const & later_hashs)
 {
+	//todo:test if later blocks must be compatible parents 
+
 	//genesis
 	if (earlier_hash == czr::genesis::block_hash)
 		return true;
