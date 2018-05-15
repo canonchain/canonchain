@@ -543,18 +543,17 @@ void czr::consensus::update_main_chain(czr::block const & block_a)
 	czr::block_state free_block_state;
 	ledger.store.block_state_get(transaction, free_block_hash, free_block_state);
 
-	czr::block_hash last_best_pblock_state_hash(free_block_hash);
+	czr::block_hash last_best_pblock_hash(free_block_hash);
 	czr::block_state last_best_pblock_state(free_block_state);
-	using pair_block_hash_state = std::pair<czr::block_hash, czr::block_state>;
 
-	std::unique_ptr<std::list<pair_block_hash_state>> new_mc_block_states(new std::list<pair_block_hash_state>);
+	std::unique_ptr<std::list<czr::block_hash>> new_mc_block_hashs(new std::list<czr::block_hash>);
 	while (!last_best_pblock_state.is_on_main_chain)
 	{
-		new_mc_block_states->push_front(std::make_pair(last_best_pblock_state_hash, last_best_pblock_state));
+		new_mc_block_hashs->push_front(last_best_pblock_hash);
 
 		//get pre best parent block
-		last_best_pblock_state_hash = last_best_pblock_state.best_parent;
-		bool pre_best_pblock_error(ledger.store.block_state_get(transaction, last_best_pblock_state_hash, last_best_pblock_state));
+		last_best_pblock_hash = last_best_pblock_state.best_parent;
+		bool pre_best_pblock_error(ledger.store.block_state_get(transaction, last_best_pblock_hash, last_best_pblock_state));
 		assert(!pre_best_pblock_error);
 	}
 	assert(last_best_pblock_state.main_chain_index);
@@ -592,12 +591,14 @@ void czr::consensus::update_main_chain(czr::block const & block_a)
 #pragma region update main chain index
 
 	uint64_t new_mci(last_mci);
-	for (auto iter(new_mc_block_states->begin()); iter != new_mc_block_states->end(); iter++)
+	for (auto iter(new_mc_block_hashs->begin()); iter != new_mc_block_hashs->end(); iter++)
 	{
-		auto pair(*iter);
 		new_mci++;
-		czr::block_hash new_mc_block_hash(pair.first);
-		czr::block_state new_mc_block_state(pair.second);
+		czr::block_hash new_mc_block_hash(*iter);
+		czr::block_state new_mc_block_state;
+		bool new_mc_block_state_error(ledger.store.block_state_get(transaction, new_mc_block_hash, new_mc_block_state));
+		assert(!new_mc_block_state_error);
+
 		new_mc_block_state.is_on_main_chain = true;
 		new_mc_block_state.main_chain_index = new_mci;
 		ledger.store.block_state_put(transaction, new_mc_block_hash, new_mc_block_state);
@@ -612,7 +613,7 @@ void czr::consensus::update_main_chain(czr::block const & block_a)
 #pragma region update latest included mc index
 
 	//get from unstable blocks where main_chain_index > last_main_chain_index or main_chain_index == null
-	std::unique_ptr<std::unordered_map <czr::block_hash, czr::block_state>> to_update_limci_blocks(new std::unordered_map <czr::block_hash, czr::block_state>);
+	std::unique_ptr<std::unordered_set<czr::block_hash>> to_update_limci_block_hashs(new std::unordered_set <czr::block_hash>);
 	for (czr::store_iterator i(ledger.store.unstable_begin(transaction)), n(nullptr); i != n; ++i)
 	{
 		czr::block_hash block_hash(i->first.uint256());
@@ -620,16 +621,15 @@ void czr::consensus::update_main_chain(czr::block const & block_a)
 		bool error(ledger.store.block_state_get(transaction, block_hash, state));
 		assert(!error);
 		if (!state.main_chain_index || (*state.main_chain_index) > last_mci)
-			to_update_limci_blocks->insert(std::make_pair(block_hash, state));
+			to_update_limci_block_hashs->insert(block_hash);
 	}
 
-	while (to_update_limci_blocks->size() > 0)
+	while (to_update_limci_block_hashs->size() > 0)
 	{
 		std::unique_ptr<std::vector<czr::block_hash>> updated_limci_blocks(new std::vector<czr::block_hash>);
-		for (auto iter(to_update_limci_blocks->begin()); iter != to_update_limci_blocks->end(); iter++)
+		for (auto iter(to_update_limci_block_hashs->begin()); iter != to_update_limci_block_hashs->end(); iter++)
 		{
-			auto pair(*iter);
-			czr::block_hash block_hash(pair.first);
+			czr::block_hash block_hash(*iter);
 			std::unique_ptr<czr::block> block = ledger.store.block_get(transaction, block_hash);
 			assert(block != nullptr);
 
@@ -673,7 +673,7 @@ void czr::consensus::update_main_chain(czr::block const & block_a)
 		}
 
 		for (auto iter(updated_limci_blocks->begin()); iter != updated_limci_blocks->end(); iter++)
-			to_update_limci_blocks->erase(*iter);
+			to_update_limci_block_hashs->erase(*iter);
 	}
 
 #pragma endregion
