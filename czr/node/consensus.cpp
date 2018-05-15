@@ -626,7 +626,7 @@ void czr::consensus::update_main_chain(czr::block const & block_a)
 
 	while (to_update_limci_block_hashs->size() > 0)
 	{
-		std::unique_ptr<std::vector<czr::block_hash>> updated_limci_blocks(new std::vector<czr::block_hash>);
+		std::unique_ptr<std::list<czr::block_hash>> updated_limci_blocks(new std::list<czr::block_hash>);
 		for (auto iter(to_update_limci_block_hashs->begin()); iter != to_update_limci_block_hashs->end(); iter++)
 		{
 			czr::block_hash block_hash(*iter);
@@ -706,7 +706,7 @@ void czr::consensus::check_mc_stable_block()
 #pragma region check is stable
 
 	czr::block_hash mc_child_hash;
-	std::shared_ptr<std::vector<czr::block_hash>> branch_child_hashs(new std::vector<czr::block_hash>);
+	std::shared_ptr<std::list<czr::block_hash>> branch_child_hashs(new std::list<czr::block_hash>);
 	ledger.find_unstable_child_blocks(transaction, last_stable_block_hash, mc_child_hash, branch_child_hashs);
 
 	if (branch_child_hashs->size() == 0)
@@ -722,7 +722,7 @@ void czr::consensus::check_mc_stable_block()
 	else
 	{
 		//branch
-		std::unique_ptr<std::vector<czr::block_hash>> search_hash_list;
+		std::unique_ptr<std::list<czr::block_hash>> search_hash_list(new std::list<czr::block_hash>);
 		uint64_t branch_max_level;
 		for (auto i(branch_child_hashs->begin()); i != branch_child_hashs->end(); i++)
 		{
@@ -743,7 +743,7 @@ void czr::consensus::check_mc_stable_block()
 
 		while (search_hash_list->size() > 0)
 		{
-			std::unique_ptr<std::vector<czr::block_hash>> next_search_hash_list(new std::vector<czr::block_hash>);
+			std::unique_ptr<std::list<czr::block_hash>> next_search_hash_list(new std::list<czr::block_hash>);
 
 			for (auto iter(search_hash_list->begin()); iter != search_hash_list->end(); iter++)
 			{
@@ -815,7 +815,7 @@ void czr::consensus::advance_mc_stable_block(czr::block_hash const & mc_stable_h
 
 	while (handle_fork_hashs->size() > 0)
 	{
-		std::unique_ptr<std::vector<czr::block_hash>> handled_hashs;
+		std::unique_ptr<std::list<czr::block_hash>> handled_hashs(new std::list<czr::block_hash>);
 
 		for (auto iter(handle_fork_hashs->begin()); iter != handle_fork_hashs->end(); iter++)
 		{
@@ -879,7 +879,7 @@ void czr::consensus::advance_mc_stable_block(czr::block_hash const & mc_stable_h
 
 	while (stable_block_hashs->size() > 0)
 	{
-		std::shared_ptr<std::unordered_set<czr::block_hash>> handled_stable_block_hashs(new std::unordered_set<czr::block_hash>);
+		std::shared_ptr<std::list<czr::block_hash>> handled_stable_block_hashs(new std::list<czr::block_hash>);
 
 		for (auto iter(stable_block_hashs->begin()); iter != stable_block_hashs->end(); iter++)
 		{
@@ -1020,7 +1020,7 @@ void czr::consensus::advance_mc_stable_block(czr::block_hash const & mc_stable_h
 
 			block_stable_observer(std::move(block));
 
-			handled_stable_block_hashs->insert(block_hash);
+			handled_stable_block_hashs->push_back(block_hash);
 		}
 
 		for (auto iter(handled_stable_block_hashs->begin()); iter != handled_stable_block_hashs->end(); iter++)

@@ -276,7 +276,7 @@ bool czr::ledger::check_witness_list_mutations_along_mc(MDB_txn * transaction_a,
 	return true;
 }
 
-void czr::ledger::find_unstable_child_blocks(MDB_txn * transaction_a, czr::block_hash const & stable_hash, czr::block_hash & mc_child_hash, std::shared_ptr<std::vector<czr::block_hash>> branch_child_hashs)
+void czr::ledger::find_unstable_child_blocks(MDB_txn * transaction_a, czr::block_hash const & stable_hash, czr::block_hash & mc_child_hash, std::shared_ptr<std::list<czr::block_hash>> branch_child_hashs)
 {
 	//get children ,filtered by children's best parent = check block's best parent
 	czr::store_iterator child_iter(store.block_child_begin(transaction_a, czr::block_child_key(stable_hash, 0)));
@@ -399,11 +399,11 @@ bool czr::ledger::check_stable_from_later_blocks(MDB_txn * transaction_a, czr::b
 
 	//find unstable child blocks
 	czr::block_hash mc_child_hash;
-	std::shared_ptr<std::vector<czr::block_hash>> temp_branch_child_hashs(new std::vector<czr::block_hash>);
+	std::shared_ptr<std::list<czr::block_hash>> temp_branch_child_hashs(new std::list<czr::block_hash>);
 	find_unstable_child_blocks(transaction_a, earlier_best_parent_hash, mc_child_hash, temp_branch_child_hashs);
 
 	//remove non-included branch children
-	std::unique_ptr<std::vector<czr::block_hash>> branch_child_hashs(new std::vector<czr::block_hash>);
+	std::unique_ptr<std::list<czr::block_hash>> branch_child_hashs(new std::list <czr::block_hash>);
 	for (auto i(temp_branch_child_hashs->begin()); i != temp_branch_child_hashs->end(); i++)
 	{
 		czr::block_hash branch_child_hash(*i);
@@ -429,7 +429,7 @@ bool czr::ledger::check_stable_from_later_blocks(MDB_txn * transaction_a, czr::b
 	else
 	{
 		//branch
-		std::unique_ptr<std::vector<czr::block_hash>> search_hash_list;
+		std::unique_ptr<std::list<czr::block_hash>> search_hash_list(new std::list<czr::block_hash>);
 		uint64_t branch_max_level;
 		for (auto i(branch_child_hashs->begin()); i != branch_child_hashs->end(); i++)
 		{
@@ -450,7 +450,7 @@ bool czr::ledger::check_stable_from_later_blocks(MDB_txn * transaction_a, czr::b
 
 		while (search_hash_list->size() > 0)
 		{
-			std::unique_ptr<std::vector<czr::block_hash>> next_search_hash_list(new std::vector<czr::block_hash>);
+			std::unique_ptr<std::list<czr::block_hash>> next_search_hash_list(new std::list<czr::block_hash>);
 
 			for (auto iter(search_hash_list->begin()); iter != search_hash_list->end(); iter++)
 			{
