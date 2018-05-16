@@ -61,7 +61,7 @@ czr::compose_result czr::composer::compose(MDB_txn * transaction_a, czr::account
 	// we need at least one compatible parent, otherwise go deep
 	if (!has_compatible)
 	{
-		//todo:pickDeepParentUnits
+		parents = pick_deep_parents(transaction_a, my_wl_info, boost::none);
 	}
 	else
 	{
@@ -146,7 +146,7 @@ czr::compose_result czr::composer::compose(MDB_txn * transaction_a, czr::account
 		czr::witness_list_key iter_wl_key(iter->first);
 		if (iter_wl_key.hash == search_wl_key.hash && iter_wl_key.mci <= last_stable_mci)
 		{
-			witness_list_block = czr::mdb_val(iter->second).uint256();
+			witness_list_block = iter->second.uint256();
 		}
 	}
 
@@ -194,4 +194,74 @@ czr::compose_result czr::composer::compose(MDB_txn * transaction_a, czr::account
 		witness_list_block, witness_list, last_summary, last_summary_block, data_a, prv_a, pub_a, work_a));
 
 	return czr::compose_result(czr::compose_result_codes::ok, block);
+}
+
+std::vector<czr::block_hash> czr::composer::pick_deep_parents(MDB_txn * transaction_a, czr::witness_list_info const & my_wl_info, boost::optional<uint64_t> const & max_wl)
+{
+	std::vector<czr::block_hash> parents;
+
+	czr::block_hash pb_hash;
+	if (!max_wl)
+	{
+		//search all block order by mci desc
+		for(czr::store_iterator i(ledger.store.mci_block_rbeign(transaction_a)), n(nullptr); i != n; ++i )
+		{
+			czr::mci_block_key key(i->first);
+			czr::block_hash b_hash(key.hash);
+			std::unique_ptr<czr::block> block(ledger.store.block_get(transaction_a, b_hash));
+			czr::witness_list_info wl_info(ledger.block_witness_list(transaction_a, *block));
+			if (my_wl_info.is_compatible(wl_info))
+			{
+				pb_hash = b_hash;
+				break;
+			}
+		}
+	}
+	else
+	{
+		//search main chain block
+		for (czr::store_iterator i(ledger.store.main_chain_rbegin(transaction_a)), n(nullptr); i != n; ++i)
+		{
+			czr::block_hash b_hash(i->second.uint256());
+			czr::block_state b_state;
+			bool b_state_error(ledger.store.block_state_get(transaction_a, b_hash, b_state));
+			assert(!b_state_error);
+			if (b_state.witnessed_level < *max_wl)
+			{
+				std::unique_ptr<czr::block> block(ledger.store.block_get(transaction_a, b_hash));
+				czr::witness_list_info wl_info(ledger.block_witness_list(transaction_a, *block));
+				if (my_wl_info.is_compatible(wl_info))
+				{
+					pb_hash = b_hash;
+					break;
+				}
+			}
+		}
+	}
+
+	if (pb_hash.is_zero())
+	{
+		BOOST_LOG(node.log) << boost::str(boost::format("compose error:no deep parents, my witness list: %1%") % my_wl_info.to_string());
+		return parents;
+	}
+
+	return check_wl_not_retreating_and_look_lower(transaction_a, my_wl_info, parents);
+}
+
+std::vector<czr::block_hash> czr::composer::check_wl_not_retreating_and_look_lower(MDB_txn * transaction_a,
+	czr::witness_list_info const & my_wl_info, std::vector<czr::block_hash> const & parents)
+{
+	czr::block_hash best_parent_hash(ledger.determine_best_parent(transaction_a, parents, my_wl_info));
+	assert(!best_parent_hash.is_zero());
+	czr::block_state best_parent_state;
+	bool best_parent_state_error(ledger.store.block_state_get(transaction_a, best_parent_hash, best_parent_state));
+	assert(!best_parent_state_error);
+
+	uint64_t best_parent_wl(best_parent_state.witnessed_level);
+	uint64_t child_wl(ledger.determine_witness_level(transaction_a, best_parent_hash, my_wl_info));
+
+	if (child_wl >= best_parent_wl)
+		return parents;
+	else
+		return pick_deep_parents(transaction_a, my_wl_info, best_parent_wl);
 }

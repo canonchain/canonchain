@@ -542,7 +542,7 @@ void czr::consensus::update_main_chain(czr::block const & block_a)
 	//search best free block by witnessed_level desc, level asc, block hash asc
 	czr::store_iterator free_iter(ledger.store.free_begin(transaction));
 	assert(free_iter != czr::store_iterator(nullptr));
-	czr::free_key free_key = free_iter->first.value;
+	czr::free_key free_key(free_iter->first);
 	czr::block_hash free_block_hash(free_key.hash_asc);
 
 	if(free_block_hash == czr::genesis::block_hash) //genesis block
