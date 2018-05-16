@@ -812,6 +812,25 @@ void czr::block_store::main_chain_del(MDB_txn * transaction_a, uint64_t const & 
 }
 
 
+czr::store_iterator czr::block_store::mci_block_rbeign(MDB_txn * transaction_a)
+{
+	czr::store_iterator result(transaction_a, mci_block, czr::store_iterator_direction::reverse);
+	return result;
+}
+
+void czr::block_store::mci_block_put(MDB_txn * transaction_a, czr::mci_block_key const & key)
+{
+	auto status(mdb_put(transaction_a, mci_block, key.val(), nullptr, 0));
+	assert(status == 0);
+}
+
+void czr::block_store::mci_block_del(MDB_txn * transaction_a, czr::mci_block_key const & key)
+{
+	auto status(mdb_del(transaction_a, mci_block, key.val(), nullptr));
+	assert(status == 0 || status == MDB_NOTFOUND);
+}
+
+
 void czr::block_store::last_stable_mci_put(MDB_txn * transaction_a, uint64_t const & last_stable_mci_value)
 {
 	auto status(mdb_put(transaction_a, prop, czr::mdb_val(last_stable_mci_key), czr::mdb_val(last_stable_mci_value), 0));

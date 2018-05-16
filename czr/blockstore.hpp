@@ -114,14 +114,18 @@ namespace czr
 		void unstable_put(MDB_txn *, czr::block_hash const &);
 		void unstable_del(MDB_txn *, czr::block_hash const &);
 
-		bool main_chain_get(MDB_txn *, uint64_t const &, czr::block_hash &);
 		bool block_state_get(MDB_txn *, czr::block_hash const &, czr::block_state &);
 		void block_state_put(MDB_txn *, czr::block_hash const &, czr::block_state const &);
 
+		bool main_chain_get(MDB_txn *, uint64_t const &, czr::block_hash &);
 		czr::store_iterator main_chain_begin(MDB_txn *, uint64_t const &);
 		czr::store_iterator main_chain_rbegin(MDB_txn *);
 		void main_chain_put(MDB_txn *, uint64_t const &, czr::block_hash const &);
 		void main_chain_del(MDB_txn *, uint64_t const &);
+
+		czr::store_iterator mci_block_rbeign(MDB_txn * transaction_a);
+		void mci_block_put(MDB_txn * transaction_a, czr::mci_block_key const & key);
+		void mci_block_del(MDB_txn * transaction_a, czr::mci_block_key const & key);
 
 		void last_stable_mci_put(MDB_txn * transaction_a, uint64_t const & last_stable_mci_value);
 		uint64_t last_stable_mci_get(MDB_txn *);
@@ -179,6 +183,8 @@ namespace czr
 		MDB_dbi unstable;
 		//main chain index -> block hash
 		MDB_dbi main_chain;
+		//main chain index, block hash -> nullptr
+		MDB_dbi mci_block;
 		// block hash -> summary hash
 		MDB_dbi block_summary;
 		// summary hash -> block hash

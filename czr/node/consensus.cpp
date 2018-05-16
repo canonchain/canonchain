@@ -52,6 +52,14 @@ czr::process_return czr::consensus::validate(czr::publish const & message)
 		return result;
 	}
 
+	//data size
+	if(block->hashables.data.size() > czr::max_data_size)
+	{
+		result.code = czr::process_result::invalid_block;
+		result.err_msg = "data size too large";
+		return result;
+	}
+
 #pragma region validate hash_tree_summary
 
 	if (!message.summary_hash.is_zero())
@@ -582,8 +590,9 @@ void czr::consensus::update_main_chain(czr::block const & block_a)
 		old_mc_block_state.main_chain_index = boost::none;
 		ledger.store.block_state_put(transaction, old_mc_block_hash, old_mc_block_state);
 
-		uint64_t old_mc_block_mci(i->first.uint64());
-		ledger.store.main_chain_del(transaction, old_mc_block_mci);
+		uint64_t old_mci(i->first.uint64());
+		ledger.store.main_chain_del(transaction, old_mci);
+		ledger.store.mci_block_del(transaction, czr::mci_block_key(old_mci, old_mc_block_hash));
 	}
 
 #pragma endregion
@@ -603,6 +612,7 @@ void czr::consensus::update_main_chain(czr::block const & block_a)
 		new_mc_block_state.main_chain_index = new_mci;
 		ledger.store.block_state_put(transaction, new_mc_block_hash, new_mc_block_state);
 		ledger.store.main_chain_put(transaction, new_mci, new_mc_block_hash);
+		ledger.store.mci_block_put(transaction, czr::mci_block_key(new_mci, new_mc_block_hash));
 
 		std::shared_ptr<std::unordered_set<czr::block_hash>> updated_hashs;
 		update_parent_mci(new_mc_block_hash, new_mci, updated_hashs);
@@ -968,10 +978,14 @@ void czr::consensus::advance_mc_stable_block(czr::block_hash const & mc_stable_h
 				//todo:clear content;
 			}
 
+			//save block state
 			block_state.is_invalid = is_invalid;
 			block_state.is_fail = is_fail;
 			block_state.is_stable = true;
 			ledger.store.block_state_put(transaction, block_hash, block_state);
+
+			//remove unstable
+			ledger.store.unstable_del(transaction, block_hash);
 
 #pragma region summary
 
@@ -1124,6 +1138,7 @@ void czr::consensus::update_parent_mci(czr::block_hash const & hash_a, uint64_t 
 			continue;
 		pblock_state.main_chain_index = mci;
 		ledger.store.block_state_put(transaction, pblock_hash, pblock_state);
+		ledger.store.mci_block_put(transaction, czr::mci_block_key(mci, pblock_hash));
 
 		updated_hashs->insert(pblock_hash);
 

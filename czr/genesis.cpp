@@ -124,9 +124,18 @@ void czr::genesis::try_initialize(MDB_txn * transaction_a, czr::block_store & st
 	block_state.to_state = 0;
 	store_a.block_state_put(transaction_a, block_hash, block_state);
 
+	//mci
+	store_a.main_chain_put(transaction_a, *block_state.main_chain_index, block_hash);
+	store_a.mci_block_put(transaction_a, czr::mci_block_key(*block_state.main_chain_index, block_hash));
+
+	//free
+	store_a.free_put(transaction_a, czr::free_key(block_state.witnessed_level, block_state.level, block_hash));
+
 	//to account state
 	czr::account_state to_state(block->hashables.to, block_hash, 0, block->hashables.amount);
 	store_a.account_state_put(transaction_a, to_state.hash(), to_state);
+	store_a.latest_account_state_put(transaction_a, block->hashables.to, to_state);
+
 
 	//witness list
 	czr::witness_list_info wl_info(block->hashables.witness_list);

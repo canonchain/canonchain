@@ -157,7 +157,6 @@ std::string czr::witness_list_info::to_string() const
 	return ss.str();
 }
 
-
 czr::witness_list_key::witness_list_key(czr::witness_list_hash const & hash_a, uint64_t const & mci_a) :
 	hash(hash_a),
 	mci(mci_a)
@@ -303,6 +302,28 @@ czr::mdb_val czr::skiplist_info::val() const
 	return czr::mdb_val(sizeof(*this), const_cast<czr::skiplist_info *> (this));
 }
 
+czr::mci_block_key::mci_block_key(uint64_t const & mci_a, czr::block_hash const & hash_a):
+	mci(mci_a),
+	hash(hash_a)
+{
+}
+
+czr::mci_block_key::mci_block_key(MDB_val const & val_a)
+{
+	assert(val_a.mv_size == sizeof(*this));
+	std::copy(reinterpret_cast<uint8_t const *> (val_a.mv_data), reinterpret_cast<uint8_t const *> (val_a.mv_data) + sizeof(*this), reinterpret_cast<uint8_t *> (this));
+}
+
+bool czr::mci_block_key::operator==(czr::mci_block_key const & other_a) const
+{
+	return mci == other_a.mci && hash == other_a.hash;
+}
+
+czr::mdb_val czr::mci_block_key::val() const
+{
+	return czr::mdb_val(sizeof(*this), const_cast<czr::mci_block_key *> (this));
+}
+
 czr::summary_hash czr::summary::gen_summary_hash(czr::block_hash const & block_hash, std::vector<czr::summary_hash> const & parent_hashs,
 	std::set<czr::summary_hash> const & skiplist, bool const & is_fork, bool const & is_invalid, bool const & is_fail,
 	czr::account_state_hash const & from_state_hash, czr::account_state_hash const & to_state_hash)
@@ -334,4 +355,3 @@ std::unique_ptr<czr::block> czr::deserialize_block(MDB_val const & val_a)
 	czr::bufferstream stream(reinterpret_cast<uint8_t const *> (val_a.mv_data), val_a.mv_size);
 	return deserialize_block(stream);
 }
-

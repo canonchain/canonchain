@@ -129,6 +129,17 @@ namespace czr
 		czr::block_hash child_hash;
 	};
 
+	class mci_block_key
+	{
+	public:
+		mci_block_key(uint64_t const & mci_a, czr::block_hash const & hash_a);
+		mci_block_key(MDB_val const &);
+		bool operator== (czr::mci_block_key const &) const;
+		czr::mdb_val val() const;
+		uint64_t mci;
+		czr::block_hash hash;
+	};
+
 	class account_state
 	{
 	public:
