@@ -20,8 +20,6 @@
 
 #include <ed25519-donna/ed25519.h>
 
-double constexpr czr::node::price_max;
-double constexpr czr::node::free_cutoff;
 std::chrono::seconds constexpr czr::node::period;
 std::chrono::seconds constexpr czr::node::cutoff;
 std::chrono::minutes constexpr czr::node::backup_interval;
@@ -540,7 +538,6 @@ czr::node_config::node_config(uint16_t peering_port_a, czr::logging const & logg
 	peering_port(peering_port_a),
 	logging(logging_a),
 	bootstrap_fraction_numerator(1),
-	receive_minimum(czr::czr_ratio),
 	password_fanout(1024),
 	io_threads(std::max<unsigned>(4, std::thread::hardware_concurrency())),
 	work_threads(std::max<unsigned>(4, std::thread::hardware_concurrency())),
@@ -569,7 +566,6 @@ void czr::node_config::serialize_json(boost::property_tree::ptree & tree_a) cons
 	tree_a.put("version", "1");
 	tree_a.put("peering_port", std::to_string(peering_port));
 	tree_a.put("bootstrap_fraction_numerator", std::to_string(bootstrap_fraction_numerator));
-	tree_a.put("receive_minimum", receive_minimum.to_string_dec());
 	boost::property_tree::ptree logging_l;
 	logging.serialize_json(logging_l);
 	tree_a.add_child("logging", logging_l);
@@ -620,7 +616,6 @@ bool czr::node_config::deserialize_json(bool & upgraded_a, boost::property_tree:
 		}
 		auto peering_port_l(tree_a.get<std::string>("peering_port"));
 		auto bootstrap_fraction_numerator_l(tree_a.get<std::string>("bootstrap_fraction_numerator"));
-		auto receive_minimum_l(tree_a.get<std::string>("receive_minimum"));
 		auto & logging_l(tree_a.get_child("logging"));
 		work_peers.clear();
 		auto work_peers_l(tree_a.get_child("work_peers"));
@@ -666,7 +661,6 @@ bool czr::node_config::deserialize_json(bool & upgraded_a, boost::property_tree:
 			lmdb_max_dbs = std::stoi(lmdb_max_dbs_l);
 			result |= peering_port > std::numeric_limits<uint16_t>::max();
 			result |= logging.deserialize_json(upgraded_a, logging_l);
-			result |= receive_minimum.decode_dec(receive_minimum_l);
 			result |= password_fanout < 16;
 			result |= password_fanout > 1024 * 1024;
 			result |= io_threads == 0;
@@ -1348,22 +1342,6 @@ void czr::node::backup_wallet()
 	alarm.add(std::chrono::steady_clock::now() + backup_interval, [this_l]() {
 		this_l->backup_wallet();
 	});
-}
-
-int czr::node::price(czr::uint128_t const & balance_a, int amount_a)
-{
-	assert(balance_a >= amount_a * czr::Gczr_ratio);
-	auto balance_l(balance_a);
-	double result(0.0);
-	for (auto i(0); i < amount_a; ++i)
-	{
-		balance_l -= czr::Gczr_ratio;
-		auto balance_scaled((balance_l / czr::Mczr_ratio).convert_to<double>());
-		auto units(balance_scaled / 1000.0);
-		auto unit_price(((free_cutoff - units) / free_cutoff) * price_max);
-		result += std::min(std::max(0.0, unit_price), price_max);
-	}
-	return static_cast<int> (result * 100.0);
 }
 
 namespace

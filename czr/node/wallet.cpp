@@ -174,6 +174,7 @@ void czr::wallet_store::derive_key(czr::raw_key & prv_a, MDB_txn * transaction_a
 	kdf.phs(prv_a, password_a, salt_l);
 }
 
+
 czr::fan::fan(czr::uint256_union const & key, size_t count_a)
 {
 	std::unique_ptr<czr::uint256_union> first(new czr::uint256_union(key));
@@ -212,6 +213,7 @@ void czr::fan::value_set(czr::raw_key const & value_a)
 	*(values[0]) ^= value_a.data;
 }
 
+
 czr::wallet_value::wallet_value(czr::mdb_val const & val_a)
 {
 	assert(val_a.size() == sizeof(*this));
@@ -230,6 +232,7 @@ czr::mdb_val czr::wallet_value::val() const
 	static_assert (sizeof(*this) == sizeof(key) + sizeof(work), "Class not packed");
 	return czr::mdb_val(sizeof(*this), const_cast<czr::wallet_value *> (this));
 }
+
 
 unsigned const czr::wallet_store::version_1(1);
 unsigned const czr::wallet_store::version_current(version_1);
@@ -598,6 +601,7 @@ void czr::wallet_store::version_put(MDB_txn * transaction_a, unsigned version_a)
 	entry_put_raw(transaction_a, czr::wallet_store::version_special, czr::wallet_value(entry, 0));
 }
 
+
 void czr::kdf::phs(czr::raw_key & result_a, std::string const & password_a, czr::uint256_union const & salt_a)
 {
 	std::lock_guard<std::mutex> lock(mutex);
@@ -605,6 +609,7 @@ void czr::kdf::phs(czr::raw_key & result_a, std::string const & password_a, czr:
 	assert(success == 0);
 	(void)success;
 }
+
 
 czr::wallet::wallet(bool & init_a, czr::transaction & transaction_a, czr::node & node_a, std::string const & wallet_a) :
 	lock_observer([](bool, bool) {}),
@@ -741,6 +746,109 @@ void czr::wallet_store::destroy(MDB_txn * transaction_a)
 	assert(status == 0);
 }
 
+// Update work for account if latest root is root_a
+void czr::wallet::work_update(MDB_txn * transaction_a, czr::account const & account_a, czr::block_hash const & root_a, uint64_t work_a)
+{
+	assert(!czr::work_validate(root_a, work_a));
+	assert(store.exists(transaction_a, account_a));
+	auto latest(node.ledger.latest_root(transaction_a, account_a));
+	if (latest == root_a)
+	{
+		store.work_put(transaction_a, account_a, work_a);
+	}
+	else
+	{
+		BOOST_LOG(node.log) << "Cached work no longer valid, discarding";
+	}
+}
+
+// Fetch work for root_a, use cached value if possible
+uint64_t czr::wallet::work_fetch(MDB_txn * transaction_a, czr::account const & account_a, czr::block_hash const & root_a)
+{
+	uint64_t result;
+	auto error(store.work_get(transaction_a, account_a, result));
+	if (error)
+	{
+		result = node.generate_work(root_a);
+	}
+	else if (czr::work_validate(root_a, result))
+	{
+		BOOST_LOG(node.log) << "Cached work invalid, regenerating";
+		result = node.generate_work(root_a);
+	}
+
+	return result;
+}
+
+void czr::wallet::work_ensure(MDB_txn * transaction_a, czr::account const & account_a)
+{
+	assert(store.exists(transaction_a, account_a));
+	auto root(node.ledger.latest_root(transaction_a, account_a));
+	uint64_t work;
+	auto error(store.work_get(transaction_a, account_a, work));
+	assert(!error);
+	if (czr::work_validate(root, work))
+	{
+		auto this_l(shared_from_this());
+		node.background([this_l, account_a, root]() {
+			this_l->work_generate(account_a, root);
+		});
+	}
+}
+
+void czr::wallet::init_free_accounts(MDB_txn * transaction_a)
+{
+	free_accounts.clear();
+	for (auto i(store.begin(transaction_a)), n(store.end()); i != n; ++i)
+	{
+		free_accounts.insert(i->first.uint256());
+	}
+}
+
+czr::public_key czr::wallet::change_seed(MDB_txn * transaction_a, czr::raw_key const & prv_a)
+{
+	store.seed_set(transaction_a, prv_a);
+	auto account = deterministic_insert(transaction_a);
+	uint32_t count(0);
+	for (uint32_t i(1), n(64); i < n; ++i)
+	{
+		czr::raw_key prv;
+		store.deterministic_key(prv, transaction_a, i);
+		czr::keypair pair(prv.data.to_string());
+		// Check if account received at least 1 block
+		auto latest(node.ledger.latest(transaction_a, pair.pub));
+		if (!latest.is_zero())
+		{
+			count = i;
+			// i + 64 - Check additional 64 accounts
+			// i/64 - Check additional accounts for large wallets. I.e. 64000/64 = 1000 accounts to check
+			n = i + 64 + (i / 64);
+		}
+	}
+	for (uint32_t i(0); i < count; ++i)
+	{
+		// Generate work for first 4 accounts only to prevent weak CPU nodes stuck
+		account = deterministic_insert(transaction_a, i < 4);
+	}
+
+	return account;
+}
+
+void czr::wallet::work_generate(czr::account const & account_a, czr::block_hash const & root_a)
+{
+	auto begin(std::chrono::steady_clock::now());
+	auto work(node.generate_work(root_a));
+	if (node.config.logging.work_generation_time())
+	{
+		BOOST_LOG(node.log) << "Work generation complete: " << (std::chrono::duration_cast<std::chrono::microseconds> (std::chrono::steady_clock::now() - begin).count()) << " us";
+	}
+	czr::transaction transaction(store.environment, nullptr, true);
+	if (store.exists(transaction, account_a))
+	{
+		work_update(transaction, account_a, root_a, work);
+	}
+}
+
 void czr::wallet::send_async(czr::account const & from_a, czr::account const & to_a, czr::amount const & amount_a,
 	std::vector<uint8_t> const & data_a, std::function<void(czr::send_result)> const & action_a,
 	bool generate_work_a, boost::optional<std::string> id_a)
@@ -850,108 +958,6 @@ czr::send_result czr::wallet::send_action(czr::account const & from_a, czr::acco
 	}
 }
 
-// Update work for account if latest root is root_a
-void czr::wallet::work_update(MDB_txn * transaction_a, czr::account const & account_a, czr::block_hash const & root_a, uint64_t work_a)
-{
-	assert(!czr::work_validate(root_a, work_a));
-	assert(store.exists(transaction_a, account_a));
-	auto latest(node.ledger.latest_root(transaction_a, account_a));
-	if (latest == root_a)
-	{
-		store.work_put(transaction_a, account_a, work_a);
-	}
-	else
-	{
-		BOOST_LOG(node.log) << "Cached work no longer valid, discarding";
-	}
-}
-
-// Fetch work for root_a, use cached value if possible
-uint64_t czr::wallet::work_fetch(MDB_txn * transaction_a, czr::account const & account_a, czr::block_hash const & root_a)
-{
-	uint64_t result;
-	auto error(store.work_get(transaction_a, account_a, result));
-	if (error)
-	{
-		result = node.generate_work(root_a);
-	}
-	else if (czr::work_validate(root_a, result))
-	{
-		BOOST_LOG(node.log) << "Cached work invalid, regenerating";
-		result = node.generate_work(root_a);
-	}
-
-	return result;
-}
-
-void czr::wallet::work_ensure(MDB_txn * transaction_a, czr::account const & account_a)
-{
-	assert(store.exists(transaction_a, account_a));
-	auto root(node.ledger.latest_root(transaction_a, account_a));
-	uint64_t work;
-	auto error(store.work_get(transaction_a, account_a, work));
-	assert(!error);
-	if (czr::work_validate(root, work))
-	{
-		auto this_l(shared_from_this());
-		node.background([this_l, account_a, root]() {
-			this_l->work_generate(account_a, root);
-		});
-	}
-}
-
-void czr::wallet::init_free_accounts(MDB_txn * transaction_a)
-{
-	free_accounts.clear();
-	for (auto i(store.begin(transaction_a)), n(store.end()); i != n; ++i)
-	{
-		free_accounts.insert(i->first.uint256());
-	}
-}
-
-czr::public_key czr::wallet::change_seed(MDB_txn * transaction_a, czr::raw_key const & prv_a)
-{
-	store.seed_set(transaction_a, prv_a);
-	auto account = deterministic_insert(transaction_a);
-	uint32_t count(0);
-	for (uint32_t i(1), n(64); i < n; ++i)
-	{
-		czr::raw_key prv;
-		store.deterministic_key(prv, transaction_a, i);
-		czr::keypair pair(prv.data.to_string());
-		// Check if account received at least 1 block
-		auto latest(node.ledger.latest(transaction_a, pair.pub));
-		if (!latest.is_zero())
-		{
-			count = i;
-			// i + 64 - Check additional 64 accounts
-			// i/64 - Check additional accounts for large wallets. I.e. 64000/64 = 1000 accounts to check
-			n = i + 64 + (i / 64);
-		}
-	}
-	for (uint32_t i(0); i < count; ++i)
-	{
-		// Generate work for first 4 accounts only to prevent weak CPU nodes stuck
-		account = deterministic_insert(transaction_a, i < 4);
-	}
-
-	return account;
-}
-
-void czr::wallet::work_generate(czr::account const & account_a, czr::block_hash const & root_a)
-{
-	auto begin(std::chrono::steady_clock::now());
-	auto work(node.generate_work(root_a));
-	if (node.config.logging.work_generation_time())
-	{
-		BOOST_LOG(node.log) << "Work generation complete: " << (std::chrono::duration_cast<std::chrono::microseconds> (std::chrono::steady_clock::now() - begin).count()) << " us";
-	}
-	czr::transaction transaction(store.environment, nullptr, true);
-	if (store.exists(transaction, account_a))
-	{
-		work_update(transaction, account_a, root_a, work);
-	}
-}
 
 czr::wallets::wallets(bool & error_a, czr::node & node_a) :
 	observer([](bool) {}),
@@ -1085,6 +1091,7 @@ void czr::wallets::stop()
 
 czr::uint128_t const czr::wallets::generate_priority = std::numeric_limits<czr::uint128_t>::max();
 czr::uint128_t const czr::wallets::high_priority = std::numeric_limits<czr::uint128_t>::max() - 1;
+
 
 czr::store_iterator czr::wallet_store::begin(MDB_txn * transaction_a)
 {

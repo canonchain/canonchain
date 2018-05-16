@@ -269,7 +269,6 @@ namespace czr
 		std::vector<std::pair<boost::asio::ip::address, uint16_t>> work_peers;
 		std::vector<std::string> preconfigured_peers;
 		unsigned bootstrap_fraction_numerator;
-		czr::amount receive_minimum;
 		unsigned password_fanout;
 		unsigned io_threads;
 		unsigned work_threads;
@@ -350,7 +349,6 @@ namespace czr
 		void ongoing_keepalive();
 		void ongoing_store_flush();
 		void backup_wallet();
-		int price(czr::uint128_t const &, int);
 		void generate_work(czr::block &);
 		uint64_t generate_work(czr::uint256_union const &);
 		void generate_work(czr::uint256_union const &, std::function<void(uint64_t)>);
@@ -372,8 +370,6 @@ namespace czr
 		czr::block_processor block_processor;
 		std::thread block_processor_thread;
 		czr::block_arrival block_arrival;
-		static double constexpr price_max = 16.0;
-		static double constexpr free_cutoff = 1024.0;
 		static std::chrono::seconds constexpr period = std::chrono::seconds(60);
 		static std::chrono::seconds constexpr cutoff = period * 5;
 		static std::chrono::minutes constexpr backup_interval = std::chrono::minutes(5);

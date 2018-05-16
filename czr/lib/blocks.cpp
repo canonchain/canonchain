@@ -99,7 +99,7 @@ czr::block_hashables::block_hashables (bool & error_a, boost::property_tree::ptr
 	deserialize_json(error_a, tree_a);
 }
 
-void czr::block_hashables::serialize_json(boost::property_tree::ptree tree_a, std::string & string_a) const
+void czr::block_hashables::serialize_json(boost::property_tree::ptree tree_a) const
 {
 	tree_a.put("from", from.to_account());
 	tree_a.put("to", to.to_account());
@@ -332,12 +332,13 @@ void czr::block::serialize_json(std::string & string_a) const
 {
 	boost::property_tree::ptree tree;
 
-	hashables.serialize_json(tree, string_a);
+	hashables.serialize_json(tree);
 
 	std::string signature_l;
 	signature.encode_hex(signature_l);
 	tree.put("signature", signature_l);
 	tree.put("work", czr::to_string_hex(work));
+
 	std::stringstream ostream;
 	boost::property_tree::write_json(ostream, tree);
 	string_a = ostream.str();

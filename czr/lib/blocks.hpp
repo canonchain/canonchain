@@ -40,7 +40,7 @@ public:
 		std::vector<uint8_t> const & data_a);
 	block_hashables (bool &, czr::stream &);
 	block_hashables (bool &, boost::property_tree::ptree const &);
-	void serialize_json(boost::property_tree::ptree tree_a, std::string & string_a) const;
+	void serialize_json(boost::property_tree::ptree tree_a) const;
 	void deserialize_json(bool & error_a, boost::property_tree::ptree const & tree_a);
 	void hash (blake2b_state &) const;
 

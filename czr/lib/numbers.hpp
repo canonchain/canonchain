@@ -12,13 +12,6 @@ extern thread_local CryptoPP::AutoSeededRandomPool random_pool;
 using uint128_t = boost::multiprecision::uint128_t;
 using uint256_t = boost::multiprecision::uint256_t;
 using uint512_t = boost::multiprecision::uint512_t;
-// SI dividers
-czr::uint128_t const Gczr_ratio = czr::uint128_t ("1000000000000000000000000000"); // 10^27
-czr::uint128_t const Mczr_ratio = czr::uint128_t ("1000000000000000000000000"); // 10^24
-czr::uint128_t const kczr_ratio = czr::uint128_t ("1000000000000000000000"); // 10^21
-czr::uint128_t const czr_ratio = czr::uint128_t ("1000000000000000000"); // 10^18
-czr::uint128_t const mczr_ratio = czr::uint128_t ("1000000000000000"); // 10^15
-czr::uint128_t const uczr_ratio = czr::uint128_t ("1000000000000"); // 10^12
 
 union uint128_union
 {
