@@ -8,12 +8,12 @@
 
 namespace czr
 {
-	enum compose_result_codes
+	enum class compose_result_codes
 	{
-		ok = 1,
+		ok,
 		insufficient_balance,
-		witness_list_not_found,
-		no_compatible_parent,
+		data_size_too_large,
+		error
 	};
 
 	class compose_result

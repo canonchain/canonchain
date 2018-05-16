@@ -3,6 +3,7 @@
 #include <czr/node/rpc.hpp>
 
 #include <czr/node/node.hpp>
+#include <czr/node/composer.hpp>
 
 #include <ed25519-donna/ed25519.h>
 
@@ -1024,122 +1025,128 @@ void czr::rpc_handler::receive_minimum_set ()
 	}
 }
 
-void czr::rpc_handler::send ()
+void czr::rpc_handler::send()
 {
-	//todo:send block
-	if (rpc.config.enable_control)
+	if (!rpc.config.enable_control)
+		error_response(response, "RPC control is disabled");
+
+	std::string wallet_text(request.get<std::string>("wallet"));
+	czr::uint256_union wallet;
+	auto error(wallet.decode_hex(wallet_text));
+	if (error)
 	{
-		std::string wallet_text (request.get<std::string> ("wallet"));
-		czr::uint256_union wallet;
-		auto error (wallet.decode_hex (wallet_text));
-		if (!error)
+		error_response(response, "Bad wallet number");
+		return;
+	}
+
+	auto existing(node.wallets.items.find(wallet));
+	if (existing == node.wallets.items.end())
+	{
+		error_response(response, "Wallet not found");
+		return;
+	}
+
+	std::string source_text(request.get<std::string>("from"));
+	czr::account from;
+	auto error(from.decode_account(source_text));
+	if (error)
+	{
+		error_response(response, "Bad from account");
+		return;
+	}
+
+	std::string to_text(request.get<std::string>("to"));
+	czr::account to;
+	auto error(to.decode_account(to_text));
+	if (error)
+	{
+		error_response(response, "Bad to account");
+		return;
+	}
+
+	std::string amount_text(request.get<std::string>("amount"));
+	czr::amount amount;
+	auto error(amount.decode_dec(amount_text));
+	if (error)
+	{
+		error_response(response, "Bad amount format");
+		return;
+	}
+
+	std::string data_text(request.get<std::string>("data"));
+	std::vector<uint8_t> data; //todo:serialize data_text to data
+	if (error)
+	{
+		error_response(response, "Bad data");
+		return;
+	}
+	if (data.size() > czr::max_data_size)
+	{
+		error_response(response, "Data size to large");
+		return;
+	}
+
+	uint64_t work(0);
+	boost::optional<std::string> work_text(request.get_optional<std::string>("work"));
+	if (work_text.is_initialized())
+	{
+		auto work_error(czr::from_string_hex(work_text.get(), work));
+		if (work_error)
 		{
-			auto existing (node.wallets.items.find (wallet));
-			if (existing != node.wallets.items.end ())
+			error_response(response, "Bad work");
+			return;
+		}
+	}
+
+	{
+		czr::transaction transaction(node.store.environment, nullptr, work != 0); // false if no "work" in request, true if work > 0
+		czr::account_info info;
+		bool account_exists(!node.store.account_get(transaction, from, info));
+		if (work)
+		{
+			if (!czr::work_validate(account_exists ? info.head : from, work))
 			{
-				std::string source_text (request.get<std::string> ("source"));
-				czr::account source;
-				auto error (source.decode_account (source_text));
-				if (!error)
-				{
-					std::string destination_text (request.get<std::string> ("destination"));
-					czr::account destination;
-					auto error (destination.decode_account (destination_text));
-					if (!error)
-					{
-						std::string amount_text (request.get<std::string> ("amount"));
-						czr::amount amount;
-						auto error (amount.decode_dec (amount_text));
-						if (!error)
-						{
-							uint64_t work (0);
-							boost::optional<std::string> work_text (request.get_optional<std::string> ("work"));
-							if (work_text.is_initialized ())
-							{
-								auto work_error (czr::from_string_hex (work_text.get (), work));
-								if (work_error)
-								{
-									error_response (response, "Bad work");
-								}
-							}
-							czr::uint128_t balance (0);
-							{
-								czr::transaction transaction (node.store.environment, nullptr, work != 0); // false if no "work" in request, true if work > 0
-								czr::account_info info;
-								if (!node.store.account_get (transaction, source, info))
-								{
-									balance = node.ledger.account_balance(transaction, source);
-								}
-								else
-								{
-									error_response (response, "Account not found");
-								}
-								if (work)
-								{
-									if (!czr::work_validate (info.head, work))
-									{
-										existing->second->store.work_put (transaction, source, work);
-									}
-									else
-									{
-										error_response (response, "Invalid work");
-									}
-								}
-							}
-							boost::optional<std::string> send_id (request.get_optional<std::string> ("id"));
-							if (balance >= amount.number ())
-							{
-								auto rpc_l (shared_from_this ());
-								auto response_a (response);
-								existing->second->send_async (source, destination, amount.number (), [response_a](std::shared_ptr<czr::block> block_a) {
-									if (block_a != nullptr)
-									{
-										czr::uint256_union hash (block_a->hash ());
-										boost::property_tree::ptree response_l;
-										response_l.put ("block", hash.to_string ());
-										response_a (response_l);
-									}
-									else
-									{
-										error_response (response_a, "Error generating block");
-									}
-								},
-								work == 0, send_id);
-							}
-							else
-							{
-								error_response (response, "Insufficient balance");
-							}
-						}
-						else
-						{
-							error_response (response, "Bad amount format");
-						}
-					}
-					else
-					{
-						error_response (response, "Bad destination account");
-					}
-				}
-				else
-				{
-					error_response (response, "Bad source account");
-				}
+				existing->second->store.work_put(transaction, from, work);
 			}
 			else
 			{
-				error_response (response, "Wallet not found");
+				error_response(response, "Invalid work");
+				return;
 			}
 		}
-		else
+	}
+
+	boost::optional<std::string> send_id(request.get_optional<std::string>("id"));
+	auto rpc_l(shared_from_this());
+	auto response_a(response);
+	existing->second->send_async(from, to, amount.number(), data, [response_a](czr::send_result result) {
+		switch (result.code)
 		{
-			error_response (response, "Bad wallet number");
+		case czr::send_result_codes::ok:
+		{
+			czr::uint256_union hash(result.block->hash());
+			boost::property_tree::ptree response_l;
+			response_l.put("block", hash.to_string());
+			response_a(response_l);
+			break;
 		}
-	}
-	else
-	{
-		error_response (response, "RPC control is disabled");
-	}
+		case czr::send_result_codes::account_locked:
+			error_response(response_a, "Account locked");
+			break;
+		case czr::send_result_codes::insufficient_balance:
+			error_response(response_a, "Insufficient balance");
+			break;
+		case czr::send_result_codes::data_size_too_large:
+			error_response(response_a, "Data size to large");
+			break;
+		case czr::send_result_codes::error:
+			error_response(response_a, "Generate block error");
+			break;
+		default:
+			error_response(response_a, "Unknown error");
+			break;
+		}
+	}, work == 0, send_id);
 }
 
 void czr::rpc_handler::stop ()

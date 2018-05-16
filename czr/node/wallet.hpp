@@ -111,11 +111,28 @@ public:
 	std::recursive_mutex mutex;
 };
 class node;
+
+enum class send_result_codes
+{
+	ok,
+	account_locked,
+	insufficient_balance,
+	data_size_too_large,
+	error,
+};
+
+class send_result
+{
+public:
+	send_result(czr::send_result_codes const & code_a, std::shared_ptr<czr::block> block_a);
+	czr::send_result_codes code;
+	std::shared_ptr<czr::block> block;
+};
+
 // A wallet is a set of account keys encrypted by a common encryption key
 class wallet : public std::enable_shared_from_this<czr::wallet>
 {
 public:
-	std::shared_ptr<czr::block> send_action (czr::account const &, czr::account const &, czr::uint128_t const &, bool = true, boost::optional<std::string> = {});
 	wallet (bool &, czr::transaction &, czr::node &, std::string const &);
 	wallet (bool &, czr::transaction &, czr::node &, std::string const &, std::string const &);
 	void enter_initial_password ();
@@ -129,8 +146,6 @@ public:
 	bool exists (czr::public_key const &);
 	bool import (std::string const &, std::string const &);
 	void serialize (std::string &);
-	czr::block_hash send_sync (czr::account const &, czr::account const &, czr::uint128_t const &);
-	void send_async (czr::account const &, czr::account const &, czr::uint128_t const &, std::function<void(std::shared_ptr<czr::block>)> const &, bool = true, boost::optional<std::string> = {});
 	void work_generate (czr::account const &, czr::block_hash const &);
 	void work_update (MDB_txn *, czr::account const &, czr::block_hash const &, uint64_t);
 	uint64_t work_fetch (MDB_txn *, czr::account const &, czr::block_hash const &);
@@ -138,6 +153,9 @@ public:
 	void init_free_accounts (MDB_txn *);
 	/** Changes the wallet seed and returns the first account */
 	czr::public_key change_seed (MDB_txn * transaction_a, czr::raw_key const & prv_a);
+	void send_async(czr::account const & from_a, czr::account const & to_a, czr::amount const & amount_a, std::vector<uint8_t> const & data_a, std::function<void(czr::send_result)> const & action_a, bool generate_work_a, boost::optional<std::string> id_a);
+	czr::send_result send_action(czr::account const & from_a, czr::account const & to_a, czr::amount const & amount_a, std::vector<uint8_t> data_a, bool generate_work_a, boost::optional<std::string> id_a);
+
 	std::unordered_set<czr::account> free_accounts;
 	std::function<void(bool, bool)> lock_observer;
 	czr::wallet_store store;

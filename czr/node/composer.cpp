@@ -20,11 +20,17 @@ czr::compose_result czr::composer::compose(MDB_txn * transaction_a, czr::account
 	czr::amount const & amount_a, std::vector<uint8_t> const & data_a, 
 	czr::raw_key const & prv_a , czr::public_key const & pub_a, uint64_t const & work_a)
 {
+	if(data_a.size() > czr::max_data_size)
+		return czr::compose_result(czr::compose_result_codes::data_size_too_large, nullptr);
+
 	//my witness list
 	czr::witness_list_info my_wl_info;
 	bool exists(!ledger.store.my_witness_list_get(transaction_a, my_wl_info));
 	if (!exists)
-		return czr::compose_result(czr::compose_result_codes::witness_list_not_found, nullptr);
+	{
+		BOOST_LOG(node.log) << "compose error:my witness list not found";
+		return czr::compose_result(czr::compose_result_codes::error, nullptr);
+	}
 
 	//previous
 	czr::account_info info;
@@ -63,7 +69,15 @@ czr::compose_result czr::composer::compose(MDB_txn * transaction_a, czr::account
 	}
 
 	if (parents.size() == 0)
-		return compose_result(czr::compose_result_codes::no_compatible_parent, nullptr);
+	{
+		BOOST_LOG(node.log) << boost::str(boost::format("compose error:no compatible parent, my witness list: %1%") % my_wl_info.to_string());
+		return czr::compose_result(czr::compose_result_codes::error, nullptr);
+	}
+
+	//first trim parents
+	size_t max_parents_size(czr::max_parents_and_pervious_size - previous.is_zero() ? 0 : 1);
+	if (parents.size() > max_parents_size)
+		parents.resize(max_parents_size);
 
 	//last summary block
 	uint64_t last_stable_mci(ledger.store.last_stable_mci_get(transaction_a));
@@ -76,14 +90,48 @@ czr::compose_result czr::composer::compose(MDB_txn * transaction_a, czr::account
 
 	//todo:adjustLastStableMcBallAndParents
 
-	//trim parents
-	size_t max_parents_size(czr::max_parents_and_pervious_size);
-	if (!previous.is_zero())
-		max_parents_size -= 1;
-
+	//second trim parents
 	if (parents.size() > max_parents_size)
-		parents.resize(max_parents_size);
+	{
+		std::random_shuffle(parents.begin(), parents.end());
 
+		std::vector<czr::block_hash> witness_parents;
+		std::vector<czr::block_hash> non_witness_parents;
+		for (czr::block_hash phash : parents)
+		{
+			std::unique_ptr<czr::block> pblock(ledger.store.block_get(transaction_a, phash));
+			assert(pblock != nullptr);
+
+			czr::witness_list_info p_wl_info(ledger.block_witness_list(transaction_a, *pblock));
+			for (czr::account my_witness : my_wl_info.witness_list)
+			{
+				if (p_wl_info.contains(my_witness))
+				{
+					witness_parents.push_back(phash);
+					continue;
+				}
+			}
+
+			non_witness_parents.push_back(phash);
+		}
+
+		//witness parent first
+		parents = witness_parents;
+		if (parents.size() >= max_parents_size)
+		{
+			parents.resize(max_parents_size);
+		}
+		else
+		{
+			int push_count = max_parents_size - parents.size();
+			for (int i = 0; i < push_count; i++)
+			{
+				parents.push_back(non_witness_parents[i]);
+			}
+		}
+	}
+
+	//remove previous from parents if exists, parents size can be zero
 	auto p(std::find(parents.begin(), parents.end(), previous));
 	if (p != parents.end())
 		parents.erase(p);
@@ -112,7 +160,28 @@ czr::compose_result czr::composer::compose(MDB_txn * transaction_a, czr::account
 
 	//check witness list muatations along mc
 	czr::block_hash best_parent_hash(ledger.determine_best_parent(transaction_a, parents, my_wl_info));
-	ledger.check_witness_list_mutations_along_mc(transaction_a, best_parent_hash, my_wl_info, witness_list_block, last_summary_block);
+	if (best_parent_hash.is_zero())
+	{
+		std::stringstream p_ss;
+		size_t size(parents.size());
+		for (int i = 0; i < parents.size(); i++)
+		{
+			p_ss << parents[i].to_string();
+			if (i < size - 1)
+				p_ss << ",";
+		}
+		BOOST_LOG(node.log) << boost::str(boost::format("compose error:no compatible best parent, parents: %1%, my witness list: %2%") 
+			% p_ss.str() % my_wl_info.to_string());
+		return czr::compose_result(czr::compose_result_codes::error, nullptr);
+	}
+
+	bool is_mutations_ok(ledger.check_witness_list_mutations_along_mc(transaction_a, best_parent_hash, my_wl_info, witness_list_block, last_summary_block));
+	if (!is_mutations_ok)
+	{
+		BOOST_LOG(node.log) << boost::str(boost::format("compose error:mutations fail, best parent: %1%, my witness list: %2%, witness list block: %3%, last summary block: %4%") 
+			% best_parent_hash.to_string() % my_wl_info.to_string() % witness_list_block.to_string() % last_summary_block.to_string());
+		return czr::compose_result(czr::compose_result_codes::error, nullptr);
+	}
 
 	//check balance
 	czr::amount balance(ledger.account_balance(transaction_a, from_a));

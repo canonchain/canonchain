@@ -143,6 +143,21 @@ bool czr::witness_list_info::contains(czr::account const & account_a) const
 	return iter != witness_list.end();
 }
 
+std::string czr::witness_list_info::to_string() const
+{
+	std::stringstream ss;
+	size_t size(witness_list.size());
+	for (int i = 0; i < size; i++)
+	{
+		czr::account witness(witness_list[i]);
+		ss << witness.to_account();
+		if (i < size - 1)
+			ss << ",";
+	}
+	return ss.str();
+}
+
+
 czr::witness_list_key::witness_list_key(czr::witness_list_hash const & hash_a, uint64_t const & mci_a) :
 	hash(hash_a),
 	mci(mci_a)

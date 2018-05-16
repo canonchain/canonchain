@@ -70,6 +70,7 @@ namespace czr
 		czr::witness_list_hash hash();
 		bool is_compatible(witness_list_info const &) const;
 		bool contains(czr::account const &) const;
+		std::string to_string() const;
 		std::vector<czr::account> witness_list;
 	};
 	class free_key
