@@ -1,5 +1,7 @@
 #include <czr/node/composer.hpp>
 
+#include <unordered_set>
+
 czr::compose_result::compose_result(czr::compose_result_codes const & code_a, std::shared_ptr<czr::block> block_a):
 	code(code_a),
 	block(block_a)
@@ -38,14 +40,14 @@ czr::compose_result czr::composer::compose(MDB_txn * transaction_a, czr::account
 	czr::block_hash previous = new_account ? 0 : info.head;
 
 	//pick parents
-	std::unique_ptr<std::list<czr::block_hash>> free_hashs(new std::list<czr::block_hash>);
+	std::vector<czr::block_hash> free_parents;
 	bool has_compatible(false);
 	for (czr::store_iterator i(ledger.store.free_begin(transaction_a)), n(nullptr); i != n; ++i)
 	{
 		czr::free_key key(i->first);
 		czr::block_hash free_hash(key.hash_asc);
 
-		free_hashs->push_back(free_hash);
+		free_parents.push_back(free_hash);
 
 		if (!has_compatible)
 		{
@@ -58,14 +60,14 @@ czr::compose_result czr::composer::compose(MDB_txn * transaction_a, czr::account
 	}
 
 	std::vector<czr::account> parents;
-	// we need at least one compatible parent, otherwise go deep
 	if (!has_compatible)
 	{
+		// we need at least one compatible parent, otherwise go deep
 		parents = pick_deep_parents(transaction_a, my_wl_info, boost::none);
 	}
 	else
 	{
-		//todo:adjustParentsToNotRetreatWitnessedLevel
+		parents = adjust_parents_to_not_retreat_witnessed_level(transaction_a, my_wl_info, free_parents);
 	}
 
 	if (parents.size() == 0)
@@ -245,10 +247,10 @@ std::vector<czr::block_hash> czr::composer::pick_deep_parents(MDB_txn * transact
 		return parents;
 	}
 
-	return check_wl_not_retreating_and_look_lower(transaction_a, my_wl_info, parents);
+	return check_witnessed_level_not_retreating_and_look_lower(transaction_a, my_wl_info, parents);
 }
 
-std::vector<czr::block_hash> czr::composer::check_wl_not_retreating_and_look_lower(MDB_txn * transaction_a,
+std::vector<czr::block_hash> czr::composer::check_witnessed_level_not_retreating_and_look_lower(MDB_txn * transaction_a,
 	czr::witness_list_info const & my_wl_info, std::vector<czr::block_hash> const & parents)
 {
 	czr::block_hash best_parent_hash(ledger.determine_best_parent(transaction_a, parents, my_wl_info));
@@ -264,4 +266,68 @@ std::vector<czr::block_hash> czr::composer::check_wl_not_retreating_and_look_low
 		return parents;
 	else
 		return pick_deep_parents(transaction_a, my_wl_info, best_parent_wl);
+}
+
+std::vector<czr::block_hash> czr::composer::adjust_parents_to_not_retreat_witnessed_level(MDB_txn * transaction_a,
+	czr::witness_list_info const & my_wl_info, std::vector<czr::block_hash> const & parents)
+{
+	std::vector<czr::block_hash> new_parents(parents);
+
+	std::shared_ptr<std::unordered_set<block_hash>> all_excluded_hashs(new std::unordered_set<block_hash>);
+	while (true)
+	{
+		czr::block_hash best_parent_hash(ledger.determine_best_parent(transaction_a, new_parents, my_wl_info));
+		assert(!best_parent_hash.is_zero());
+		czr::block_state best_parent_state;
+		bool best_parent_state_error(ledger.store.block_state_get(transaction_a, best_parent_hash, best_parent_state));
+		assert(!best_parent_state_error);
+
+		uint64_t best_parent_wl(best_parent_state.witnessed_level);
+		uint64_t child_wl(ledger.determine_witness_level(transaction_a, best_parent_hash, my_wl_info));
+
+		if (child_wl >= best_parent_wl)
+			return new_parents;
+		else
+			new_parents = replace_excluded_parent(transaction_a, new_parents, best_parent_hash, all_excluded_hashs);
+	}
+}
+
+std::vector<czr::block_hash> czr::composer::replace_excluded_parent(MDB_txn * transaction_a, 
+	std::vector<czr::block_hash> const & parents, czr::block_hash const & excluded_hash, std::shared_ptr<std::unordered_set<block_hash>> all_excluded_hashs)
+{
+	std::vector<czr::block_hash> new_parents(parents);
+	all_excluded_hashs->insert(excluded_hash);
+	auto p(std::find(new_parents.begin(), new_parents.end(), excluded_hash));
+	if (p != new_parents.end())
+		new_parents.erase(p);
+
+	std::unique_ptr<czr::block> excluded_block(ledger.store.block_get(transaction_a, excluded_hash));
+	assert(excluded_block != nullptr);
+
+	//search parents only
+	for (czr::block_hash pb_hash : excluded_block->hashables.parents)
+	{
+		bool has_other_children(false);
+		czr::store_iterator iter(ledger.store.block_child_begin(transaction_a, czr::block_child_key(pb_hash, 0)));
+		czr::store_iterator iter_end(nullptr);
+		while(iter != iter_end)
+		{
+			czr::block_child_key key(iter->first);
+			if (key.hash != pb_hash)
+				break;
+
+			if (all_excluded_hashs->find(key.child_hash) == all_excluded_hashs->end())
+			{
+				has_other_children = true;
+				break;
+			}
+		}
+
+		if (!has_other_children)
+		{
+			new_parents.push_back(pb_hash);
+		}
+	}
+
+	return new_parents;
 }
