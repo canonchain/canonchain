@@ -30,7 +30,7 @@ namespace czr
 		composer(czr::node & node_a);
 		~composer();
 		czr::compose_result compose(MDB_txn * transaction_a, czr::account const & from_a, czr::account const & to_a, czr::amount const & amount_a, std::vector<uint8_t> const & data_a, czr::raw_key const & prv_a, czr::public_key const & pub_a, uint64_t const & work_a);
-		void pick_parents_and_last_summary_and_wl_block(czr::error_message & err_msg, MDB_txn * transaction_a, czr::block_hash const & previous, czr::witness_list_info const & my_wl_info, czr::block_hash & last_summary_block, czr::summary_hash & last_summary, uint64_t & last_stable_mci, czr::block_hash & witness_list_block);
+		void pick_parents_and_last_summary_and_wl_block(czr::error_message & err_msg, MDB_txn * transaction_a, czr::witness_list_info const & my_wl_info, czr::block_hash & last_summary_block, czr::summary_hash & last_summary, uint64_t & last_stable_mci, czr::block_hash & witness_list_block);
 		std::vector<czr::block_hash> pick_deep_parents(czr::error_message & err_msg, MDB_txn * transaction_a, czr::witness_list_info const & my_wl_info, boost::optional<uint64_t> const & max_wl);
 		std::vector<czr::block_hash> check_witnessed_level_not_retreating_and_look_lower(czr::error_message & err_msg, MDB_txn * transaction_a, czr::witness_list_info const & my_wl_info, std::vector<czr::block_hash> const & parents);
 		void adjust_parents_to_not_retreat_witnessed_level(MDB_txn * transaction_a, czr::witness_list_info const & my_wl_info, std::vector<czr::block_hash> & parents);

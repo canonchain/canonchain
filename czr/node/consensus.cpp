@@ -132,12 +132,26 @@ czr::process_return czr::consensus::validate(czr::publish const & message)
 
 #pragma region validate parents and previous
 
-	//check size
-	size_t parents_and_pervious_size(block->parents_and_previous().size());
-	if (parents_and_pervious_size == 0 || parents_and_pervious_size > czr::max_parents_and_pervious_size)
+	//check pervious
+	if (!block->previous().is_zero())
+	{
+		std::unique_ptr<czr::block> previous_block = ledger.store.block_get(transaction, block->previous());
+		assert(previous_block != nullptr);
+
+		if (previous_block->hashables.from != block->hashables.from)
+		{
+			result.code = czr::process_result::invalid_block;
+			result.err_msg = boost::str(boost::format("current from %1% not equal to pervious from %2%") % block->hashables.from.to_string() % previous_block->hashables.from.to_string());
+			return result;
+		}
+	}
+
+	//check parents size
+	size_t parents_size(block->parents().size());
+	if (parents_size == 0 || parents_size > czr::max_parents_size)
 	{
 		result.code = czr::process_result::invalid_block;
-		result.err_msg = boost::str(boost::format("Invalid parent and perviou size: %1%") % parents_and_pervious_size);
+		result.err_msg = boost::str(boost::format("Invalid parent size: %1%") % parents_size);
 		return result;
 	}
 
@@ -158,30 +172,9 @@ czr::process_return czr::consensus::validate(czr::publish const & message)
 		return result;
 	}
 
-	//check pervious
-	if (!block->previous().is_zero())
-	{
-		std::unique_ptr<czr::block> previous_block = ledger.store.block_get(transaction, block->previous());
-		assert(previous_block != nullptr);
-
-		if (previous_block->hashables.from != block->hashables.from)
-		{
-			result.code = czr::process_result::invalid_block;
-			result.err_msg = boost::str(boost::format("current from %1% not equal to pervious from %2%") % block->hashables.from.to_string() % previous_block->hashables.from.to_string());
-			return result;
-		}
-
-		if (std::find(block->hashables.parents.begin(), block->hashables.parents.end(), block->previous()) != block->hashables.parents.end())
-		{
-			result.code = czr::process_result::invalid_block;
-			result.err_msg = boost::str(boost::format("duplicate previous and parent %1%") % block->previous().to_string());
-			return result;
-		}
-	}
-
 	//check parents
 	czr::block_hash pre_pblock_hash;
-	for (czr::block_hash & pblock_hash : block->hashables.parents)
+	for (czr::block_hash & pblock_hash : block->parents())
 	{
 		if (pblock_hash <= pre_pblock_hash)
 		{
@@ -191,7 +184,7 @@ czr::process_return czr::consensus::validate(czr::publish const & message)
 		}
 		pre_pblock_hash = pblock_hash;
 
-		//todo:graph.compareUnitsByProps ?
+		//todo:graph.compareUnitsByProps
 	}
 
 #pragma endregion
@@ -219,7 +212,7 @@ czr::process_return czr::consensus::validate(czr::publish const & message)
 	uint64_t last_summary_mci = *last_summary_block_state.main_chain_index;
 
 	uint64_t max_parent_limci;
-	for (czr::block_hash & pblock_hash : block->parents_and_previous())
+	for (czr::block_hash & pblock_hash : block->parents())
 	{
 		if (pblock_hash != czr::genesis::block_hash)
 		{
@@ -372,7 +365,7 @@ czr::process_return czr::consensus::validate(czr::publish const & message)
 	}
 
 	//check best parent
-	czr::block_hash best_pblock_hash(ledger.determine_best_parent(transaction, block->parents_and_previous(), wl_info));
+	czr::block_hash best_pblock_hash(ledger.determine_best_parent(transaction, block->parents(), wl_info));
 	if (best_pblock_hash.is_zero())
 	{
 		result.code = czr::process_result::invalid_block;
@@ -404,7 +397,8 @@ czr::process_return czr::consensus::validate(czr::publish const & message)
 #pragma endregion
 
 #pragma region  check if last summary block is stable in view of parents and previous and mci not retreat
-	bool is_last_summary_stable = ledger.check_stable_from_later_blocks(transaction, last_summary_block_hash, block->parents_and_previous());
+
+	bool is_last_summary_stable = ledger.check_stable_from_later_blocks(transaction, last_summary_block_hash, block->parents());
 	if (!is_last_summary_stable)
 	{
 		result.code = czr::process_result::invalid_block;
@@ -435,7 +429,7 @@ czr::process_return czr::consensus::validate(czr::publish const & message)
 
 	//check last summary mci retreat
 	uint64_t max_parent_last_summary_mci;
-	for (czr::block_hash & pblock_hash : block->parents_and_previous())
+	for (czr::block_hash & pblock_hash : block->parents())
 	{
 		std::unique_ptr<czr::block> pblock = ledger.store.block_get(transaction, pblock_hash);
 		assert(pblock != nullptr);
@@ -472,7 +466,7 @@ void czr::consensus::save_block(czr::block const & block_a)
 	czr::witness_list_info wl_info(ledger.block_witness_list(transaction, block_a));
 
 	uint64_t max_parent_level;
-	for (czr::block_hash & pblock_hash : block_a.parents_and_previous())
+	for (czr::block_hash & pblock_hash : block_a.parents())
 	{
 		std::unique_ptr<czr::block> pblock(ledger.store.block_get(transaction, pblock_hash));
 		czr::block_state pblock_state;
@@ -485,6 +479,7 @@ void czr::consensus::save_block(czr::block const & block_a)
 		pblock_state.is_free = false;
 		ledger.store.block_state_put(transaction, pblock_hash, pblock_state);
 
+		//max parent level
 		if (pblock_state.level > max_parent_level)
 		{
 			max_parent_level = pblock_state.level;
@@ -498,7 +493,7 @@ void czr::consensus::save_block(czr::block const & block_a)
 	bool is_fork(account_exists && (block_a.previous().is_zero() || block_a.previous() != info.head));
 
 	//best parent
-	czr::block_hash best_pblock_hash(ledger.determine_best_parent(transaction, block_a.parents_and_previous(), wl_info));
+	czr::block_hash best_pblock_hash(ledger.determine_best_parent(transaction, block_a.parents(), wl_info));
 
 	//witnessed level
 	uint64_t witnessed_level(ledger.determine_witness_level(transaction, best_pblock_hash, wl_info));
@@ -652,7 +647,7 @@ void czr::consensus::update_main_chain(czr::block const & block_a)
 
 			bool is_parent_ready(true);
 			boost::optional<uint64_t> max_limci;
-			for (czr::block_hash & pblock_hash : block->parents_and_previous())
+			for (czr::block_hash & pblock_hash : block->parents())
 			{
 				czr::block_state pblock_state;
 				bool pblock_state_error(ledger.store.block_state_get(transaction, pblock_hash, pblock_state));

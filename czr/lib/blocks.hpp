@@ -73,6 +73,7 @@ public:
 	uint64_t block_work() const;
 	void block_work_set(uint64_t);
 	czr::block_hash previous() const;
+	std::vector<czr::block_hash> parents() const;
 	std::vector<czr::block_hash> parents_and_previous() const;
 	czr::block_hash root() const;
 	void serialize(czr::stream &) const;

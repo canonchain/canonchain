@@ -285,6 +285,11 @@ czr::block_hash czr::block::previous () const
 	return hashables.previous;
 }
 
+std::vector<czr::block_hash> czr::block::parents() const
+{
+	return hashables.parents;
+}
+
 std::vector<czr::block_hash> czr::block::parents_and_previous() const
 {
 	std::vector<czr::block_hash> list(hashables.parents);

@@ -46,7 +46,7 @@ czr::compose_result czr::composer::compose(MDB_txn * transaction_a, czr::account
 	uint64_t last_stable_mci;
 	czr::block_hash witness_list_block;
 	czr::error_message err_msg;
-	pick_parents_and_last_summary_and_wl_block(err_msg, transaction_a, previous, my_wl_info, last_summary_block, last_summary, last_stable_mci, witness_list_block);
+	pick_parents_and_last_summary_and_wl_block(err_msg, transaction_a, my_wl_info, last_summary_block, last_summary, last_stable_mci, witness_list_block);
 	if (err_msg.error)
 	{
 		BOOST_LOG(node.log) << err_msg.message;
@@ -73,8 +73,7 @@ czr::compose_result czr::composer::compose(MDB_txn * transaction_a, czr::account
 	return czr::compose_result(czr::compose_result_codes::ok, block);
 }
 
-void czr::composer::pick_parents_and_last_summary_and_wl_block(czr::error_message & err_msg, MDB_txn * transaction_a, 
-	czr::block_hash const & previous, czr::witness_list_info const & my_wl_info, 
+void czr::composer::pick_parents_and_last_summary_and_wl_block(czr::error_message & err_msg, MDB_txn * transaction_a, czr::witness_list_info const & my_wl_info, 
 	czr::block_hash & last_summary_block, czr::summary_hash & last_summary, uint64_t & last_stable_mci, czr::block_hash & witness_list_block)
 {
 	//pick free parents
@@ -119,10 +118,9 @@ void czr::composer::pick_parents_and_last_summary_and_wl_block(czr::error_messag
 	}
 
 	//first trim parents
-	size_t max_parents_size(czr::max_parents_and_pervious_size - previous.is_zero() ? 0 : 1);
-	if (parents.size() > max_parents_size)
+	if (parents.size() > czr::max_parents_size)
 	{
-		parents.resize(max_parents_size);
+		parents.resize(czr::max_parents_size);
 	}
 
 	//last mc summary block
@@ -144,13 +142,8 @@ void czr::composer::pick_parents_and_last_summary_and_wl_block(czr::error_messag
 	bool last_summary_error(ledger.store.block_summary_get(transaction_a, last_summary_block, last_summary));
 	assert(!last_summary_error);
 
-	//remove previous from parents if exists, parents size can be zero
-	auto p(std::find(parents.begin(), parents.end(), previous));
-	if (p != parents.end())
-		parents.erase(p);
-
 	//second trim parents
-	if (parents.size() > max_parents_size)
+	if (parents.size() > czr::max_parents_size)
 	{
 		std::random_shuffle(parents.begin(), parents.end());
 
@@ -326,8 +319,7 @@ void czr::composer::replace_excluded_parent(MDB_txn * transaction_a,
 	std::unique_ptr<czr::block> excluded_block(ledger.store.block_get(transaction_a, excluded_hash));
 	assert(excluded_block != nullptr);
 
-	//search parents only
-	for (czr::block_hash pb_hash : excluded_block->hashables.parents)
+	for (czr::block_hash pb_hash : excluded_block->parents())
 	{
 		bool has_other_children(false);
 		czr::store_iterator iter(ledger.store.block_child_begin(transaction_a, czr::block_child_key(pb_hash, 0)));

@@ -22,7 +22,7 @@ size_t const witness_count(12);
 size_t const max_witness_list_mutations(1);
 size_t const majority_of_witnesses(witness_count / 2 + 1);
 
-size_t const max_parents_and_pervious_size(16);
+size_t const max_parents_size(16);
 size_t const max_data_size(32000); //32kb
 
 size_t const skiplist_divisor(10);
