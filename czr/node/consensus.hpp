@@ -31,7 +31,7 @@ namespace czr
 		void update_main_chain(czr::block const &);
 		void check_mc_stable_block();
 		void update_parent_mci(czr::block_hash const &, uint64_t const &, std::shared_ptr<std::unordered_set<czr::block_hash>>);
-		void update_stable_block(czr::block_hash const &, uint64_t const &, std::shared_ptr<std::set<czr::block_hash>>);
+		void search_stable_block(czr::block_hash const &, uint64_t const &, std::shared_ptr<std::set<czr::block_hash>>);
 		void advance_mc_stable_block(czr::block_hash const & mc_stable_hash, uint64_t const & mci);
 		void rollback(czr::block_hash const &);
 		void change_successor(czr::block_hash const &);

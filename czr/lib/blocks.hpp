@@ -37,7 +37,7 @@ public:
 		czr::block_hash const & previous_a, std::vector<czr::block_hash> const & parents_a,
 		czr::block_hash const & witness_list_block_a, std::vector<czr::account> const & witness_list_a,
 		czr::summary_hash const & last_summary_a, czr::block_hash const & last_summary_block_a,
-		std::vector<uint8_t> const & data_a);
+		std::vector<uint8_t> const & data_a, uint64_t const & exec_timestamp_a);
 	block_hashables (bool &, czr::stream &);
 	block_hashables (bool &, boost::property_tree::ptree const &);
 	void serialize_json(boost::property_tree::ptree tree_a) const;
@@ -54,6 +54,7 @@ public:
 	czr::summary_hash last_summary;
 	czr::block_hash last_summary_block;
 	std::vector<uint8_t> data;
+	uint64_t exec_timestamp;
 };
 
 class block
@@ -63,7 +64,7 @@ public:
 		czr::block_hash const & previous_a, std::vector<czr::block_hash> const & parents_a,
 		czr::block_hash const & witness_list_block_a, std::vector<czr::account> const & witness_list_a,
 		czr::summary_hash const & last_summary_a,	czr::block_hash const & last_summary_block_a,
-		std::vector<uint8_t> const & data_a,
+		std::vector<uint8_t> const & data_a, uint64_t const & exec_timestamp_a,
 		czr::raw_key const & prv_a, czr::public_key const & pub_a, uint64_t work_a);
 	block(bool &, czr::stream &);
 	block(bool &, boost::property_tree::ptree const &);

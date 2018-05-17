@@ -64,7 +64,7 @@ czr::block_hashables::block_hashables(czr::account const & from_a, czr::account 
 	czr::block_hash const & previous_a, std::vector<czr::block_hash> const & parents_a, 
 	czr::block_hash const & witness_list_block_a, std::vector<czr::account> const & witness_list_a,
 	czr::summary_hash const & last_summary_a, czr::block_hash const & last_summary_block_a,
-	std::vector<uint8_t> const & data_a):
+	std::vector<uint8_t> const & data_a, uint64_t const & exec_timestamp_a):
 from(from_a),
 to(to_a),
 amount (amount_a),
@@ -74,9 +74,9 @@ witness_list_block(witness_list_block_a),
 witness_list(witness_list_a),
 last_summary(last_summary_a),
 last_summary_block(last_summary_block_a),
-data(data_a)
+data(data_a),
+exec_timestamp(exec_timestamp_a)
 {
-	//todo:add timestamp
 	//todo:need fee feild ???
 }
 
@@ -123,6 +123,8 @@ void czr::block_hashables::serialize_json(boost::property_tree::ptree tree_a) co
 
 	std::string data_str;	//todo:serialize data to string
 	tree_a.put("data", data_str);
+
+	tree_a.put("exec_timestamp", exec_timestamp);
 }
 
 void czr::block_hashables::deserialize_json(bool & error_a, boost::property_tree::ptree const & tree_a)
@@ -189,9 +191,15 @@ void czr::block_hashables::deserialize_json(bool & error_a, boost::property_tree
 		if (error_a)
 			return;
 
-		//todo:derialize dat from string to bytes;
+		//todo:deserialize dat from string to bytes;
 		auto data_l(tree_a.get<std::string>("data"));
-		//error_a = data.derialize(data_l) 
+		//error_a = data.deserialize(data_l) 
+		
+		auto exec_timestamp_l(tree_a.get<std::string>("exec_timestamp"));
+		std::stringstream exec_timestamp_ss(exec_timestamp_l);
+		error_a = (exec_timestamp_ss >> exec_timestamp).bad();
+		if (error_a)
+			return;
 	}
 	catch (std::runtime_error const &)
 	{
@@ -218,17 +226,18 @@ void czr::block_hashables::hash (blake2b_state & hash_a) const
 
 	blake2b_update(&hash_a, last_summary.bytes.data(), sizeof(last_summary.bytes));
 	blake2b_update(&hash_a, last_summary_block.bytes.data(), sizeof(last_summary_block.bytes));
-
+	
 	blake2b_update(&hash_a, data.data(), data.size());
+	blake2b_update(&hash_a, &exec_timestamp, sizeof(exec_timestamp));
 }
 
 czr::block::block(czr::account const & from_a, czr::account const & to_a, czr::amount const & amount_a, 
 	czr::block_hash const & previous_a, std::vector<czr::block_hash> const & parents_a, 
 	czr::block_hash const & witness_list_block_a, std::vector<czr::account> const & witness_list_a,
 	czr::summary_hash const & last_summary_a, czr::block_hash const & last_summary_block_a,
-	std::vector<uint8_t> const & data_a,
+	std::vector<uint8_t> const & data_a, uint64_t const & exec_timestamp_a,
 	czr::raw_key const & prv_a, czr::public_key const & pub_a, uint64_t work_a):
-hashables(from_a, to_a, amount_a, previous_a, parents_a, witness_list_block_a, witness_list_a, last_summary_a, last_summary_block_a, data_a),
+hashables(from_a, to_a, amount_a, previous_a, parents_a, witness_list_block_a, witness_list_a, last_summary_a, last_summary_block_a, data_a, exec_timestamp_a),
 signature(czr::sign_message(prv_a, pub_a, hash())),
 work(work_a)
 {

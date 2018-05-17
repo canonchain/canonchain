@@ -52,6 +52,13 @@ czr::process_return czr::consensus::validate(czr::publish const & message)
 		return result;
 	}
 
+	//check timestamp
+	if (czr::seconds_since_epoch() < block->hashables.exec_timestamp)
+	{
+		result.code = czr::process_result::exec_timestamp_too_late;
+		return result;
+	}
+
 	//data size
 	if(block->hashables.data.size() > czr::max_data_size)
 	{
@@ -155,8 +162,10 @@ czr::process_return czr::consensus::validate(czr::publish const & message)
 		return result;
 	}
 
+	auto parents_and_previous(block->parents_and_previous());
+
 	//check missing parents and previous 
-	for (czr::block_hash & pblock_hash : block->parents_and_previous())
+	for (czr::block_hash & pblock_hash : parents_and_previous)
 	{
 		if (!ledger.store.block_exists(transaction, pblock_hash))
 		{
@@ -170,6 +179,18 @@ czr::process_return czr::consensus::validate(czr::publish const & message)
 
 		result.code = czr::process_result::missing_parents_and_previous;
 		return result;
+	}
+
+	//check parent and previous exe_timestamp
+	for (czr::block_hash & pblock_hash : parents_and_previous)
+	{
+		std::unique_ptr<czr::block> pblock(ledger.store.block_get(transaction, pblock_hash));
+		if (pblock->hashables.exec_timestamp > block->hashables.exec_timestamp)
+		{
+			result.code = czr::process_result::invalid_block;
+			result.err_msg = boost::str(boost::format("Invalid exec_timestamp, parent or previous: %1%") % pblock_hash.to_string());
+			return result;
+		}
 	}
 
 	//check parents
@@ -505,7 +526,6 @@ void czr::consensus::save_block(czr::block const & block_a)
 	state.best_parent = best_pblock_hash;
 	state.level = max_parent_level + 1;
 	state.witnessed_level = witnessed_level;
-	state.creation_date = std::chrono::system_clock::now();
 	ledger.store.block_state_put(transaction, block_hash, state);
 	//save free
 	ledger.store.free_put(transaction, czr::free_key(state.witnessed_level, state.level, block_hash));
@@ -815,7 +835,11 @@ void czr::consensus::check_mc_stable_block()
 void czr::consensus::advance_mc_stable_block(czr::block_hash const & mc_stable_hash, uint64_t const & mci)
 {
 	std::shared_ptr<std::set<czr::block_hash>> stable_block_hashs(new std::set<czr::block_hash>); //order by block hash
-	update_stable_block(mc_stable_hash, mci, stable_block_hashs);
+	search_stable_block(mc_stable_hash, mci, stable_block_hashs);
+
+	std::unique_ptr<czr::block> mc_stable_block(ledger.store.block_get(transaction, mc_stable_hash));
+	assert(mc_stable_block != nullptr);
+	uint64_t timestamp(mc_stable_block->hashables.exec_timestamp);
 
 #pragma region handle fork block
 
@@ -983,6 +1007,7 @@ void czr::consensus::advance_mc_stable_block(czr::block_hash const & mc_stable_h
 			//save block state
 			block_state.is_invalid = is_invalid;
 			block_state.is_fail = is_fail;
+			block_state.timestamp = timestamp;
 			block_state.is_stable = true;
 			ledger.store.block_state_put(transaction, block_hash, block_state);
 
@@ -1148,7 +1173,7 @@ void czr::consensus::update_parent_mci(czr::block_hash const & hash_a, uint64_t 
 	}
 }
 
-void czr::consensus::update_stable_block(czr::block_hash const & block_hash, uint64_t const & mci, std::shared_ptr<std::set<czr::block_hash>> stable_block_hashs)
+void czr::consensus::search_stable_block(czr::block_hash const & block_hash, uint64_t const & mci, std::shared_ptr<std::set<czr::block_hash>> stable_block_hashs)
 {
 	//has updated
 	if (stable_block_hashs->find(block_hash) != stable_block_hashs->end())
@@ -1169,7 +1194,7 @@ void czr::consensus::update_stable_block(czr::block_hash const & block_hash, uin
 	std::unique_ptr<czr::block> block(ledger.store.block_get(transaction, block_hash));
 	for (czr::block_hash & pblock_hash : block->parents_and_previous())
 	{
-		update_stable_block(pblock_hash, mci, stable_block_hashs);
+		search_stable_block(pblock_hash, mci, stable_block_hashs);
 	}
 }
 

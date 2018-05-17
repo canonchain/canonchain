@@ -850,6 +850,16 @@ czr::process_return czr::block_processor::process_receive_one(MDB_txn * transact
 			//todo:to request catchup
 			break;
 		}
+		case czr::process_result::exec_timestamp_too_late:
+		{
+			if (node.config.logging.ledger_logging())
+			{
+				BOOST_LOG(node.log) << boost::str(boost::format("Exec timestamp too late, block: %1%, exec_timestamp: %2%")
+					% message.block->hash().to_string() % message.block->hashables.exec_timestamp);
+				//todo:store message and try later
+			}
+			break;
+		}
 		case czr::process_result::invalid_block:
 		{
 			if (node.config.logging.ledger_logging())

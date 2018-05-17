@@ -61,6 +61,18 @@ czr::compose_result czr::composer::compose(MDB_txn * transaction_a, czr::account
 		std::sort(witness_list.begin(), witness_list.end());
 	}
 
+	//exec timestamp
+	uint64_t exec_timestamp(czr::seconds_since_epoch());
+	for (czr::block_hash phash : parents)
+	{
+		std::unique_ptr<czr::block> pblock(ledger.store.block_get(transaction_a, phash));
+		if (pblock->hashables.exec_timestamp > exec_timestamp)
+		{
+			BOOST_LOG(node.log) << "Parent's exec_timestamp later than yours";
+			return czr::compose_result(czr::compose_result_codes::error, nullptr);
+		}
+	}
+
 	//check balance
 	czr::amount balance(ledger.account_balance(transaction_a, from_a));
 	czr::amount fee; //todo: calculate fee, !!parents count not relate to fee
@@ -68,7 +80,7 @@ czr::compose_result czr::composer::compose(MDB_txn * transaction_a, czr::account
 		return czr::compose_result(czr::compose_result_codes::insufficient_balance, nullptr);
 
 	std::shared_ptr<czr::block> block(new czr::block(from_a, to_a, amount_a, previous, parents, 
-		witness_list_block, witness_list, last_summary, last_summary_block, data_a, prv_a, pub_a, work_a));
+		witness_list_block, witness_list, last_summary, last_summary_block, data_a, exec_timestamp, prv_a, pub_a, work_a));
 
 	return czr::compose_result(czr::compose_result_codes::ok, block);
 }

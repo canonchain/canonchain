@@ -54,6 +54,7 @@ char const * beta_genesis_data = R"%%%({
     "last_summary":"0000000000000000000000000000000000000000000000000000000000000000",
     "last_summary_block":"0000000000000000000000000000000000000000000000000000000000000000",
     "data":"",
+	"exec_timestamp":"1526568538",
 	"work": "62f05417dd3fb691",
 	"signature": "9F0C933C8ADE004D808EA1985FA746A7E95BA2A38F867640F53EC8F180BDFE9E2C1268DEAD7C2664F356E37ABA362BC58E46DBA03E523A7B5A19E4B6EB12BB02"
 })%%%";
@@ -82,6 +83,7 @@ char const * live_genesis_data = R"%%%({
     "last_summary":"0000000000000000000000000000000000000000000000000000000000000000",
     "last_summary_block":"0000000000000000000000000000000000000000000000000000000000000000",
     "data":"",
+	"exec_timestamp":"1526568538",
 	"work": "62f05417dd3fb691",
 	"signature": "9F0C933C8ADE004D808EA1985FA746A7E95BA2A38F867640F53EC8F180BDFE9E2C1268DEAD7C2664F356E37ABA362BC58E46DBA03E523A7B5A19E4B6EB12BB02"
 })%%%";
@@ -119,7 +121,7 @@ void czr::genesis::try_initialize(MDB_txn * transaction_a, czr::block_store & st
 	block_state.level = 0;
 	block_state.witnessed_level = 0;
 	block_state.best_parent = 0;
-	block_state.creation_date = std::chrono::system_clock::now(); //todo:
+	block_state.timestamp = block->hashables.exec_timestamp;
 	block_state.from_state = 0;
 	block_state.to_state = 0;
 	store_a.block_state_put(transaction_a, block_hash, block_state);

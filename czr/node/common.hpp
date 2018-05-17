@@ -177,6 +177,7 @@ enum class process_result
 	old, // Already seen and was valid
 	missing_hash_tree_summary,
 	missing_parents_and_previous,
+	exec_timestamp_too_late,
 	invalid_block,
 	invalid_message,
 };

@@ -113,7 +113,7 @@ namespace czr
 		uint64_t level;
 		uint64_t witnessed_level;
 		czr::block_hash best_parent;
-		std::chrono::system_clock::time_point creation_date;
+		uint64_t timestamp;
 		czr::account_state_hash from_state;
 		czr::account_state_hash to_state;
 	};
