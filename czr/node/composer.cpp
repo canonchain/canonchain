@@ -19,10 +19,10 @@ czr::composer::~composer()
 }
 
 czr::compose_result czr::composer::compose(MDB_txn * transaction_a, czr::account const & from_a, czr::account const & to_a,
-	czr::amount const & amount_a, std::vector<uint8_t> const & data_a, 
-	czr::raw_key const & prv_a , czr::public_key const & pub_a, uint64_t const & work_a)
+	czr::amount const & amount_a, std::vector<uint8_t> const & data_a,
+	czr::raw_key const & prv_a, czr::public_key const & pub_a, uint64_t const & work_a)
 {
-	if(data_a.size() > czr::max_data_size)
+	if (data_a.size() > czr::max_data_size)
 		return czr::compose_result(czr::compose_result_codes::data_size_too_large, nullptr);
 
 	//my witness list
@@ -39,15 +39,53 @@ czr::compose_result czr::composer::compose(MDB_txn * transaction_a, czr::account
 	bool new_account(node.ledger.store.account_get(transaction_a, from_a, info));
 	czr::block_hash previous = new_account ? 0 : info.head;
 
-	//pick parents
-	std::vector<czr::block_hash> free_parents;
+	//pick parents and last summary
+	std::vector<czr::block_hash> parents;
+	czr::block_hash last_summary_block;
+	czr::block_hash last_summary;
+	uint64_t last_stable_mci;
+	czr::block_hash witness_list_block;
+	czr::error_message err_msg;
+	pick_parents_and_last_summary_and_wl_block(err_msg, transaction_a, previous, my_wl_info, last_summary_block, last_summary, last_stable_mci, witness_list_block);
+	if (err_msg.error)
+	{
+		BOOST_LOG(node.log) << err_msg.message;
+		return czr::compose_result(czr::compose_result_codes::error, nullptr);
+	}
+
+	//witness list
+	std::vector<czr::account> witness_list;
+	if (witness_list_block.is_zero())
+	{
+		witness_list = my_wl_info.witness_list;
+		std::sort(witness_list.begin(), witness_list.end());
+	}
+
+	//check balance
+	czr::amount balance(ledger.account_balance(transaction_a, from_a));
+	czr::amount fee; //todo: calculate fee, !!parents count not relate to fee
+	if (balance.number() < amount_a.number() + fee.number())
+		return czr::compose_result(czr::compose_result_codes::insufficient_balance, nullptr);
+
+	std::shared_ptr<czr::block> block(new czr::block(from_a, to_a, amount_a, previous, parents, 
+		witness_list_block, witness_list, last_summary, last_summary_block, data_a, prv_a, pub_a, work_a));
+
+	return czr::compose_result(czr::compose_result_codes::ok, block);
+}
+
+void czr::composer::pick_parents_and_last_summary_and_wl_block(czr::error_message & err_msg, MDB_txn * transaction_a, 
+	czr::block_hash const & previous, czr::witness_list_info const & my_wl_info, 
+	czr::block_hash & last_summary_block, czr::summary_hash & last_summary, uint64_t & last_stable_mci, czr::block_hash & witness_list_block)
+{
+	//pick free parents
+	std::vector<czr::account> parents;
 	bool has_compatible(false);
 	for (czr::store_iterator i(ledger.store.free_begin(transaction_a)), n(nullptr); i != n; ++i)
 	{
 		czr::free_key key(i->first);
 		czr::block_hash free_hash(key.hash_asc);
 
-		free_parents.push_back(free_hash);
+		parents.push_back(free_hash);
 
 		if (!has_compatible)
 		{
@@ -59,38 +97,57 @@ czr::compose_result czr::composer::compose(MDB_txn * transaction_a, czr::account
 		}
 	}
 
-	std::vector<czr::account> parents;
+	// we need at least one compatible parent, otherwise go deep
 	if (!has_compatible)
 	{
-		// we need at least one compatible parent, otherwise go deep
-		parents = pick_deep_parents(transaction_a, my_wl_info, boost::none);
+		czr::error_message err_msg;
+		parents = pick_deep_parents(err_msg, transaction_a, my_wl_info, boost::none);
+		if (err_msg.error)
+			return;
 	}
 	else
 	{
-		parents = adjust_parents_to_not_retreat_witnessed_level(transaction_a, my_wl_info, free_parents);
+		adjust_parents_to_not_retreat_witnessed_level(transaction_a, my_wl_info, parents);
+		std::sort(parents.begin(), parents.end());
 	}
 
 	if (parents.size() == 0)
 	{
-		BOOST_LOG(node.log) << boost::str(boost::format("compose error:no compatible parent, my witness list: %1%") % my_wl_info.to_string());
-		return czr::compose_result(czr::compose_result_codes::error, nullptr);
+		err_msg.error = true;
+		err_msg.message = boost::str(boost::format("compose error:no compatible parent, my witness list: %1%") % my_wl_info.to_string());
+		return;
 	}
 
 	//first trim parents
 	size_t max_parents_size(czr::max_parents_and_pervious_size - previous.is_zero() ? 0 : 1);
 	if (parents.size() > max_parents_size)
+	{
 		parents.resize(max_parents_size);
+	}
 
-	//last summary block
-	uint64_t last_stable_mci(ledger.store.last_stable_mci_get(transaction_a));
-	czr::block_hash last_summary_block;
-	bool last_summary_block_error(ledger.store.main_chain_get(transaction_a, last_stable_mci, last_summary_block));
+	//last mc summary block
+	uint64_t last_stable_mc_mci(ledger.store.last_stable_mci_get(transaction_a));
+	bool last_summary_block_error(ledger.store.main_chain_get(transaction_a, last_stable_mc_mci, last_summary_block));
 	assert(!last_summary_block_error);
-	czr::summary_hash last_summary;
+
+	//last_summary_block and parents may be adjusted
+	adjust_last_summary_and_parents(err_msg, transaction_a, my_wl_info, last_summary_block, parents);
+	if (err_msg.error)
+		return;
+
+	//get last_stable_mci and last_summary after adjustment
+	czr::block_state last_summary_state;
+	bool last_summary_state_error(ledger.store.block_state_get(transaction_a, last_summary_block, last_summary_state));
+	assert(!last_summary_state_error);
+	last_stable_mci = *last_summary_state.main_chain_index;
+
 	bool last_summary_error(ledger.store.block_summary_get(transaction_a, last_summary_block, last_summary));
 	assert(!last_summary_error);
 
-	//todo:adjustLastStableMcBallAndParents
+	//remove previous from parents if exists, parents size can be zero
+	auto p(std::find(parents.begin(), parents.end(), previous));
+	if (p != parents.end())
+		parents.erase(p);
 
 	//second trim parents
 	if (parents.size() > max_parents_size)
@@ -133,33 +190,6 @@ czr::compose_result czr::composer::compose(MDB_txn * transaction_a, czr::account
 		}
 	}
 
-	//remove previous from parents if exists, parents size can be zero
-	auto p(std::find(parents.begin(), parents.end(), previous));
-	if (p != parents.end())
-		parents.erase(p);
-
-	//witness list block
-	czr::witness_list_key search_wl_key(my_wl_info.hash(), 0);
-	czr::store_iterator iter(ledger.store.witness_list_hash_block_begin(transaction_a, search_wl_key));
-
-	czr::block_hash witness_list_block;
-	if (iter != czr::store_iterator(nullptr))
-	{
-		czr::witness_list_key iter_wl_key(iter->first);
-		if (iter_wl_key.hash == search_wl_key.hash && iter_wl_key.mci <= last_stable_mci)
-		{
-			witness_list_block = iter->second.uint256();
-		}
-	}
-
-	//witness list
-	std::vector<czr::account> witness_list;
-	if (witness_list_block.is_zero())
-	{
-		witness_list = my_wl_info.witness_list;
-		std::sort(witness_list.begin(), witness_list.end());
-	}
-
 	//check witness list muatations along mc
 	czr::block_hash best_parent_hash(ledger.determine_best_parent(transaction_a, parents, my_wl_info));
 	if (best_parent_hash.is_zero())
@@ -172,37 +202,30 @@ czr::compose_result czr::composer::compose(MDB_txn * transaction_a, czr::account
 			if (i < size - 1)
 				p_ss << ",";
 		}
-		BOOST_LOG(node.log) << boost::str(boost::format("compose error:no compatible best parent, parents: %1%, my witness list: %2%") 
+		err_msg.error = true;
+		err_msg.message = boost::str(boost::format("compose error:no compatible best parent, parents: %1%, my witness list: %2%")
 			% p_ss.str() % my_wl_info.to_string());
-		return czr::compose_result(czr::compose_result_codes::error, nullptr);
+		return;
 	}
+
+	//witness list block
+	witness_list_block = ledger.find_witness_list_block(transaction_a, my_wl_info, last_stable_mci);
 
 	bool is_mutations_ok(ledger.check_witness_list_mutations_along_mc(transaction_a, best_parent_hash, my_wl_info, witness_list_block, last_summary_block));
 	if (!is_mutations_ok)
 	{
-		BOOST_LOG(node.log) << boost::str(boost::format("compose error:mutations fail, best parent: %1%, my witness list: %2%, witness list block: %3%, last summary block: %4%") 
+		err_msg.error = true;
+		err_msg.message = boost::str(boost::format("compose error:mutations fail, best parent: %1%, my witness list: %2%, witness list block: %3%, last summary block: %4%")
 			% best_parent_hash.to_string() % my_wl_info.to_string() % witness_list_block.to_string() % last_summary_block.to_string());
-		return czr::compose_result(czr::compose_result_codes::error, nullptr);
+		return;
 	}
-
-	//check balance
-	czr::amount balance(ledger.account_balance(transaction_a, from_a));
-	czr::amount fee; //todo: calculate fee, !!parents count not relate to fee
-	if (balance.number() < amount_a.number() + fee.number())
-		return czr::compose_result(czr::compose_result_codes::insufficient_balance, nullptr);
-
-
-	std::shared_ptr<czr::block> block(new czr::block(from_a, to_a, amount_a, previous, parents, 
-		witness_list_block, witness_list, last_summary, last_summary_block, data_a, prv_a, pub_a, work_a));
-
-	return czr::compose_result(czr::compose_result_codes::ok, block);
 }
 
-std::vector<czr::block_hash> czr::composer::pick_deep_parents(MDB_txn * transaction_a, czr::witness_list_info const & my_wl_info, boost::optional<uint64_t> const & max_wl)
+std::vector<czr::block_hash> czr::composer::pick_deep_parents(czr::error_message & err_msg, MDB_txn * transaction_a, 
+	czr::witness_list_info const & my_wl_info, boost::optional<uint64_t> const & max_wl)
 {
 	std::vector<czr::block_hash> parents;
 
-	czr::block_hash pb_hash;
 	if (!max_wl)
 	{
 		//search all block order by mci desc
@@ -214,7 +237,7 @@ std::vector<czr::block_hash> czr::composer::pick_deep_parents(MDB_txn * transact
 			czr::witness_list_info wl_info(ledger.block_witness_list(transaction_a, *block));
 			if (my_wl_info.is_compatible(wl_info))
 			{
-				pb_hash = b_hash;
+				parents.push_back(b_hash);
 				break;
 			}
 		}
@@ -234,23 +257,24 @@ std::vector<czr::block_hash> czr::composer::pick_deep_parents(MDB_txn * transact
 				czr::witness_list_info wl_info(ledger.block_witness_list(transaction_a, *block));
 				if (my_wl_info.is_compatible(wl_info))
 				{
-					pb_hash = b_hash;
+					parents.push_back(b_hash);
 					break;
 				}
 			}
 		}
 	}
 
-	if (pb_hash.is_zero())
+	if (parents.size() == 0)
 	{
-		BOOST_LOG(node.log) << boost::str(boost::format("compose error:no deep parents, my witness list: %1%") % my_wl_info.to_string());
+		err_msg.error = true;
+		err_msg.message = boost::str(boost::format("compose error:no deep parents, my witness list: %1%") % my_wl_info.to_string());
 		return parents;
 	}
 
-	return check_witnessed_level_not_retreating_and_look_lower(transaction_a, my_wl_info, parents);
+	return check_witnessed_level_not_retreating_and_look_lower(err_msg, transaction_a, my_wl_info, parents);
 }
 
-std::vector<czr::block_hash> czr::composer::check_witnessed_level_not_retreating_and_look_lower(MDB_txn * transaction_a,
+std::vector<czr::block_hash> czr::composer::check_witnessed_level_not_retreating_and_look_lower(czr::error_message & err_msg, MDB_txn * transaction_a,
 	czr::witness_list_info const & my_wl_info, std::vector<czr::block_hash> const & parents)
 {
 	czr::block_hash best_parent_hash(ledger.determine_best_parent(transaction_a, parents, my_wl_info));
@@ -265,18 +289,17 @@ std::vector<czr::block_hash> czr::composer::check_witnessed_level_not_retreating
 	if (child_wl >= best_parent_wl)
 		return parents;
 	else
-		return pick_deep_parents(transaction_a, my_wl_info, best_parent_wl);
+		return pick_deep_parents(err_msg, transaction_a, my_wl_info, best_parent_wl);
 }
 
-std::vector<czr::block_hash> czr::composer::adjust_parents_to_not_retreat_witnessed_level(MDB_txn * transaction_a,
-	czr::witness_list_info const & my_wl_info, std::vector<czr::block_hash> const & parents)
+void czr::composer::adjust_parents_to_not_retreat_witnessed_level(MDB_txn * transaction_a,
+	czr::witness_list_info const & my_wl_info, std::vector<czr::block_hash> & parents)
 {
-	std::vector<czr::block_hash> new_parents(parents);
 
 	std::shared_ptr<std::unordered_set<block_hash>> all_excluded_hashs(new std::unordered_set<block_hash>);
 	while (true)
 	{
-		czr::block_hash best_parent_hash(ledger.determine_best_parent(transaction_a, new_parents, my_wl_info));
+		czr::block_hash best_parent_hash(ledger.determine_best_parent(transaction_a, parents, my_wl_info));
 		assert(!best_parent_hash.is_zero());
 		czr::block_state best_parent_state;
 		bool best_parent_state_error(ledger.store.block_state_get(transaction_a, best_parent_hash, best_parent_state));
@@ -286,20 +309,19 @@ std::vector<czr::block_hash> czr::composer::adjust_parents_to_not_retreat_witnes
 		uint64_t child_wl(ledger.determine_witness_level(transaction_a, best_parent_hash, my_wl_info));
 
 		if (child_wl >= best_parent_wl)
-			return new_parents;
+			return;
 		else
-			new_parents = replace_excluded_parent(transaction_a, new_parents, best_parent_hash, all_excluded_hashs);
+			replace_excluded_parent(transaction_a, best_parent_hash, parents, all_excluded_hashs);
 	}
 }
 
-std::vector<czr::block_hash> czr::composer::replace_excluded_parent(MDB_txn * transaction_a, 
-	std::vector<czr::block_hash> const & parents, czr::block_hash const & excluded_hash, std::shared_ptr<std::unordered_set<block_hash>> all_excluded_hashs)
+void czr::composer::replace_excluded_parent(MDB_txn * transaction_a, 
+	czr::block_hash const & excluded_hash, std::vector<czr::block_hash> & parents, std::shared_ptr<std::unordered_set<block_hash>> all_excluded_hashs)
 {
-	std::vector<czr::block_hash> new_parents(parents);
 	all_excluded_hashs->insert(excluded_hash);
-	auto p(std::find(new_parents.begin(), new_parents.end(), excluded_hash));
-	if (p != new_parents.end())
-		new_parents.erase(p);
+	auto p(std::find(parents.begin(), parents.end(), excluded_hash));
+	if (p != parents.end())
+		parents.erase(p);
 
 	std::unique_ptr<czr::block> excluded_block(ledger.store.block_get(transaction_a, excluded_hash));
 	assert(excluded_block != nullptr);
@@ -325,9 +347,30 @@ std::vector<czr::block_hash> czr::composer::replace_excluded_parent(MDB_txn * tr
 
 		if (!has_other_children)
 		{
-			new_parents.push_back(pb_hash);
+			parents.push_back(pb_hash);
 		}
 	}
+}
 
-	return new_parents;
+void czr::composer::adjust_last_summary_and_parents(czr::error_message & err_msg, MDB_txn * transaction_a, czr::witness_list_info const & my_wl_info, czr::block_hash & last_summary_block_hash, std::vector<czr::block_hash> & parents)
+{
+	bool is_stable(ledger.check_stable_from_later_blocks(transaction_a, last_summary_block_hash, parents));
+	if (is_stable)
+		return;
+
+	if (parents.size() > 1)
+	{
+		parents = pick_deep_parents(err_msg, transaction_a, my_wl_info, boost::none);
+		if (err_msg.error)
+			return;
+	}
+	else
+	{
+		czr::block_state last_summary_state;
+		bool last_summary_state_error(ledger.store.block_state_get(transaction_a, last_summary_block_hash, last_summary_state));
+		assert(!last_summary_state_error);
+
+		last_summary_block_hash = last_summary_state.best_parent;
+	}
+	adjust_last_summary_and_parents(err_msg, transaction_a, my_wl_info, last_summary_block_hash, parents);
 }

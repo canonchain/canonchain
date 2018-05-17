@@ -508,3 +508,20 @@ bool czr::ledger::check_stable_from_later_blocks(MDB_txn * transaction_a, czr::b
 	return is_stable;
 }
 
+czr::block_hash czr::ledger::find_witness_list_block(MDB_txn * transaction_a, czr::witness_list_info const & wl_info, uint64_t const & last_stable_mci)
+{
+	czr::witness_list_key search_wl_key(wl_info.hash(), 0);
+	czr::store_iterator iter(store.witness_list_hash_block_begin(transaction_a, search_wl_key));
+
+	czr::block_hash witness_list_block;
+	if (iter != czr::store_iterator(nullptr))
+	{
+		czr::witness_list_key iter_wl_key(iter->first);
+		if (iter_wl_key.hash == search_wl_key.hash && iter_wl_key.mci <= last_stable_mci)
+		{
+			witness_list_block = iter->second.uint256();
+		}
+	}
+	return witness_list_block;
+}
+

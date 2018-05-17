@@ -67,7 +67,7 @@ namespace czr
 		witness_list_info(MDB_val const &);
 		witness_list_info(std::vector<czr::account> const &);
 		czr::mdb_val val() const;
-		czr::witness_list_hash hash();
+		czr::witness_list_hash hash() const;
 		bool is_compatible(witness_list_info const &) const;
 		bool contains(czr::account const &) const;
 		std::string to_string() const;

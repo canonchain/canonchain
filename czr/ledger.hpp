@@ -35,6 +35,7 @@ namespace czr
 		void find_unstable_child_blocks(MDB_txn * transaction_a, czr::block_hash const & stable_hash, czr::block_hash & mc_child_hash, std::shared_ptr<std::list<czr::block_hash>> branch_child_hashs);
 		uint64_t find_mc_min_wl(MDB_txn * transaction_a, czr::block_hash const & best_block_hash, czr::witness_list_info const & witness_list);
 		bool check_stable_from_later_blocks(MDB_txn * transaction_a, czr::block_hash const & earlier_hash, std::vector<czr::block_hash> const & later_hashs);
+		czr::block_hash find_witness_list_block(MDB_txn * transaction_a, czr::witness_list_info const & wl_info, uint64_t const & last_stable_mci);
 
 		static czr::uint128_t const unit;
 		czr::block_store & store;

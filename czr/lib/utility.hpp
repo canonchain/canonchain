@@ -29,4 +29,12 @@ public:
 	std::mutex mutex;
 	std::vector<std::function<void(T...)>> observers;
 };
+
+class error_message
+{
+public:
+	bool error;
+	std::string message;
+};
+
 }

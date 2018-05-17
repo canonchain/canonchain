@@ -106,7 +106,7 @@ czr::mdb_val czr::witness_list_info::val() const
 	return czr::mdb_val(sizeof(*this), const_cast<czr::witness_list_info *> (this));
 }
 
-czr::witness_list_hash czr::witness_list_info::hash()
+czr::witness_list_hash czr::witness_list_info::hash() const
 {
 	czr::uint256_union result;
 	blake2b_state hash_l;

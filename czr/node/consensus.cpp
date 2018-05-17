@@ -170,6 +170,13 @@ czr::process_return czr::consensus::validate(czr::publish const & message)
 			result.err_msg = boost::str(boost::format("current from %1% not equal to pervious from %2%") % block->hashables.from.to_string() % previous_block->hashables.from.to_string());
 			return result;
 		}
+
+		if (std::find(block->hashables.parents.begin(), block->hashables.parents.end(), block->previous()) != block->hashables.parents.end())
+		{
+			result.code = czr::process_result::invalid_block;
+			result.err_msg = boost::str(boost::format("duplicate previous and parent %1%") % block->previous().to_string());
+			return result;
+		}
 	}
 
 	//check parents
