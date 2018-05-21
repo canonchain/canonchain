@@ -123,6 +123,7 @@ namespace czr
 		void main_chain_put(MDB_txn *, uint64_t const &, czr::block_hash const &);
 		void main_chain_del(MDB_txn *, uint64_t const &);
 
+		czr::store_iterator mci_block_beign(MDB_txn * transaction_a, czr::mci_block_key const & key);
 		czr::store_iterator mci_block_rbeign(MDB_txn * transaction_a);
 		void mci_block_put(MDB_txn * transaction_a, czr::mci_block_key const & key);
 		void mci_block_del(MDB_txn * transaction_a, czr::mci_block_key const & key);

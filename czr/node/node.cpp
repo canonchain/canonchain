@@ -834,7 +834,7 @@ czr::process_return czr::block_processor::process_receive_one(MDB_txn * transact
 		{
 			if (node.config.logging.ledger_logging())
 			{
-				BOOST_LOG(node.log) << boost::str(boost::format("Missing parents for: %1%") % message.block->hash().to_string());
+				BOOST_LOG(node.log) << boost::str(boost::format("Missing parents and previous for: %1%") % message.block->hash().to_string());
 			}
 			std::vector<block_hash> missing_parents_and_previous(result.missing_parents_and_previous);
 			//todo: store message to unhandle_message db 
@@ -845,7 +845,7 @@ czr::process_return czr::block_processor::process_receive_one(MDB_txn * transact
 		{
 			if (node.config.logging.ledger_logging())
 			{
-				BOOST_LOG(node.log) << boost::str(boost::format("Missing parents for: %1%") % message.block->hash().to_string());
+				BOOST_LOG(node.log) << boost::str(boost::format("Missing hash tree summary for: %1%") % message.block->hash().to_string());
 			}
 			//todo:to request catchup
 			break;

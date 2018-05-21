@@ -139,6 +139,45 @@ czr::process_return czr::consensus::validate(czr::publish const & message)
 
 #pragma region validate parents and previous
 
+	//check parents and previous size
+	size_t parents_and_previous_size(block->parents_and_previous().size());
+	if (parents_and_previous_size == 0 || parents_and_previous_size > czr::max_parents_size)
+	{
+		result.code = czr::process_result::invalid_block;
+		result.err_msg = boost::str(boost::format("Invalid parents and previous size: %1%") % parents_and_previous_size);
+		return result;
+	}
+
+	//check missing parents and previous
+	for (czr::block_hash & pblock_hash : block->parents_and_previous())
+	{
+		if (!ledger.store.block_exists(transaction, pblock_hash))
+		{
+			result.missing_parents_and_previous.push_back(pblock_hash);
+			continue;
+		}
+	}
+	if (result.missing_parents_and_previous.size() > 0)
+	{
+		//todo:check any of missing parents and previous is known invalid block, if so return invalid block;
+
+		result.code = czr::process_result::missing_parents_and_previous;
+		return result;
+	}
+
+	//check exe_timestamp
+	for (czr::block_hash pblock_hash : block->parents_and_previous())
+	{
+		//check parent exe_timestamp
+		std::unique_ptr<czr::block> pblock(ledger.store.block_get(transaction, pblock_hash));
+		if (pblock->hashables.exec_timestamp > block->hashables.exec_timestamp)
+		{
+			result.code = czr::process_result::invalid_block;
+			result.err_msg = boost::str(boost::format("Invalid exec_timestamp, parent or previous: %1%") % pblock_hash.to_string());
+			return result;
+		}
+	}
+
 	//check pervious
 	if (!block->previous().is_zero())
 	{
@@ -153,50 +192,11 @@ czr::process_return czr::consensus::validate(czr::publish const & message)
 		}
 	}
 
-	//check parents size
-	size_t parents_size(block->parents().size());
-	if (parents_size == 0 || parents_size > czr::max_parents_size)
-	{
-		result.code = czr::process_result::invalid_block;
-		result.err_msg = boost::str(boost::format("Invalid parent size: %1%") % parents_size);
-		return result;
-	}
-
-	auto parents_and_previous(block->parents_and_previous());
-
-	//check missing parents and previous 
-	for (czr::block_hash & pblock_hash : parents_and_previous)
-	{
-		if (!ledger.store.block_exists(transaction, pblock_hash))
-		{
-			result.missing_parents_and_previous.push_back(pblock_hash);
-			continue;
-		}
-	}
-	if (result.missing_parents_and_previous.size() > 0)
-	{
-		//todo:check any of missing parents is known invalid block, if so return invalid block;
-
-		result.code = czr::process_result::missing_parents_and_previous;
-		return result;
-	}
-
-	//check parent and previous exe_timestamp
-	for (czr::block_hash & pblock_hash : parents_and_previous)
-	{
-		std::unique_ptr<czr::block> pblock(ledger.store.block_get(transaction, pblock_hash));
-		if (pblock->hashables.exec_timestamp > block->hashables.exec_timestamp)
-		{
-			result.code = czr::process_result::invalid_block;
-			result.err_msg = boost::str(boost::format("Invalid exec_timestamp, parent or previous: %1%") % pblock_hash.to_string());
-			return result;
-		}
-	}
-
 	//check parents
 	czr::block_hash pre_pblock_hash;
 	for (czr::block_hash & pblock_hash : block->parents())
 	{
+		//check order
 		if (pblock_hash <= pre_pblock_hash)
 		{
 			result.code = czr::process_result::invalid_block;
@@ -233,7 +233,7 @@ czr::process_return czr::consensus::validate(czr::publish const & message)
 	uint64_t last_summary_mci = *last_summary_block_state.main_chain_index;
 
 	uint64_t max_parent_limci;
-	for (czr::block_hash & pblock_hash : block->parents())
+	for (czr::block_hash & pblock_hash : block->parents_and_previous())
 	{
 		if (pblock_hash != czr::genesis::block_hash)
 		{
@@ -386,7 +386,7 @@ czr::process_return czr::consensus::validate(czr::publish const & message)
 	}
 
 	//check best parent
-	czr::block_hash best_pblock_hash(ledger.determine_best_parent(transaction, block->parents(), wl_info));
+	czr::block_hash best_pblock_hash(ledger.determine_best_parent(transaction, block->parents_and_previous(), wl_info));
 	if (best_pblock_hash.is_zero())
 	{
 		result.code = czr::process_result::invalid_block;
@@ -419,7 +419,7 @@ czr::process_return czr::consensus::validate(czr::publish const & message)
 
 #pragma region  check if last summary block is stable in view of parents and previous and mci not retreat
 
-	bool is_last_summary_stable = ledger.check_stable_from_later_blocks(transaction, last_summary_block_hash, block->parents());
+	bool is_last_summary_stable = ledger.check_stable_from_later_blocks(transaction, last_summary_block_hash, block->parents_and_previous());
 	if (!is_last_summary_stable)
 	{
 		result.code = czr::process_result::invalid_block;
@@ -450,7 +450,7 @@ czr::process_return czr::consensus::validate(czr::publish const & message)
 
 	//check last summary mci retreat
 	uint64_t max_parent_last_summary_mci;
-	for (czr::block_hash & pblock_hash : block->parents())
+	for (czr::block_hash & pblock_hash : block->parents_and_previous())
 	{
 		std::unique_ptr<czr::block> pblock = ledger.store.block_get(transaction, pblock_hash);
 		assert(pblock != nullptr);
@@ -487,7 +487,7 @@ void czr::consensus::save_block(czr::block const & block_a)
 	czr::witness_list_info wl_info(ledger.block_witness_list(transaction, block_a));
 
 	uint64_t max_parent_level;
-	for (czr::block_hash & pblock_hash : block_a.parents())
+	for (czr::block_hash & pblock_hash : block_a.parents_and_previous())
 	{
 		std::unique_ptr<czr::block> pblock(ledger.store.block_get(transaction, pblock_hash));
 		czr::block_state pblock_state;
@@ -505,6 +505,9 @@ void czr::consensus::save_block(czr::block const & block_a)
 		{
 			max_parent_level = pblock_state.level;
 		}
+
+		//save child
+		ledger.store.block_child_put(transaction, czr::block_child_key(pblock_hash, block_hash));
 	}
 
 	czr::account_info info;
@@ -514,7 +517,7 @@ void czr::consensus::save_block(czr::block const & block_a)
 	bool is_fork(account_exists && (block_a.previous().is_zero() || block_a.previous() != info.head));
 
 	//best parent
-	czr::block_hash best_pblock_hash(ledger.determine_best_parent(transaction, block_a.parents(), wl_info));
+	czr::block_hash best_pblock_hash(ledger.determine_best_parent(transaction, block_a.parents_and_previous(), wl_info));
 
 	//witnessed level
 	uint64_t witnessed_level(ledger.determine_witness_level(transaction, best_pblock_hash, wl_info));
@@ -601,20 +604,30 @@ void czr::consensus::update_main_chain(czr::block const & block_a)
 
 #pragma region delete old main chain block whose main chain index larger than last_mci
 
+	//delete old main chian block
 	for (czr::store_iterator i(ledger.store.main_chain_begin(transaction, last_mci + 1)), n(nullptr); i != n; ++i)
 	{
 		czr::block_hash old_mc_block_hash(i->second.uint256());
-		czr::block_state old_mc_block_state;
-		bool old_mc_block_error(ledger.store.block_state_get(transaction, old_mc_block_hash, old_mc_block_state));
-		assert(!old_mc_block_error && !old_mc_block_state.is_stable);
-
-		old_mc_block_state.is_on_main_chain = false;
-		old_mc_block_state.main_chain_index = boost::none;
-		ledger.store.block_state_put(transaction, old_mc_block_hash, old_mc_block_state);
-
 		uint64_t old_mci(i->first.uint64());
 		ledger.store.main_chain_del(transaction, old_mci);
-		ledger.store.mci_block_del(transaction, czr::mci_block_key(old_mci, old_mc_block_hash));
+	}
+
+	//clear old mci
+	for (czr::store_iterator i(ledger.store.mci_block_rbeign(transaction)), n(nullptr); i != n; ++i)
+	{
+		czr::mci_block_key key(i->first);
+		if (key.mci <= last_mci)
+			break;
+
+		czr::block_state old_mci_block_state;
+		bool old_mci_block_error(ledger.store.block_state_get(transaction, key.hash, old_mci_block_state));
+		assert(!old_mci_block_error && !old_mci_block_state.is_stable);
+
+		old_mci_block_state.is_on_main_chain = false;
+		old_mci_block_state.main_chain_index = boost::none;
+		ledger.store.block_state_put(transaction, key.hash, old_mci_block_state);
+
+		ledger.store.mci_block_del(transaction, czr::mci_block_key(key.mci, key.hash));
 	}
 
 #pragma endregion
@@ -667,7 +680,7 @@ void czr::consensus::update_main_chain(czr::block const & block_a)
 
 			bool is_parent_ready(true);
 			boost::optional<uint64_t> max_limci;
-			for (czr::block_hash & pblock_hash : block->parents())
+			for (czr::block_hash & pblock_hash : block->parents_and_previous())
 			{
 				czr::block_state pblock_state;
 				bool pblock_state_error(ledger.store.block_state_get(transaction, pblock_hash, pblock_state));
@@ -866,37 +879,35 @@ void czr::consensus::advance_mc_stable_block(czr::block_hash const & mc_stable_h
 				//previous not handled, handle previous first
 				if (handle_fork_hashs->find(previous_hash) != handle_fork_hashs->end())
 					continue;
+
+				bool previous_state_error(ledger.store.block_state_get(transaction, previous_hash, previous_state));
+				assert(!previous_state_error);
 			}
 
 			czr::block_state stable_block_state;
 			bool block_state_error(ledger.store.block_state_get(transaction, stable_block_hash, stable_block_state));
 			assert(!block_state_error);
 
-			if (!previous_hash.is_zero() && previous_state.is_fork)
-				assert(stable_block_state.is_fork);
-			else
+			if (stable_block_state.is_fork && (previous_hash.is_zero() || !previous_state.is_fork))
 			{
-				if (stable_block_state.is_fork)
+				std::unique_ptr<czr::block> successor(ledger.successor(transaction, stable_block->root()));
+				czr::block_hash successor_hash(successor->hash());
+				assert(successor != nullptr && successor_hash != stable_block_hash);
+				czr::block_state successor_state;
+				bool successor_state_error(ledger.store.block_state_get(transaction, successor_hash, successor_state));
+				assert(!successor_state_error);
+
+				if (!successor_state.main_chain_index
+					|| *successor_state.main_chain_index > *stable_block_state.main_chain_index
+					|| (*successor_state.main_chain_index == *stable_block_state.main_chain_index && successor_hash.number() > stable_block_hash.number()))
 				{
-					std::unique_ptr<czr::block> successor(ledger.successor(transaction, stable_block->root()));
-					czr::block_hash successor_hash(successor->hash());
-					assert(successor != nullptr && successor_hash != stable_block_hash);
-					czr::block_state successor_state;
-					bool successor_state_error(ledger.store.block_state_get(transaction, successor_hash, successor_state));
-					assert(!successor_state_error);
+					assert(!successor_state.is_fork);
 
-					if (!successor_state.main_chain_index
-						|| *successor_state.main_chain_index > *stable_block_state.main_chain_index
-						|| (*successor_state.main_chain_index == *stable_block_state.main_chain_index && successor_hash.number() > stable_block_hash.number()))
-					{
-						assert(!successor_state.is_fork);
+					//rollbock account info
+					rollback(successor_hash);
 
-						//rollbock account info
-						rollback(successor_hash);
-
-						//change successor
-						change_successor(stable_block_hash);
-					}
+					//change successor
+					change_successor(stable_block_hash);
 				}
 			}
 
@@ -923,22 +934,12 @@ void czr::consensus::advance_mc_stable_block(czr::block_hash const & mc_stable_h
 			std::unique_ptr<czr::block> block(ledger.store.block_get(transaction, block_hash));
 			assert(block != nullptr);
 
-			//if parent not handled, handle parent first;
-			auto parents_and_previous(block->parents_and_previous());
-			bool parent_not_handled;
-			for (auto i(parents_and_previous.begin()); i != parents_and_previous.end(); i++)
+			//previous not handled, handle previous first
+			czr::block_hash previous_hash(block->previous());
+			if (!previous_hash.is_zero())
 			{
-				czr::block_hash pblock_hash(*i);
-				auto it(stable_block_hashs->find(pblock_hash));
-				if (it != stable_block_hashs->end())
-				{
-					parent_not_handled = true;
-					break;
-				}
-			}
-			if (parent_not_handled)
-			{
-				continue;
+				if (stable_block_hashs->find(previous_hash) != stable_block_hashs->end())
+					continue;
 			}
 
 			czr::block_state block_state;
@@ -1163,6 +1164,7 @@ void czr::consensus::update_parent_mci(czr::block_hash const & hash_a, uint64_t 
 		assert(!pblock_state_error);
 		if (pblock_state.main_chain_index && *pblock_state.main_chain_index < mci)
 			continue;
+
 		pblock_state.main_chain_index = mci;
 		ledger.store.block_state_put(transaction, pblock_hash, pblock_state);
 		ledger.store.mci_block_put(transaction, czr::mci_block_key(mci, pblock_hash));

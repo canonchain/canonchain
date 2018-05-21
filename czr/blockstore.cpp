@@ -811,6 +811,11 @@ void czr::block_store::main_chain_del(MDB_txn * transaction_a, uint64_t const & 
 	assert(status == 0 || status == MDB_NOTFOUND);
 }
 
+czr::store_iterator czr::block_store::mci_block_beign(MDB_txn * transaction_a, czr::mci_block_key const & key)
+{
+	czr::store_iterator result(transaction_a, mci_block, key.val());
+	return result;
+}
 
 czr::store_iterator czr::block_store::mci_block_rbeign(MDB_txn * transaction_a)
 {
@@ -820,7 +825,7 @@ czr::store_iterator czr::block_store::mci_block_rbeign(MDB_txn * transaction_a)
 
 void czr::block_store::mci_block_put(MDB_txn * transaction_a, czr::mci_block_key const & key)
 {
-	auto status(mdb_put(transaction_a, mci_block, key.val(), nullptr, 0));
+	auto status(mdb_put(transaction_a, mci_block, key.val(), czr::mdb_val(), 0));
 	assert(status == 0);
 }
 
