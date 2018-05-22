@@ -224,6 +224,10 @@ void czr::composer::pick_parents_and_last_summary_and_wl_block(czr::error_messag
 		return;
 	}
 
+	//remove previous
+	auto it(std::find(parents.begin(), parents.end(), previous));
+	if (it != parents.end())
+		parents.erase(it);
 	//sort
 	std::sort(parents.begin(), parents.end());
 }
