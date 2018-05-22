@@ -262,6 +262,8 @@ add_library (node
 	czr/node/composer.cpp
 	czr/node/node.hpp
 	czr/node/node.cpp
+	czr/node/witness.hpp
+	czr/node/witness.cpp
 	czr/node/openclwork.cpp
 	czr/node/openclwork.hpp
 	czr/node/rpc.hpp

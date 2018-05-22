@@ -761,7 +761,7 @@ void czr::consensus::check_mc_stable_block()
 		bool state_error(ledger.store.block_state_get(transaction, mc_child_hash, mc_child_state));
 		assert(!state_error);
 
-		if (min_wl >= mc_child_state.witnessed_level)
+		if (min_wl >= mc_child_state.level)
 			is_stable = true;
 	}
 	else

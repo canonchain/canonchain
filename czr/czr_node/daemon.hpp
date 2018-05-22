@@ -19,6 +19,7 @@ namespace czr_daemon
 		czr::rpc_config rpc;
 		czr::node_config node;
 		bool opencl_enable;
+		bool witness_enable;
 		czr::opencl_config opencl;
 	};
 }
