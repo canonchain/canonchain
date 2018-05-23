@@ -1,12 +1,6 @@
 #include <czr/node/witness.hpp>
 #include <czr/node/common.hpp>
 
-#include <boost/log/expressions.hpp>
-#include <boost/log/utility/setup/common_attributes.hpp>
-#include <boost/log/utility/setup/console.hpp>
-#include <boost/log/utility/setup/file.hpp>
-#include <boost/log/trivial.hpp>
-#include <boost/log/sources/logger.hpp>
 
 czr::witness::witness(czr::error_message & error_msg, czr::node & node_a, std::string const & wallet_text, std::string const & account_text):
 	node(node_a)
@@ -42,7 +36,6 @@ czr::witness::witness(czr::error_message & error_msg, czr::node & node_a, std::s
 
 void czr::witness::start()
 {
-
 	ongoing_send();
 }
 
@@ -52,7 +45,6 @@ void czr::witness::ongoing_send()
 	auto to(account);
 	uint128_t amount(0);
 	std::vector<uint8_t> data;
-	uint64_t work(0); //todo:need work?
 
 	auto this_l(shared_from_this());
 	auto node_l(node.shared());
@@ -83,5 +75,5 @@ void czr::witness::ongoing_send()
 			BOOST_LOG(node_l->log) << "Unknown error";
 			break;
 		}
-	}, work == 0, boost::none);
+	}, boost::none);
 }

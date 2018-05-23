@@ -1,7 +1,6 @@
 #include <czr/node/wallet.hpp>
 
 #include <czr/node/node.hpp>
-#include <czr/node/xorshift.hpp>
 #include <czr/node/composer.hpp>
 
 #include <argon2.h>
@@ -49,7 +48,7 @@ void czr::wallet_store::seed_set(MDB_txn * transaction_a, czr::raw_key const & p
 	wallet_key(password_l, transaction_a);
 	czr::uint256_union ciphertext;
 	ciphertext.encrypt(prv_a, password_l, salt(transaction_a).owords[0]);
-	entry_put_raw(transaction_a, czr::wallet_store::seed_special, czr::wallet_value(ciphertext, 0));
+	entry_put_raw(transaction_a, czr::wallet_store::seed_special, czr::wallet_value(ciphertext));
 	deterministic_clear(transaction_a);
 }
 
@@ -69,7 +68,7 @@ czr::public_key czr::wallet_store::deterministic_insert(MDB_txn * transaction_a)
 	uint64_t marker(1);
 	marker <<= 32;
 	marker |= index;
-	entry_put_raw(transaction_a, result, czr::wallet_value(czr::uint256_union(marker), 0));
+	entry_put_raw(transaction_a, result, czr::wallet_value(czr::uint256_union(marker)));
 	++index;
 	deterministic_index_set(transaction_a, index);
 	return result;
@@ -92,7 +91,7 @@ uint32_t czr::wallet_store::deterministic_index_get(MDB_txn * transaction_a)
 void czr::wallet_store::deterministic_index_set(MDB_txn * transaction_a, uint32_t index_a)
 {
 	czr::uint256_union index_l(index_a);
-	czr::wallet_value value(index_l, 0);
+	czr::wallet_value value(index_l);
 	entry_put_raw(transaction_a, czr::wallet_store::deterministic_index_special, value);
 }
 
@@ -159,7 +158,7 @@ bool czr::wallet_store::rekey(MDB_txn * transaction_a, std::string const & passw
 		czr::raw_key wallet_enc;
 		wallet_enc.data = encrypted;
 		wallet_key_mem.value_set(wallet_enc);
-		entry_put_raw(transaction_a, czr::wallet_store::wallet_key_special, czr::wallet_value(encrypted, 0));
+		entry_put_raw(transaction_a, czr::wallet_store::wallet_key_special, czr::wallet_value(encrypted));
 	}
 	else
 	{
@@ -218,18 +217,16 @@ czr::wallet_value::wallet_value(czr::mdb_val const & val_a)
 {
 	assert(val_a.size() == sizeof(*this));
 	std::copy(reinterpret_cast<uint8_t const *> (val_a.data()), reinterpret_cast<uint8_t const *> (val_a.data()) + sizeof(key), key.chars.begin());
-	std::copy(reinterpret_cast<uint8_t const *> (val_a.data()) + sizeof(key), reinterpret_cast<uint8_t const *> (val_a.data()) + sizeof(key) + sizeof(work), reinterpret_cast<char *> (&work));
 }
 
-czr::wallet_value::wallet_value(czr::uint256_union const & key_a, uint64_t work_a) :
-	key(key_a),
-	work(work_a)
+czr::wallet_value::wallet_value(czr::uint256_union const & key_a) :
+	key(key_a)
 {
 }
 
 czr::mdb_val czr::wallet_value::val() const
 {
-	static_assert (sizeof(*this) == sizeof(key) + sizeof(work), "Class not packed");
+	static_assert (sizeof(*this) == sizeof(key), "Class not packed");
 	return czr::mdb_val(sizeof(*this), const_cast<czr::wallet_value *> (this));
 }
 
@@ -282,7 +279,7 @@ czr::wallet_store::wallet_store(bool & init_a, czr::kdf & kdf_a, czr::transactio
 				init_a = value.decode_hex(wallet_l.get<std::string>(i->first));
 				if (!init_a)
 				{
-					entry_put_raw(transaction_a, key, czr::wallet_value(value, 0));
+					entry_put_raw(transaction_a, key, czr::wallet_value(value));
 				}
 				else
 				{
@@ -324,7 +321,7 @@ czr::wallet_store::wallet_store(bool & init_a, czr::kdf & kdf_a, czr::transactio
 			version_put(transaction_a, version_current);
 			czr::uint256_union salt_l;
 			random_pool.GenerateBlock(salt_l.bytes.data(), salt_l.bytes.size());
-			entry_put_raw(transaction_a, czr::wallet_store::salt_special, czr::wallet_value(salt_l, 0));
+			entry_put_raw(transaction_a, czr::wallet_store::salt_special, czr::wallet_value(salt_l));
 			// Wallet key is a fixed random key that encrypts all entries
 			czr::raw_key wallet_key;
 			random_pool.GenerateBlock(wallet_key.data.bytes.data(), sizeof(wallet_key.data.bytes));
@@ -336,17 +333,17 @@ czr::wallet_store::wallet_store(bool & init_a, czr::kdf & kdf_a, czr::transactio
 			// Wallet key is encrypted by the user's password
 			czr::uint256_union encrypted;
 			encrypted.encrypt(wallet_key, zero, salt_l.owords[0]);
-			entry_put_raw(transaction_a, czr::wallet_store::wallet_key_special, czr::wallet_value(encrypted, 0));
+			entry_put_raw(transaction_a, czr::wallet_store::wallet_key_special, czr::wallet_value(encrypted));
 			czr::raw_key wallet_key_enc;
 			wallet_key_enc.data = encrypted;
 			wallet_key_mem.value_set(wallet_key_enc);
 			czr::uint256_union check;
 			check.encrypt(zero, wallet_key, salt_l.owords[0]);
-			entry_put_raw(transaction_a, czr::wallet_store::check_special, czr::wallet_value(check, 0));
+			entry_put_raw(transaction_a, czr::wallet_store::check_special, czr::wallet_value(check));
 			czr::raw_key seed;
 			random_pool.GenerateBlock(seed.data.bytes.data(), seed.data.bytes.size());
 			seed_set(transaction_a, seed);
-			entry_put_raw(transaction_a, czr::wallet_store::deterministic_index_special, czr::wallet_value(czr::uint256_union(0), 0));
+			entry_put_raw(transaction_a, czr::wallet_store::deterministic_index_special, czr::wallet_value(czr::uint256_union(0)));
 		}
 	}
 	czr::raw_key key;
@@ -382,13 +379,13 @@ czr::public_key czr::wallet_store::insert_adhoc(MDB_txn * transaction_a, czr::ra
 	wallet_key(password_l, transaction_a);
 	czr::uint256_union ciphertext;
 	ciphertext.encrypt(prv, password_l, salt(transaction_a).owords[0]);
-	entry_put_raw(transaction_a, pub, czr::wallet_value(ciphertext, 0));
+	entry_put_raw(transaction_a, pub, czr::wallet_value(ciphertext));
 	return pub;
 }
 
 void czr::wallet_store::insert_watch(MDB_txn * transaction_a, czr::public_key const & pub)
 {
-	entry_put_raw(transaction_a, pub, czr::wallet_value(czr::uint256_union(0), 0));
+	entry_put_raw(transaction_a, pub, czr::wallet_value(czr::uint256_union(0)));
 }
 
 void czr::wallet_store::erase(MDB_txn * transaction_a, czr::public_key const & pub)
@@ -409,14 +406,13 @@ czr::wallet_value czr::wallet_store::entry_get_raw(MDB_txn * transaction_a, czr:
 	else
 	{
 		result.key.clear();
-		result.work = 0;
 	}
 	return result;
 }
 
 void czr::wallet_store::entry_put_raw(MDB_txn * transaction_a, czr::public_key const & pub_a, czr::wallet_value const & entry_a)
 {
-	auto status(mdb_put(transaction_a, handle, czr::mdb_val(pub_a), entry_a.val(), 0));
+	auto status(mdb_put(transaction_a, handle, czr::mdb_val(pub_a), entry_a.val(), 0)); 
 	assert(status == 0);
 }
 
@@ -564,29 +560,6 @@ bool czr::wallet_store::import(MDB_txn * transaction_a, czr::wallet_store & othe
 	return result;
 }
 
-bool czr::wallet_store::work_get(MDB_txn * transaction_a, czr::public_key const & pub_a, uint64_t & work_a)
-{
-	auto result(false);
-	auto entry(entry_get_raw(transaction_a, pub_a));
-	if (!entry.key.is_zero())
-	{
-		work_a = entry.work;
-	}
-	else
-	{
-		result = true;
-	}
-	return result;
-}
-
-void czr::wallet_store::work_put(MDB_txn * transaction_a, czr::public_key const & pub_a, uint64_t work_a)
-{
-	auto entry(entry_get_raw(transaction_a, pub_a));
-	assert(!entry.key.is_zero());
-	entry.work = work_a;
-	entry_put_raw(transaction_a, pub_a, entry);
-}
-
 unsigned czr::wallet_store::version(MDB_txn * transaction_a)
 {
 	czr::wallet_value value(entry_get_raw(transaction_a, czr::wallet_store::version_special));
@@ -598,7 +571,7 @@ unsigned czr::wallet_store::version(MDB_txn * transaction_a)
 void czr::wallet_store::version_put(MDB_txn * transaction_a, unsigned version_a)
 {
 	czr::uint256_union entry(version_a);
-	entry_put_raw(transaction_a, czr::wallet_store::version_special, czr::wallet_value(entry, 0));
+	entry_put_raw(transaction_a, czr::wallet_store::version_special, czr::wallet_value(entry));
 }
 
 
@@ -657,45 +630,37 @@ bool czr::wallet::enter_password(std::string const & password_a)
 	return result;
 }
 
-czr::public_key czr::wallet::deterministic_insert(MDB_txn * transaction_a, bool generate_work_a)
+czr::public_key czr::wallet::deterministic_insert(MDB_txn * transaction_a)
 {
 	czr::public_key key(0);
 	if (store.valid_password(transaction_a))
 	{
 		key = store.deterministic_insert(transaction_a);
-		if (generate_work_a)
-		{
-			work_ensure(transaction_a, key);
-		}
 	}
 	return key;
 }
 
-czr::public_key czr::wallet::deterministic_insert(bool generate_work_a)
+czr::public_key czr::wallet::deterministic_insert()
 {
 	czr::transaction transaction(store.environment, nullptr, true);
-	auto result(deterministic_insert(transaction, generate_work_a));
+	auto result(deterministic_insert(transaction));
 	return result;
 }
 
-czr::public_key czr::wallet::insert_adhoc(MDB_txn * transaction_a, czr::raw_key const & key_a, bool generate_work_a)
+czr::public_key czr::wallet::insert_adhoc(MDB_txn * transaction_a, czr::raw_key const & key_a)
 {
 	czr::public_key key(0);
 	if (store.valid_password(transaction_a))
 	{
 		key = store.insert_adhoc(transaction_a, key_a);
-		if (generate_work_a)
-		{
-			work_ensure(transaction_a, key);
-		}
 	}
 	return key;
 }
 
-czr::public_key czr::wallet::insert_adhoc(czr::raw_key const & account_a, bool generate_work_a)
+czr::public_key czr::wallet::insert_adhoc(czr::raw_key const & account_a)
 {
 	czr::transaction transaction(store.environment, nullptr, true);
-	auto result(insert_adhoc(transaction, account_a, generate_work_a));
+	auto result(insert_adhoc(transaction, account_a));
 	return result;
 }
 
@@ -746,56 +711,6 @@ void czr::wallet_store::destroy(MDB_txn * transaction_a)
 	assert(status == 0);
 }
 
-// Update work for account if latest root is root_a
-void czr::wallet::work_update(MDB_txn * transaction_a, czr::account const & account_a, czr::block_hash const & root_a, uint64_t work_a)
-{
-	assert(!czr::work_validate(root_a, work_a));
-	assert(store.exists(transaction_a, account_a));
-	auto latest(node.ledger.latest_root(transaction_a, account_a));
-	if (latest == root_a)
-	{
-		store.work_put(transaction_a, account_a, work_a);
-	}
-	else
-	{
-		BOOST_LOG(node.log) << "Cached work no longer valid, discarding";
-	}
-}
-
-// Fetch work for root_a, use cached value if possible
-uint64_t czr::wallet::work_fetch(MDB_txn * transaction_a, czr::account const & account_a, czr::block_hash const & root_a)
-{
-	uint64_t result;
-	auto error(store.work_get(transaction_a, account_a, result));
-	if (error)
-	{
-		result = node.generate_work(root_a);
-	}
-	else if (czr::work_validate(root_a, result))
-	{
-		BOOST_LOG(node.log) << "Cached work invalid, regenerating";
-		result = node.generate_work(root_a);
-	}
-
-	return result;
-}
-
-void czr::wallet::work_ensure(MDB_txn * transaction_a, czr::account const & account_a)
-{
-	assert(store.exists(transaction_a, account_a));
-	auto root(node.ledger.latest_root(transaction_a, account_a));
-	uint64_t work;
-	auto error(store.work_get(transaction_a, account_a, work));
-	assert(!error);
-	if (czr::work_validate(root, work))
-	{
-		auto this_l(shared_from_this());
-		node.background([this_l, account_a, root]() {
-			this_l->work_generate(account_a, root);
-		});
-	}
-}
-
 void czr::wallet::init_free_accounts(MDB_txn * transaction_a)
 {
 	free_accounts.clear();
@@ -827,42 +742,26 @@ czr::public_key czr::wallet::change_seed(MDB_txn * transaction_a, czr::raw_key c
 	}
 	for (uint32_t i(0); i < count; ++i)
 	{
-		// Generate work for first 4 accounts only to prevent weak CPU nodes stuck
-		account = deterministic_insert(transaction_a, i < 4);
+		account = deterministic_insert(transaction_a);
 	}
 
 	return account;
 }
 
-void czr::wallet::work_generate(czr::account const & account_a, czr::block_hash const & root_a)
-{
-	auto begin(std::chrono::steady_clock::now());
-	auto work(node.generate_work(root_a));
-	if (node.config.logging.work_generation_time())
-	{
-		BOOST_LOG(node.log) << "Work generation complete: " << (std::chrono::duration_cast<std::chrono::microseconds> (std::chrono::steady_clock::now() - begin).count()) << " us";
-	}
-	czr::transaction transaction(store.environment, nullptr, true);
-	if (store.exists(transaction, account_a))
-	{
-		work_update(transaction, account_a, root_a, work);
-	}
-}
-
 void czr::wallet::send_async(czr::account const & from_a, czr::account const & to_a, czr::amount const & amount_a,
-	std::vector<uint8_t> const & data_a, std::function<void(czr::send_result)> const & action_a,
-	bool generate_work_a, boost::optional<std::string> id_a)
+	std::vector<uint8_t> const & data_a, std::function<void(czr::send_result)> const & action_a, 
+	boost::optional<std::string> id_a)
 {
-	node.background([this, from_a, to_a, amount_a, data_a, action_a, generate_work_a, id_a]() {
-		this->node.wallets.queue_wallet_action(czr::wallets::high_priority, [this, from_a, to_a, amount_a, data_a, action_a, generate_work_a, id_a]() {
-			auto result(send_action(from_a, to_a, amount_a, data_a, generate_work_a, id_a));
+	node.background([this, from_a, to_a, amount_a, data_a, action_a, id_a]() {
+		this->node.wallets.queue_wallet_action(czr::wallets::high_priority, [this, from_a, to_a, amount_a, data_a, action_a, id_a]() {
+			auto result(send_action(from_a, to_a, amount_a, data_a, id_a));
 			action_a(result);
 		});
 	});
 }
 
 czr::send_result czr::wallet::send_action(czr::account const & from_a, czr::account const & to_a,
-	czr::amount const & amount_a, std::vector<uint8_t> data_a, bool generate_work_a, boost::optional<std::string> id_a)
+	czr::amount const & amount_a, std::vector<uint8_t> data_a, boost::optional<std::string> id_a)
 {
 	czr::publish message;
 	boost::optional<czr::mdb_val> id_mdb_val;
@@ -908,7 +807,7 @@ czr::send_result czr::wallet::send_action(czr::account const & from_a, czr::acco
 				assert(!error2);
 
 				czr::composer composer(node);
-				czr::compose_result result(composer.compose(transaction, from_a, to_a, amount_a, data_a, prv, from_a, 0));
+				czr::compose_result result(composer.compose(transaction, from_a, to_a, amount_a, data_a, prv, from_a));
 				switch (result.code)
 				{
 				case czr::compose_result_codes::ok:
@@ -941,11 +840,6 @@ czr::send_result czr::wallet::send_action(czr::account const & from_a, czr::acco
 	{
 		node.block_arrival.add(message.block->hash());
 		node.block_processor.process_receive_many(message);
-		auto hash(message.block->hash());
-		auto this_l(shared_from_this());
-		node.wallets.queue_wallet_action(czr::wallets::generate_priority, [this_l, from_a, hash] {
-			this_l->work_generate(from_a, hash);
-		});
 	}
 
 	if (error)

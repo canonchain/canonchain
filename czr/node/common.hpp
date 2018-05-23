@@ -111,14 +111,12 @@ public:
 	static size_t constexpr ipv4_only_position = 1;
 	static size_t constexpr bootstrap_server_position = 2;
 };
-class work_pool;
 class message_parser
 {
 public:
 	enum class parse_status
 	{
 		success,
-		insufficient_work,
 		invalid_header,
 		invalid_message_type,
 		invalid_keepalive_message,
@@ -126,13 +124,12 @@ public:
 		invalid_confirm_req_message,
 		invalid_confirm_ack_message
 	};
-	message_parser (czr::message_visitor &, czr::work_pool &);
+	message_parser (czr::message_visitor &);
 	void deserialize_buffer (uint8_t const *, size_t);
 	void deserialize_keepalive (uint8_t const *, size_t);
 	void deserialize_publish (uint8_t const *, size_t);
 	bool at_end (czr::bufferstream &);
 	czr::message_visitor & visitor;
-	czr::work_pool & pool;
 	parse_status status;
 };
 class keepalive : public message

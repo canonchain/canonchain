@@ -236,24 +236,20 @@ czr::block::block(czr::account const & from_a, czr::account const & to_a, czr::a
 	czr::block_hash const & witness_list_block_a, std::vector<czr::account> const & witness_list_a,
 	czr::summary_hash const & last_summary_a, czr::block_hash const & last_summary_block_a,
 	std::vector<uint8_t> const & data_a, uint64_t const & exec_timestamp_a,
-	czr::raw_key const & prv_a, czr::public_key const & pub_a, uint64_t work_a):
+	czr::raw_key const & prv_a, czr::public_key const & pub_a):
 hashables(from_a, to_a, amount_a, previous_a, parents_a, witness_list_block_a, witness_list_a, last_summary_a, last_summary_block_a, data_a, exec_timestamp_a),
-signature(czr::sign_message(prv_a, pub_a, hash())),
-work(work_a)
+signature(czr::sign_message(prv_a, pub_a, hash()))
 {
 }
 
 czr::block::block (bool & error_a, czr::stream & stream_a) :
 hashables (error_a, stream_a)
 {
+	//todo:deserialize block///////////////
+
 	if (!error_a)
 	{
 		error_a = czr::read (stream_a, signature);
-		if (!error_a)
-		{
-			error_a = czr::read (stream_a, work);
-			boost::endian::big_to_native_inplace (work);
-		}
 	}
 }
 
@@ -264,11 +260,6 @@ hashables (error_a, tree_a)
 	{
 		try
 		{
-			auto work_l(tree_a.get<std::string>("work"));
-			error_a = czr::from_string_hex(work_l, work);
-			if (error_a)
-				return;
-
 			auto signature_l(tree_a.get<std::string>("signature"));
 			error_a = signature.decode_hex(signature_l);
 		}
@@ -277,16 +268,6 @@ hashables (error_a, tree_a)
 			error_a = true;
 		}
 	}
-}
-
-uint64_t czr::block::block_work () const
-{
-	return work;
-}
-
-void czr::block::block_work_set (uint64_t work_a)
-{
-	work = work_a;
 }
 
 czr::block_hash czr::block::previous () const
@@ -315,7 +296,6 @@ void czr::block::serialize (czr::stream & stream_a) const
 	write (stream_a, hashables.to);
 	write (stream_a, hashables.amount);
 	write (stream_a, signature);
-	write (stream_a, boost::endian::native_to_big (work));
 }
 
 bool czr::block::deserialize (czr::stream & stream_a)
@@ -331,11 +311,6 @@ bool czr::block::deserialize (czr::stream & stream_a)
 			if (!error)
 			{
 				error = read(stream_a, signature);
-				if (!error)
-				{
-					error = read(stream_a, work);
-					boost::endian::big_to_native_inplace(work);
-				}
 			}
 		}
 	}
@@ -351,7 +326,6 @@ void czr::block::serialize_json(std::string & string_a) const
 	std::string signature_l;
 	signature.encode_hex(signature_l);
 	tree.put("signature", signature_l);
-	tree.put("work", czr::to_string_hex(work));
 
 	std::stringstream ostream;
 	boost::property_tree::write_json(ostream, tree);
@@ -363,11 +337,6 @@ void czr::block::deserialize_json (bool & error_a, boost::property_tree::ptree c
 	try
 	{
 		hashables.deserialize_json(error_a, tree_a);
-		if (error_a)
-			return;
-
-		auto work_l (tree_a.get<std::string> ("work"));
-		error_a = czr::from_string_hex(work_l, work);
 		if (error_a)
 			return;
 
@@ -389,8 +358,7 @@ void czr::block::visit (czr::block_visitor & visitor_a) const
 bool czr::block::operator== (czr::block const & other_a) const
 {
 	return hash() == other_a.hash()
-		&& signature == other_a.signature 
-		&& work == other_a.work;
+		&& signature == other_a.signature;
 }
 
 czr::block_hash czr::block::root () const

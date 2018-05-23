@@ -38,7 +38,6 @@ czr::network::network(czr::node & node_a, uint16_t port) :
 	node(node_a),
 	bad_sender_count(0),
 	on(true),
-	insufficient_work_count(0),
 	error_count(0)
 {
 }
@@ -192,22 +191,13 @@ void czr::network::receive_action(boost::system::error_code const & error, size_
 		if (!czr::reserved_address(remote) && remote != endpoint())
 		{
 			network_message_visitor visitor(node, remote);
-			czr::message_parser parser(visitor, node.work);
+			czr::message_parser parser(visitor);
 			parser.deserialize_buffer(buffer.data(), size_a);
 			if (parser.status != czr::message_parser::parse_status::success)
 			{
 				++error_count;
 
-				if (parser.status == czr::message_parser::parse_status::insufficient_work)
-				{
-					if (node.config.logging.insufficient_work_logging())
-					{
-						BOOST_LOG(node.log) << "Insufficient work in message";
-					}
-
-					++insufficient_work_count;
-				}
-				else if (parser.status == czr::message_parser::parse_status::invalid_message_type)
+				if (parser.status == czr::message_parser::parse_status::invalid_message_type)
 				{
 					if (node.config.logging.network_logging())
 					{
@@ -360,10 +350,7 @@ czr::logging::logging() :
 	network_packet_logging_value(false),
 	network_keepalive_logging_value(false),
 	node_lifetime_tracing_value(false),
-	insufficient_work_logging_value(true),
 	log_rpc_value(true),
-	bulk_pull_logging_value(false),
-	work_generation_time_value(true),
 	log_to_cerr_value(false),
 	max_size(16 * 1024 * 1024),
 	rotation_size(4 * 1024 * 1024),
@@ -396,10 +383,7 @@ void czr::logging::serialize_json(boost::property_tree::ptree & tree_a) const
 	tree_a.put("network_packet", network_packet_logging_value);
 	tree_a.put("network_keepalive", network_keepalive_logging_value);
 	tree_a.put("node_lifetime_tracing", node_lifetime_tracing_value);
-	tree_a.put("insufficient_work", insufficient_work_logging_value);
 	tree_a.put("log_rpc", log_rpc_value);
-	tree_a.put("bulk_pull", bulk_pull_logging_value);
-	tree_a.put("work_generation_time", work_generation_time_value);
 	tree_a.put("log_to_cerr", log_to_cerr_value);
 	tree_a.put("max_size", max_size);
 	tree_a.put("rotation_size", rotation_size);
@@ -422,11 +406,6 @@ bool czr::logging::deserialize_json(bool & upgraded_a, boost::property_tree::ptr
 		{
 			tree_a.put("version", "1");
 			version_l = "1";
-			auto work_peers_l(tree_a.get_child_optional("work_peers"));
-			if (!work_peers_l)
-			{
-				tree_a.add_child("work_peers", boost::property_tree::ptree());
-			}
 			upgraded_a = true;
 		}
 		upgraded_a |= upgrade_json(std::stoull(version_l.get()), tree_a);
@@ -438,10 +417,7 @@ bool czr::logging::deserialize_json(bool & upgraded_a, boost::property_tree::ptr
 		network_packet_logging_value = tree_a.get<bool>("network_packet");
 		network_keepalive_logging_value = tree_a.get<bool>("network_keepalive");
 		node_lifetime_tracing_value = tree_a.get<bool>("node_lifetime_tracing");
-		insufficient_work_logging_value = tree_a.get<bool>("insufficient_work");
 		log_rpc_value = tree_a.get<bool>("log_rpc");
-		bulk_pull_logging_value = tree_a.get<bool>("bulk_pull");
-		work_generation_time_value = tree_a.get<bool>("work_generation_time");
 		log_to_cerr_value = tree_a.get<bool>("log_to_cerr");
 		max_size = tree_a.get<uintmax_t>("max_size");
 		rotation_size = tree_a.get<uintmax_t>("rotation_size", 4194304);
@@ -494,29 +470,14 @@ bool czr::logging::node_lifetime_tracing() const
 	return node_lifetime_tracing_value;
 }
 
-bool czr::logging::insufficient_work_logging() const
-{
-	return network_logging() && insufficient_work_logging_value;
-}
-
 bool czr::logging::log_rpc() const
 {
 	return network_logging() && log_rpc_value;
 }
 
-bool czr::logging::bulk_pull_logging() const
-{
-	return network_logging() && bulk_pull_logging_value;
-}
-
 bool czr::logging::callback_logging() const
 {
 	return network_logging();
-}
-
-bool czr::logging::work_generation_time() const
-{
-	return work_generation_time_value;
 }
 
 bool czr::logging::log_to_cerr() const
@@ -540,7 +501,6 @@ czr::node_config::node_config(uint16_t peering_port_a, czr::logging const & logg
 	bootstrap_fraction_numerator(1),
 	password_fanout(1024),
 	io_threads(std::max<unsigned>(4, std::thread::hardware_concurrency())),
-	work_threads(std::max<unsigned>(4, std::thread::hardware_concurrency())),
 	enable_voting(true),
 	bootstrap_connections(4),
 	bootstrap_connections_max(64),
@@ -569,14 +529,6 @@ void czr::node_config::serialize_json(boost::property_tree::ptree & tree_a) cons
 	boost::property_tree::ptree logging_l;
 	logging.serialize_json(logging_l);
 	tree_a.add_child("logging", logging_l);
-	boost::property_tree::ptree work_peers_l;
-	for (auto i(work_peers.begin()), n(work_peers.end()); i != n; ++i)
-	{
-		boost::property_tree::ptree entry;
-		entry.put("", boost::str(boost::format("%1%:%2%") % i->first % i->second));
-		work_peers_l.push_back(std::make_pair("", entry));
-	}
-	tree_a.add_child("work_peers", work_peers_l);
 	boost::property_tree::ptree preconfigured_peers_l;
 	for (auto i(preconfigured_peers.begin()), n(preconfigured_peers.end()); i != n; ++i)
 	{
@@ -587,7 +539,6 @@ void czr::node_config::serialize_json(boost::property_tree::ptree & tree_a) cons
 	tree_a.add_child("preconfigured_peers", preconfigured_peers_l);
 	tree_a.put("password_fanout", std::to_string(password_fanout));
 	tree_a.put("io_threads", std::to_string(io_threads));
-	tree_a.put("work_threads", std::to_string(work_threads));
 	tree_a.put("enable_voting", enable_voting);
 	tree_a.put("bootstrap_connections", bootstrap_connections);
 	tree_a.put("bootstrap_connections_max", bootstrap_connections_max);
@@ -607,29 +558,11 @@ bool czr::node_config::deserialize_json(bool & upgraded_a, boost::property_tree:
 		{
 			tree_a.put("version", "1");
 			version_l = "1";
-			auto work_peers_l(tree_a.get_child_optional("work_peers"));
-			if (!work_peers_l)
-			{
-				tree_a.add_child("work_peers", boost::property_tree::ptree());
-			}
 			upgraded_a = true;
 		}
 		auto peering_port_l(tree_a.get<std::string>("peering_port"));
 		auto bootstrap_fraction_numerator_l(tree_a.get<std::string>("bootstrap_fraction_numerator"));
 		auto & logging_l(tree_a.get_child("logging"));
-		work_peers.clear();
-		auto work_peers_l(tree_a.get_child("work_peers"));
-		for (auto i(work_peers_l.begin()), n(work_peers_l.end()); i != n; ++i)
-		{
-			auto work_peer(i->second.get<std::string>(""));
-			boost::asio::ip::address address;
-			uint16_t port;
-			result |= czr::parse_address_port(work_peer, address, port);
-			if (!result)
-			{
-				work_peers.push_back(std::make_pair(address, port));
-			}
-		}
 		auto preconfigured_peers_l(tree_a.get_child("preconfigured_peers"));
 		preconfigured_peers.clear();
 		for (auto i(preconfigured_peers_l.begin()), n(preconfigured_peers_l.end()); i != n; ++i)
@@ -640,7 +573,6 @@ bool czr::node_config::deserialize_json(bool & upgraded_a, boost::property_tree:
 
 		auto password_fanout_l(tree_a.get<std::string>("password_fanout"));
 		auto io_threads_l(tree_a.get<std::string>("io_threads"));
-		auto work_threads_l(tree_a.get<std::string>("work_threads"));
 		enable_voting = tree_a.get<bool>("enable_voting");
 		auto bootstrap_connections_l(tree_a.get<std::string>("bootstrap_connections"));
 		auto bootstrap_connections_max_l(tree_a.get<std::string>("bootstrap_connections_max"));
@@ -655,7 +587,6 @@ bool czr::node_config::deserialize_json(bool & upgraded_a, boost::property_tree:
 			bootstrap_fraction_numerator = std::stoul(bootstrap_fraction_numerator_l);
 			password_fanout = std::stoul(password_fanout_l);
 			io_threads = std::stoul(io_threads_l);
-			work_threads = std::stoul(work_threads_l);
 			bootstrap_connections = std::stoul(bootstrap_connections_l);
 			bootstrap_connections_max = std::stoul(bootstrap_connections_max_l);
 			lmdb_max_dbs = std::stoi(lmdb_max_dbs_l);
@@ -664,7 +595,6 @@ bool czr::node_config::deserialize_json(bool & upgraded_a, boost::property_tree:
 			result |= password_fanout < 16;
 			result |= password_fanout > 1024 * 1024;
 			result |= io_threads == 0;
-			result |= work_threads == 0;
 		}
 		catch (std::logic_error const &)
 		{
@@ -882,16 +812,17 @@ czr::process_return czr::block_processor::process_receive_one(MDB_txn * transact
 	return result;
 }
 
-czr::node::node(czr::node_init & init_a, boost::asio::io_service & service_a, uint16_t peering_port_a, boost::filesystem::path const & application_path_a, czr::alarm & alarm_a, czr::logging const & logging_a, czr::work_pool & work_a) :
-	node(init_a, service_a, application_path_a, alarm_a, czr::node_config(peering_port_a, logging_a), work_a)
+czr::node::node(czr::node_init & init_a, boost::asio::io_service & service_a, uint16_t peering_port_a, 
+	boost::filesystem::path const & application_path_a, czr::alarm & alarm_a, czr::logging const & logging_a) :
+	node(init_a, service_a, application_path_a, alarm_a, czr::node_config(peering_port_a, logging_a))
 {
 }
 
-czr::node::node(czr::node_init & init_a, boost::asio::io_service & service_a, boost::filesystem::path const & application_path_a, czr::alarm & alarm_a, czr::node_config const & config_a, czr::work_pool & work_a) :
+czr::node::node(czr::node_init & init_a, boost::asio::io_service & service_a, 
+	boost::filesystem::path const & application_path_a, czr::alarm & alarm_a, czr::node_config const & config_a) :
 	service(service_a),
 	config(config_a),
 	alarm(alarm_a),
-	work(work_a),
 	store(init_a.error, application_path_a / "data.ldb", config_a.lmdb_max_dbs),
 	gap_cache(*this),
 	ledger(store),
@@ -1017,7 +948,6 @@ czr::node::node(czr::node_init & init_a, boost::asio::io_service & service_a, bo
 	});
 
 	BOOST_LOG(log) << "Node starting, version: " << CANONCHAIN_VERSION_MAJOR << "." << CANONCHAIN_VERSION_MINOR;
-	BOOST_LOG(log) << boost::str(boost::format("Work pool running %1% threads") % work.threads.size());
 	if (!init_a.error)
 	{
 		if (config.logging.node_lifetime_tracing())
@@ -1352,237 +1282,6 @@ void czr::node::backup_wallet()
 	alarm.add(std::chrono::steady_clock::now() + backup_interval, [this_l]() {
 		this_l->backup_wallet();
 	});
-}
-
-namespace
-{
-	class work_request
-	{
-	public:
-		work_request(boost::asio::io_service & service_a, boost::asio::ip::address address_a, uint16_t port_a) :
-			address(address_a),
-			port(port_a),
-			socket(service_a)
-		{
-		}
-		boost::asio::ip::address address;
-		uint16_t port;
-		boost::beast::flat_buffer buffer;
-		boost::beast::http::response<boost::beast::http::string_body> response;
-		boost::asio::ip::tcp::socket socket;
-	};
-	class distributed_work : public std::enable_shared_from_this<distributed_work>
-	{
-	public:
-		distributed_work(std::shared_ptr<czr::node> const & node_a, czr::block_hash const & root_a, std::function<void(uint64_t)> callback_a) :
-			callback(callback_a),
-			node(node_a),
-			root(root_a)
-		{
-			completed.clear();
-			for (auto & i : node_a->config.work_peers)
-			{
-				outstanding[i.first] = i.second;
-			}
-		}
-		void start()
-		{
-			if (!outstanding.empty())
-			{
-				auto this_l(shared_from_this());
-				std::lock_guard<std::mutex> lock(mutex);
-				for (auto const & i : outstanding)
-				{
-					auto host(i.first);
-					auto service(i.second);
-					node->background([this_l, host, service]() {
-						auto connection(std::make_shared<work_request>(this_l->node->service, host, service));
-						connection->socket.async_connect(czr::tcp_endpoint(host, service), [this_l, connection](boost::system::error_code const & ec) {
-							if (!ec)
-							{
-								std::string request_string;
-								{
-									boost::property_tree::ptree request;
-									request.put("action", "work_generate");
-									request.put("hash", this_l->root.to_string());
-									std::stringstream ostream;
-									boost::property_tree::write_json(ostream, request);
-									request_string = ostream.str();
-								}
-								auto request(std::make_shared<boost::beast::http::request<boost::beast::http::string_body>>());
-								request->method(boost::beast::http::verb::post);
-								request->target("/");
-								request->version(11);
-								request->body() = request_string;
-								request->prepare_payload();
-								boost::beast::http::async_write(connection->socket, *request, [this_l, connection, request](boost::system::error_code const & ec, size_t bytes_transferred) {
-									if (!ec)
-									{
-										boost::beast::http::async_read(connection->socket, connection->buffer, connection->response, [this_l, connection](boost::system::error_code const & ec, size_t bytes_transferred) {
-											if (!ec)
-											{
-												if (connection->response.result() == boost::beast::http::status::ok)
-												{
-													this_l->success(connection->response.body(), connection->address);
-												}
-												else
-												{
-													BOOST_LOG(this_l->node->log) << boost::str(boost::format("Work peer responded with an error %1% %2%: %3%") % connection->address % connection->port % connection->response.result());
-													this_l->failure(connection->address);
-												}
-											}
-											else
-											{
-												BOOST_LOG(this_l->node->log) << boost::str(boost::format("Unable to read from work_peer %1% %2%: %3% (%4%)") % connection->address % connection->port % ec.message() % ec.value());
-												this_l->failure(connection->address);
-											}
-										});
-									}
-									else
-									{
-										BOOST_LOG(this_l->node->log) << boost::str(boost::format("Unable to write to work_peer %1% %2%: %3% (%4%)") % connection->address % connection->port % ec.message() % ec.value());
-										this_l->failure(connection->address);
-									}
-								});
-							}
-							else
-							{
-								BOOST_LOG(this_l->node->log) << boost::str(boost::format("Unable to connect to work_peer %1% %2%: %3% (%4%)") % connection->address % connection->port % ec.message() % ec.value());
-								this_l->failure(connection->address);
-							}
-						});
-					});
-				}
-			}
-			else
-			{
-				handle_failure(true);
-			}
-		}
-		void stop()
-		{
-			auto this_l(shared_from_this());
-			std::lock_guard<std::mutex> lock(mutex);
-			for (auto const & i : outstanding)
-			{
-				auto host(i.first);
-				auto service(i.second);
-				node->background([this_l, host, service]() {
-					std::string request_string;
-					{
-						boost::property_tree::ptree request;
-						request.put("action", "work_cancel");
-						request.put("hash", this_l->root.to_string());
-						std::stringstream ostream;
-						boost::property_tree::write_json(ostream, request);
-						request_string = ostream.str();
-					}
-					boost::beast::http::request<boost::beast::http::string_body> request;
-					request.method(boost::beast::http::verb::post);
-					request.target("/");
-					request.version(11);
-					request.body() = request_string;
-					request.prepare_payload();
-					auto socket(std::make_shared<boost::asio::ip::tcp::socket>(this_l->node->service));
-					boost::beast::http::async_write(*socket, request, [socket](boost::system::error_code const & ec, size_t bytes_transferred) {
-					});
-				});
-			}
-			outstanding.clear();
-		}
-		void success(std::string const & body_a, boost::asio::ip::address const & address)
-		{
-			auto last(remove(address));
-			std::stringstream istream(body_a);
-			try
-			{
-				boost::property_tree::ptree result;
-				boost::property_tree::read_json(istream, result);
-				auto work_text(result.get<std::string>("work"));
-				uint64_t work;
-				if (!czr::from_string_hex(work_text, work))
-				{
-					if (!czr::work_validate(root, work))
-					{
-						set_once(work);
-						stop();
-					}
-					else
-					{
-						BOOST_LOG(node->log) << boost::str(boost::format("Incorrect work response from %1% for root %2% value %3%") % address % root.to_string() % work_text);
-						handle_failure(last);
-					}
-				}
-				else
-				{
-					BOOST_LOG(node->log) << boost::str(boost::format("Work response from %1% wasn't a number %2%") % address % work_text);
-					handle_failure(last);
-				}
-			}
-			catch (...)
-			{
-				BOOST_LOG(node->log) << boost::str(boost::format("Work response from %1% wasn't parsable %2%") % address % body_a);
-				handle_failure(last);
-			}
-		}
-		void set_once(uint64_t work_a)
-		{
-			if (!completed.test_and_set())
-			{
-				callback(work_a);
-			}
-		}
-		void failure(boost::asio::ip::address const & address)
-		{
-			auto last(remove(address));
-			handle_failure(last);
-		}
-		void handle_failure(bool last)
-		{
-			if (last)
-			{
-				if (!completed.test_and_set())
-				{
-					auto callback_l(callback);
-					node->work.generate(root, [callback_l](boost::optional<uint64_t> const & work_a) {
-						callback_l(work_a.value());
-					});
-				}
-			}
-		}
-		bool remove(boost::asio::ip::address const & address)
-		{
-			std::lock_guard<std::mutex> lock(mutex);
-			outstanding.erase(address);
-			return outstanding.empty();
-		}
-		std::function<void(uint64_t)> callback;
-		std::shared_ptr<czr::node> node;
-		czr::block_hash root;
-		std::mutex mutex;
-		std::map<boost::asio::ip::address, uint16_t> outstanding;
-		std::atomic_flag completed;
-	};
-}
-
-void czr::node::generate_work(czr::block & block_a)
-{
-	block_a.block_work_set(generate_work(block_a.root()));
-}
-
-void czr::node::generate_work(czr::uint256_union const & hash_a, std::function<void(uint64_t)> callback_a)
-{
-	auto work_generation(std::make_shared<distributed_work>(shared(), hash_a, callback_a));
-	work_generation->start();
-}
-
-uint64_t czr::node::generate_work(czr::uint256_union const & hash_a)
-{
-	std::promise<uint64_t> promise;
-	generate_work(hash_a, [&promise](uint64_t work_a) {
-		promise.set_value(work_a);
-	});
-	return promise.get_future().get();
 }
 
 void czr::node::add_initial_peers()
@@ -2485,12 +2184,11 @@ bool czr::handle_node_options(boost::program_options::variables_map & vm)
 czr::inactive_node::inactive_node(boost::filesystem::path const & path) :
 	path(path),
 	service(boost::make_shared<boost::asio::io_service>()),
-	alarm(*service),
-	work(1, nullptr)
+	alarm(*service)
 {
 	boost::filesystem::create_directories(path);
 	logging.init(path);
-	node = std::make_shared<czr::node>(init, *service, 24000, path, alarm, logging, work);
+	node = std::make_shared<czr::node>(init, *service, 24000, path, alarm, logging);
 }
 
 czr::inactive_node::~inactive_node()

@@ -65,14 +65,12 @@ public:
 		czr::block_hash const & witness_list_block_a, std::vector<czr::account> const & witness_list_a,
 		czr::summary_hash const & last_summary_a,	czr::block_hash const & last_summary_block_a,
 		std::vector<uint8_t> const & data_a, uint64_t const & exec_timestamp_a,
-		czr::raw_key const & prv_a, czr::public_key const & pub_a, uint64_t work_a);
+		czr::raw_key const & prv_a, czr::public_key const & pub_a);
 	block(bool &, czr::stream &);
 	block(bool &, boost::property_tree::ptree const &);
 	virtual ~block() = default;
 	czr::block_hash hash() const;
 	std::string to_json();
-	uint64_t block_work() const;
-	void block_work_set(uint64_t);
 	czr::block_hash previous() const;
 	std::vector<czr::block_hash> parents() const;
 	std::vector<czr::block_hash> parents_and_previous() const;
@@ -88,7 +86,6 @@ public:
 	bool operator== (czr::block const &) const;
 	czr::block_hashables hashables;
 	czr::signature signature;
-	uint64_t work; // Only least 48 least significant bits are encoded
 };
 
 class block_visitor

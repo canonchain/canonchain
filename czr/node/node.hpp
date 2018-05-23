@@ -1,9 +1,11 @@
 #pragma once
 
-#include <czr/node/consensus.hpp>
+//#include <czr/config.hpp>
+//#include <czr/lib/numbers.hpp>
+#include <czr/lib/utility.hpp>
 
+#include <czr/node/consensus.hpp>
 #include <czr/ledger.hpp>
-#include <czr/lib/work.hpp>
 #include <czr/node/wallet.hpp>
 
 #include <condition_variable>
@@ -79,7 +81,6 @@ namespace czr
 		std::mutex mutex;
 		czr::node & node;
 	};
-	class work_pool;
 	class peer_information
 	{
 	public:
@@ -204,7 +205,6 @@ namespace czr
 		czr::node & node;
 		uint64_t bad_sender_count;
 		bool on;
-		uint64_t insufficient_work_count;
 		uint64_t error_count;
 		czr::message_statistics incoming;
 		czr::message_statistics outgoing;
@@ -225,11 +225,8 @@ namespace czr
 		bool network_packet_logging() const;
 		bool network_keepalive_logging() const;
 		bool node_lifetime_tracing() const;
-		bool insufficient_work_logging() const;
 		bool log_rpc() const;
-		bool bulk_pull_logging() const;
 		bool callback_logging() const;
-		bool work_generation_time() const;
 		bool log_to_cerr() const;
 		void init(boost::filesystem::path const &);
 
@@ -241,10 +238,7 @@ namespace czr
 		bool network_packet_logging_value;
 		bool network_keepalive_logging_value;
 		bool node_lifetime_tracing_value;
-		bool insufficient_work_logging_value;
 		bool log_rpc_value;
-		bool bulk_pull_logging_value;
-		bool work_generation_time_value;
 		bool log_to_cerr_value;
 		bool flush;
 		uintmax_t max_size;
@@ -266,12 +260,10 @@ namespace czr
 		bool deserialize_json(bool &, boost::property_tree::ptree &);
 		uint16_t peering_port;
 		czr::logging logging;
-		std::vector<std::pair<boost::asio::ip::address, uint16_t>> work_peers;
 		std::vector<std::string> preconfigured_peers;
 		unsigned bootstrap_fraction_numerator;
 		unsigned password_fanout;
 		unsigned io_threads;
-		unsigned work_threads;
 		bool enable_voting;
 		unsigned bootstrap_connections;
 		unsigned bootstrap_connections_max;
@@ -326,8 +318,8 @@ namespace czr
 	class node : public std::enable_shared_from_this<czr::node>
 	{
 	public:
-		node(czr::node_init &, boost::asio::io_service &, uint16_t, boost::filesystem::path const &, czr::alarm &, czr::logging const &, czr::work_pool &);
-		node(czr::node_init &, boost::asio::io_service &, boost::filesystem::path const &, czr::alarm &, czr::node_config const &, czr::work_pool &);
+		node(czr::node_init & init_a, boost::asio::io_service & service_a, uint16_t peering_port_a, boost::filesystem::path const & application_path_a, czr::alarm & alarm_a, czr::logging const & logging_a);
+		node(czr::node_init & init_a, boost::asio::io_service & service_a, boost::filesystem::path const & application_path_a, czr::alarm & alarm_a, czr::node_config const & config_a);
 		~node();
 		template <typename T>
 		void background(T action_a)
@@ -349,14 +341,10 @@ namespace czr
 		void ongoing_keepalive();
 		void ongoing_store_flush();
 		void backup_wallet();
-		void generate_work(czr::block &);
-		uint64_t generate_work(czr::uint256_union const &);
-		void generate_work(czr::uint256_union const &, std::function<void(uint64_t)>);
 		void add_initial_peers();
 		boost::asio::io_service & service;
 		czr::node_config config;
 		czr::alarm & alarm;
-		czr::work_pool & work;
 		boost::log::sources::logger_mt log;
 		czr::block_store store;
 		czr::gap_cache gap_cache;
@@ -394,7 +382,6 @@ namespace czr
 		czr::alarm alarm;
 		czr::logging logging;
 		czr::node_init init;
-		czr::work_pool work;
 		std::shared_ptr<czr::node> node;
 	};
 }

@@ -126,15 +126,6 @@ public:
 	void wallet_destroy ();
 	void wallet_export ();
 	void wallet_lock ();
-	void wallet_work_get ();
-	void work_generate ();
-	void work_cancel ();
-	void work_get ();
-	void work_set ();
-	void work_validate ();
-	void work_peer_add ();
-	void work_peers ();
-	void work_peers_clear ();
 	std::string body;
 	czr::node & node;
 	czr::rpc & rpc;

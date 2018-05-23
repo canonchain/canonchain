@@ -206,15 +206,12 @@ if (${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
 elseif (${CMAKE_SYSTEM_NAME} MATCHES "Windows")
 	set (PLATFORM_LIB_SOURCE czr/plat/windows/priority.cpp)
 	set (PLATFORM_SECURE_SOURCE czr/plat/windows/working.cpp)
-	set (PLATFORM_NODE_SOURCE czr/plat/windows/openclapi.cpp)
 elseif (${CMAKE_SYSTEM_NAME} MATCHES "Linux")
 	set (PLATFORM_LIB_SOURCE czr/plat/linux/priority.cpp)
 	set (PLATFORM_SECURE_SOURCE czr/plat/posix/working.cpp)
-	set (PLATFORM_NODE_SOURCE czr/plat/posix/openclapi.cpp)
 elseif (${CMAKE_SYSTEM_NAME} MATCHES "FreeBSD")
 	set (PLATFORM_LIB_SOURCE czr/plat/default/priority.cpp)
 	set (PLATFORM_SECURE_SOURCE czr/plat/posix/working.cpp)
-	set (PLATFORM_NODE_SOURCE czr/plat/posix/openclapi.cpp)
 else ()
 	error ("Unknown platform: ${CMAKE_SYSTEM_NAME}")
 endif ()
@@ -244,9 +241,7 @@ SET (CZR_LIB_SOURCES
 	czr/lib/interface.cpp
 	czr/lib/numbers.cpp
 	czr/lib/numbers.hpp
-	czr/lib/utility.hpp
-	czr/lib/work.hpp
-	czr/lib/work.cpp)
+	czr/lib/utility.hpp)
 
 add_library (czr_lib SHARED ${CZR_LIB_SOURCES})
 add_library (czr_lib_static STATIC ${CZR_LIB_SOURCES})
@@ -264,14 +259,11 @@ add_library (node
 	czr/node/node.cpp
 	czr/node/witness.hpp
 	czr/node/witness.cpp
-	czr/node/openclwork.cpp
-	czr/node/openclwork.hpp
 	czr/node/rpc.hpp
 	czr/node/rpc.cpp
 	czr/node/wallet.hpp
 	czr/node/wallet.cpp
-	czr/node/working.hpp
-	czr/node/xorshift.hpp)
+	czr/node/working.hpp)
 
 
 SET (ACTIVE_NETWORK czr_live_network CACHE STRING "Selects which network parameters are used")

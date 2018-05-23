@@ -20,7 +20,7 @@ czr::composer::~composer()
 
 czr::compose_result czr::composer::compose(MDB_txn * transaction_a, czr::account const & from_a, czr::account const & to_a,
 	czr::amount const & amount_a, std::vector<uint8_t> const & data_a,
-	czr::raw_key const & prv_a, czr::public_key const & pub_a, uint64_t const & work_a)
+	czr::raw_key const & prv_a, czr::public_key const & pub_a)
 {
 	if (data_a.size() > czr::max_data_size)
 		return czr::compose_result(czr::compose_result_codes::data_size_too_large, nullptr);
@@ -80,7 +80,7 @@ czr::compose_result czr::composer::compose(MDB_txn * transaction_a, czr::account
 		return czr::compose_result(czr::compose_result_codes::insufficient_balance, nullptr);
 
 	std::shared_ptr<czr::block> block(new czr::block(from_a, to_a, amount_a, previous, parents, 
-		witness_list_block, witness_list, last_summary, last_summary_block, data_a, exec_timestamp, prv_a, pub_a, work_a));
+		witness_list_block, witness_list, last_summary, last_summary_block, data_a, exec_timestamp, prv_a, pub_a));
 
 	return czr::compose_result(czr::compose_result_codes::ok, block);
 }

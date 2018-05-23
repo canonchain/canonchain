@@ -3,7 +3,6 @@
 #include <czr/blockstore.hpp>
 #include <czr/common.hpp>
 #include <czr/node/common.hpp>
-#include <czr/node/openclwork.hpp>
 
 #include <mutex>
 #include <queue>
@@ -30,10 +29,9 @@ class wallet_value
 public:
 	wallet_value () = default;
 	wallet_value (czr::mdb_val const &);
-	wallet_value (czr::uint256_union const &, uint64_t);
+	wallet_value(czr::uint256_union const & key_a);
 	czr::mdb_val val () const;
 	czr::private_key key;
-	uint64_t work;
 };
 class node_config;
 class kdf
@@ -87,8 +85,6 @@ public:
 	void write_backup (MDB_txn *, boost::filesystem::path const &);
 	bool move (MDB_txn *, czr::wallet_store &, std::vector<czr::public_key> const &);
 	bool import (MDB_txn *, czr::wallet_store &);
-	bool work_get (MDB_txn *, czr::public_key const &, uint64_t &);
-	void work_put (MDB_txn *, czr::public_key const &, uint64_t);
 	unsigned version (MDB_txn *);
 	void version_put (MDB_txn *, unsigned);
 	czr::fan password;
@@ -138,23 +134,19 @@ public:
 	void enter_initial_password ();
 	bool valid_password ();
 	bool enter_password (std::string const &);
-	czr::public_key insert_adhoc (czr::raw_key const &, bool = true);
-	czr::public_key insert_adhoc (MDB_txn *, czr::raw_key const &, bool = true);
 	void insert_watch (MDB_txn *, czr::public_key const &);
-	czr::public_key deterministic_insert (MDB_txn *, bool = true);
-	czr::public_key deterministic_insert (bool = true);
+	czr::public_key deterministic_insert(MDB_txn * transaction_a);
+	czr::public_key deterministic_insert();
+	czr::public_key insert_adhoc(MDB_txn * transaction_a, czr::raw_key const & key_a);
+	czr::public_key insert_adhoc(czr::raw_key const & account_a);
 	bool exists (czr::public_key const &);
 	bool import (std::string const &, std::string const &);
 	void serialize (std::string &);
-	void work_generate (czr::account const &, czr::block_hash const &);
-	void work_update (MDB_txn *, czr::account const &, czr::block_hash const &, uint64_t);
-	uint64_t work_fetch (MDB_txn *, czr::account const &, czr::block_hash const &);
-	void work_ensure (MDB_txn *, czr::account const &);
+	void send_async(czr::account const & from_a, czr::account const & to_a, czr::amount const & amount_a, std::vector<uint8_t> const & data_a, std::function<void(czr::send_result)> const & action_a, boost::optional<std::string> id_a);
+	czr::send_result send_action(czr::account const & from_a, czr::account const & to_a, czr::amount const & amount_a, std::vector<uint8_t> data_a, boost::optional<std::string> id_a);
 	void init_free_accounts (MDB_txn *);
 	/** Changes the wallet seed and returns the first account */
 	czr::public_key change_seed (MDB_txn * transaction_a, czr::raw_key const & prv_a);
-	void send_async(czr::account const & from_a, czr::account const & to_a, czr::amount const & amount_a, std::vector<uint8_t> const & data_a, std::function<void(czr::send_result)> const & action_a, bool generate_work_a, boost::optional<std::string> id_a);
-	czr::send_result send_action(czr::account const & from_a, czr::account const & to_a, czr::amount const & amount_a, std::vector<uint8_t> data_a, bool generate_work_a, boost::optional<std::string> id_a);
 
 	std::unordered_set<czr::account> free_accounts;
 	std::function<void(bool, bool)> lock_observer;

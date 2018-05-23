@@ -6,8 +6,7 @@
 #include <czr/node/working.hpp>
 
 czr_daemon::daemon_config::daemon_config(boost::filesystem::path const & application_path_a) :
-	rpc_enable(false),
-	opencl_enable(false)
+	rpc_enable(false)
 {
 }
 
@@ -21,10 +20,6 @@ void czr_daemon::daemon_config::serialize_json(boost::property_tree::ptree & tre
 	boost::property_tree::ptree node_l;
 	node.serialize_json(node_l);
 	tree_a.add_child("node", node_l);
-	tree_a.put("opencl_enable", opencl_enable);
-	boost::property_tree::ptree opencl_l;
-	opencl.serialize_json(opencl_l);
-	tree_a.add_child("opencl", opencl_l);
 }
 
 bool czr_daemon::daemon_config::deserialize_json(bool & upgraded_a, boost::property_tree::ptree & tree_a)
@@ -46,9 +41,6 @@ bool czr_daemon::daemon_config::deserialize_json(bool & upgraded_a, boost::prope
 			error |= rpc.deserialize_json(rpc_l);
 			auto & node_l(tree_a.get_child("node"));
 			error |= node.deserialize_json(upgraded_a, node_l);
-			opencl_enable = tree_a.get<bool>("opencl_enable");
-			auto & opencl_l(tree_a.get_child("opencl"));
-			error |= opencl.deserialize_json(opencl_l);
 		}
 		else
 		{
@@ -82,16 +74,11 @@ void czr_daemon::daemon::run(boost::filesystem::path const & data_path)
 		config.node.logging.init(data_path);
 		config_file.close();
 		boost::asio::io_service service;
-		auto opencl(czr::opencl_work::create(config.opencl_enable, config.opencl, config.node.logging));
-		czr::work_pool opencl_work(config.node.work_threads, opencl ? [&opencl](czr::uint256_union const & root_a) {
-			return opencl->generate_work(root_a);
-		}
-		: std::function<boost::optional<uint64_t>(czr::uint256_union const &)>(nullptr));
 		czr::alarm alarm(service);
 		czr::node_init init;
 		try
 		{
-			auto node(std::make_shared<czr::node>(init, service, data_path, alarm, config.node, opencl_work));
+			auto node(std::make_shared<czr::node>(init, service, data_path, alarm, config.node));
 			if (!init.error)
 			{
 				node->start();

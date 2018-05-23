@@ -1,7 +1,5 @@
 
 #include <czr/node/common.hpp>
-
-#include <czr/lib/work.hpp>
 #include <czr/node/wallet.hpp>
 
 std::array<uint8_t, 2> constexpr czr::message::magic_number;
@@ -59,9 +57,8 @@ bool czr::message::read_header (czr::stream & stream_a, uint8_t & version_max_a,
 	return result;
 }
 
-czr::message_parser::message_parser (czr::message_visitor & visitor_a, czr::work_pool & pool_a) :
+czr::message_parser::message_parser (czr::message_visitor & visitor_a) :
 visitor (visitor_a),
-pool (pool_a),
 status (parse_status::success)
 {
 }
@@ -124,14 +121,7 @@ void czr::message_parser::deserialize_publish (uint8_t const * buffer_a, size_t 
 	auto error_l (incoming.deserialize (stream));
 	if (!error_l && at_end (stream))
 	{
-		if (!czr::work_validate (*incoming.block))
-		{
-			visitor.publish (incoming);
-		}
-		else
-		{
-			status = parse_status::insufficient_work;
-		}
+		visitor.publish(incoming);
 	}
 	else
 	{
