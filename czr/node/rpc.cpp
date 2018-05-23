@@ -52,18 +52,14 @@ bool czr::rpc_secure_config::deserialize_json(boost::property_tree::ptree const 
 czr::rpc_config::rpc_config() :
 	address(boost::asio::ip::address_v6::loopback()),
 	port(czr::rpc::rpc_port),
-	enable_control(false),
-	frontier_request_limit(16384),
-	chain_request_limit(16384)
+	enable_control(false)
 {
 }
 
 czr::rpc_config::rpc_config(bool enable_control_a) :
 	address(boost::asio::ip::address_v6::loopback()),
 	port(czr::rpc::rpc_port),
-	enable_control(enable_control_a),
-	frontier_request_limit(16384),
-	chain_request_limit(16384)
+	enable_control(enable_control_a)
 {
 }
 
@@ -72,8 +68,6 @@ void czr::rpc_config::serialize_json(boost::property_tree::ptree & tree_a) const
 	tree_a.put("address", address.to_string());
 	tree_a.put("port", std::to_string(port));
 	tree_a.put("enable_control", enable_control);
-	tree_a.put("frontier_request_limit", frontier_request_limit);
-	tree_a.put("chain_request_limit", chain_request_limit);
 }
 
 bool czr::rpc_config::deserialize_json(boost::property_tree::ptree const & tree_a)
@@ -92,14 +86,10 @@ bool czr::rpc_config::deserialize_json(boost::property_tree::ptree const & tree_
 			auto address_l(tree_a.get<std::string>("address"));
 			auto port_l(tree_a.get<std::string>("port"));
 			enable_control = tree_a.get<bool>("enable_control");
-			auto frontier_request_limit_l(tree_a.get<std::string>("frontier_request_limit"));
-			auto chain_request_limit_l(tree_a.get<std::string>("chain_request_limit"));
 			try
 			{
 				port = std::stoul(port_l);
 				result = port > std::numeric_limits<uint16_t>::max();
-				frontier_request_limit = std::stoull(frontier_request_limit_l);
-				chain_request_limit = std::stoull(chain_request_limit_l);
 			}
 			catch (std::logic_error const &)
 			{

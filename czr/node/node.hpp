@@ -261,12 +261,8 @@ namespace czr
 		uint16_t peering_port;
 		czr::logging logging;
 		std::vector<std::string> preconfigured_peers;
-		unsigned bootstrap_fraction_numerator;
 		unsigned password_fanout;
 		unsigned io_threads;
-		bool enable_voting;
-		unsigned bootstrap_connections;
-		unsigned bootstrap_connections_max;
 		std::string callback_address;
 		uint16_t callback_port;
 		std::string callback_target;

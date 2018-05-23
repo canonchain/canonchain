@@ -498,12 +498,8 @@ czr::node_config::node_config() :
 czr::node_config::node_config(uint16_t peering_port_a, czr::logging const & logging_a) :
 	peering_port(peering_port_a),
 	logging(logging_a),
-	bootstrap_fraction_numerator(1),
 	password_fanout(1024),
 	io_threads(std::max<unsigned>(4, std::thread::hardware_concurrency())),
-	enable_voting(true),
-	bootstrap_connections(4),
-	bootstrap_connections_max(64),
 	callback_port(0),
 	lmdb_max_dbs(128)
 {
@@ -525,7 +521,6 @@ void czr::node_config::serialize_json(boost::property_tree::ptree & tree_a) cons
 {
 	tree_a.put("version", "1");
 	tree_a.put("peering_port", std::to_string(peering_port));
-	tree_a.put("bootstrap_fraction_numerator", std::to_string(bootstrap_fraction_numerator));
 	boost::property_tree::ptree logging_l;
 	logging.serialize_json(logging_l);
 	tree_a.add_child("logging", logging_l);
@@ -539,9 +534,6 @@ void czr::node_config::serialize_json(boost::property_tree::ptree & tree_a) cons
 	tree_a.add_child("preconfigured_peers", preconfigured_peers_l);
 	tree_a.put("password_fanout", std::to_string(password_fanout));
 	tree_a.put("io_threads", std::to_string(io_threads));
-	tree_a.put("enable_voting", enable_voting);
-	tree_a.put("bootstrap_connections", bootstrap_connections);
-	tree_a.put("bootstrap_connections_max", bootstrap_connections_max);
 	tree_a.put("callback_address", callback_address);
 	tree_a.put("callback_port", std::to_string(callback_port));
 	tree_a.put("callback_target", callback_target);
@@ -561,7 +553,6 @@ bool czr::node_config::deserialize_json(bool & upgraded_a, boost::property_tree:
 			upgraded_a = true;
 		}
 		auto peering_port_l(tree_a.get<std::string>("peering_port"));
-		auto bootstrap_fraction_numerator_l(tree_a.get<std::string>("bootstrap_fraction_numerator"));
 		auto & logging_l(tree_a.get_child("logging"));
 		auto preconfigured_peers_l(tree_a.get_child("preconfigured_peers"));
 		preconfigured_peers.clear();
@@ -573,9 +564,6 @@ bool czr::node_config::deserialize_json(bool & upgraded_a, boost::property_tree:
 
 		auto password_fanout_l(tree_a.get<std::string>("password_fanout"));
 		auto io_threads_l(tree_a.get<std::string>("io_threads"));
-		enable_voting = tree_a.get<bool>("enable_voting");
-		auto bootstrap_connections_l(tree_a.get<std::string>("bootstrap_connections"));
-		auto bootstrap_connections_max_l(tree_a.get<std::string>("bootstrap_connections_max"));
 		callback_address = tree_a.get<std::string>("callback_address");
 		auto callback_port_l(tree_a.get<std::string>("callback_port"));
 		callback_target = tree_a.get<std::string>("callback_target");
@@ -584,11 +572,8 @@ bool czr::node_config::deserialize_json(bool & upgraded_a, boost::property_tree:
 		try
 		{
 			peering_port = std::stoul(peering_port_l);
-			bootstrap_fraction_numerator = std::stoul(bootstrap_fraction_numerator_l);
 			password_fanout = std::stoul(password_fanout_l);
 			io_threads = std::stoul(io_threads_l);
-			bootstrap_connections = std::stoul(bootstrap_connections_l);
-			bootstrap_connections_max = std::stoul(bootstrap_connections_max_l);
 			lmdb_max_dbs = std::stoi(lmdb_max_dbs_l);
 			result |= peering_port > std::numeric_limits<uint16_t>::max();
 			result |= logging.deserialize_json(upgraded_a, logging_l);

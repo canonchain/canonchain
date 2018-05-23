@@ -128,8 +128,6 @@ else ()
 	set (ARGON_CORE phc-winner-argon2/src/ref.c)
 endif ()
 
-include_directories (beast/include)
-
 set (BUILD_SHARED OFF CACHE BOOL "")
 set (USE_INTERMEDIATE_OBJECTS_TARGET OFF CACHE BOOL "")
 if (CRYPTOPP_CUSTOM OR NOT CANONCHAIN_SIMD_OPTIMIZATIONS)
