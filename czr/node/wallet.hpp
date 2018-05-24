@@ -126,6 +126,8 @@ public:
 	std::shared_ptr<czr::block> block;
 };
 
+class composer;
+
 // A wallet is a set of account keys encrypted by a common encryption key
 class wallet : public std::enable_shared_from_this<czr::wallet>
 {
