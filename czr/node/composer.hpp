@@ -2,6 +2,7 @@
 
 #include <czr/node/common.hpp>
 #include <czr/node/node.hpp>
+#include <czr/node/validation.hpp>
 #include <czr/ledger.hpp>
 #include <czr/blockstore.hpp>
 
@@ -13,15 +14,16 @@ namespace czr
 		ok,
 		insufficient_balance,
 		data_size_too_large,
+		validate_error,
 		error
 	};
 
 	class compose_result
 	{
 	public:
-		compose_result(czr::compose_result_codes const & code_a, std::shared_ptr<czr::block> block_a);
+		compose_result(czr::compose_result_codes const & code_a, std::shared_ptr<czr::publish> message);
 		czr::compose_result_codes code;
-		std::shared_ptr<czr::block> block;
+		std::shared_ptr<czr::publish> message;
 	};
 
 	class composer

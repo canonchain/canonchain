@@ -587,14 +587,16 @@ void czr::kdf::phs(czr::raw_key & result_a, std::string const & password_a, czr:
 czr::wallet::wallet(bool & init_a, czr::transaction & transaction_a, czr::node & node_a, std::string const & wallet_a) :
 	lock_observer([](bool, bool) {}),
 	store(init_a, node_a.wallets.kdf, transaction_a, node_a.config.password_fanout, wallet_a),
-	node(node_a)
+	node(node_a),
+	composer(std::make_shared<czr::composer>(node))
 {
 }
 
 czr::wallet::wallet(bool & init_a, czr::transaction & transaction_a, czr::node & node_a, std::string const & wallet_a, std::string const & json) :
 	lock_observer([](bool, bool) {}),
 	store(init_a, node_a.wallets.kdf, transaction_a, node_a.config.password_fanout, wallet_a, json),
-	node(node_a)
+	node(node_a),
+	composer(std::make_shared<czr::composer>(node))
 {
 }
 
@@ -763,7 +765,7 @@ void czr::wallet::send_async(czr::account const & from_a, czr::account const & t
 czr::send_result czr::wallet::send_action(czr::account const & from_a, czr::account const & to_a,
 	czr::amount const & amount_a, std::vector<uint8_t> data_a, boost::optional<std::string> id_a)
 {
-	czr::publish message;
+	std::shared_ptr<czr::publish> message;
 	boost::optional<czr::mdb_val> id_mdb_val;
 	if (id_a)
 	{
@@ -780,11 +782,12 @@ czr::send_result czr::wallet::send_action(czr::account const & from_a, czr::acco
 			if (status == 0)
 			{
 				auto hash(result.uint256());
-				message.block = node.store.block_get(transaction, hash);
-				if (message.block != nullptr)
+				auto block = node.store.block_get(transaction, hash);
+				if (block != nullptr)
 				{
+					message = std::make_shared<czr::publish>(std::shared_ptr<czr::block>(block.release()));
 					cached_block = true;
-					node.network.publish(transaction, message);
+					node.network.publish(transaction, *message);
 				}
 			}
 			else if (status != MDB_NOTFOUND)
@@ -792,7 +795,7 @@ czr::send_result czr::wallet::send_action(czr::account const & from_a, czr::acco
 				error = true;
 			}
 		}
-		if (!error && message.block == nullptr)
+		if (!error && message == nullptr)
 		{
 			if (!store.valid_password(transaction))
 				return czr::send_result(czr::send_result_codes::insufficient_balance, nullptr);
@@ -806,18 +809,17 @@ czr::send_result czr::wallet::send_action(czr::account const & from_a, czr::acco
 				auto error2(store.fetch(transaction, from_a, prv));
 				assert(!error2);
 
-				czr::composer composer(node);
-				czr::compose_result result(composer.compose(transaction, from_a, to_a, amount_a, data_a, prv, from_a));
-				switch (result.code)
+				czr::compose_result compose_result(composer->compose(transaction, from_a, to_a, amount_a, data_a, prv, from_a));
+				switch (compose_result.code)
 				{
 				case czr::compose_result_codes::ok:
-					message.block = result.block;
+					message = compose_result.message;
 					if (id_mdb_val)
 					{
-						auto status(mdb_put(transaction, node.wallets.send_action_ids, *id_mdb_val, czr::mdb_val(message.block->hash()), 0));
+						auto status(mdb_put(transaction, node.wallets.send_action_ids, *id_mdb_val, czr::mdb_val(message->block->hash()), 0));
 						if (status != 0)
 						{
-							message.block = nullptr;
+							message = nullptr;
 							error = true;
 						}
 					}
@@ -826,6 +828,8 @@ czr::send_result czr::wallet::send_action(czr::account const & from_a, czr::acco
 					return czr::send_result(czr::send_result_codes::insufficient_balance, nullptr);
 				case czr::compose_result_codes::data_size_too_large:
 					return czr::send_result(czr::send_result_codes::data_size_too_large, nullptr);
+				case czr::compose_result_codes::validate_error:
+					return czr::send_result(czr::send_result_codes::validate_error, nullptr);
 				case czr::compose_result_codes::error:
 					error = true;
 					break;
@@ -836,10 +840,10 @@ czr::send_result czr::wallet::send_action(czr::account const & from_a, czr::acco
 			}
 		}
 	}
-	if (!error && message.block != nullptr && !cached_block)
+	if (!error && message != nullptr && !cached_block)
 	{
-		node.block_arrival.add(message.block->hash());
-		node.block_processor.process_receive_many(message);
+		node.block_arrival.add(message->block->hash());
+		node.block_processor.process_receive_many(*message);
 	}
 
 	if (error)
@@ -848,7 +852,7 @@ czr::send_result czr::wallet::send_action(czr::account const & from_a, czr::acco
 	}
 	else
 	{
-		return czr::send_result(czr::send_result_codes::ok, message.block);
+		return czr::send_result(czr::send_result_codes::ok, message->block);
 	}
 }
 

@@ -114,6 +114,7 @@ enum class send_result_codes
 	account_locked,
 	insufficient_balance,
 	data_size_too_large,
+	validate_error,
 	error,
 };
 
@@ -152,6 +153,7 @@ public:
 	std::function<void(bool, bool)> lock_observer;
 	czr::wallet_store store;
 	czr::node & node;
+	std::shared_ptr<czr::composer> composer;
 };
 // The wallets set is all the wallets a node controls.  A node may contain multiple wallets independently encrypted and operated.
 class wallets

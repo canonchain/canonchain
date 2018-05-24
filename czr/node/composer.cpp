@@ -2,9 +2,9 @@
 
 #include <unordered_set>
 
-czr::compose_result::compose_result(czr::compose_result_codes const & code_a, std::shared_ptr<czr::block> block_a):
+czr::compose_result::compose_result(czr::compose_result_codes const & code_a, std::shared_ptr<czr::publish> message_a):
 	code(code_a),
-	block(block_a)
+	message(message_a)
 {
 }
 
@@ -66,7 +66,7 @@ czr::compose_result czr::composer::compose(MDB_txn * transaction_a, czr::account
 	std::unique_ptr<czr::block> prev_block(ledger.store.block_get(transaction_a, previous));
 	if (prev_block->hashables.exec_timestamp > exec_timestamp)
 	{
-		BOOST_LOG(node.log) << "Previous's exec_timestamp is later than yours";
+		BOOST_LOG(node.log) << "compose error: previous's exec_timestamp is later than yours";
 		return czr::compose_result(czr::compose_result_codes::error, nullptr);
 	}
 
@@ -75,7 +75,7 @@ czr::compose_result czr::composer::compose(MDB_txn * transaction_a, czr::account
 		std::unique_ptr<czr::block> pblock(ledger.store.block_get(transaction_a, phash));
 		if (pblock->hashables.exec_timestamp > exec_timestamp)
 		{
-			BOOST_LOG(node.log) << "Parent's exec_timestamp is later than yours";
+			BOOST_LOG(node.log) << "compose error: parent's exec_timestamp is later than yours";
 			return czr::compose_result(czr::compose_result_codes::error, nullptr);
 		}
 	}
@@ -89,7 +89,16 @@ czr::compose_result czr::composer::compose(MDB_txn * transaction_a, czr::account
 	std::shared_ptr<czr::block> block(new czr::block(from_a, to_a, amount_a, previous, parents, 
 		witness_list_block, witness_list, last_summary, last_summary_block, data_a, exec_timestamp, prv_a, pub_a));
 
-	return czr::compose_result(czr::compose_result_codes::ok, block);
+	std::shared_ptr<czr::publish> message(new czr::publish(block));
+
+	czr::validate_result result(node.validation->validate(transaction_a, *message));
+	if (result.code != validate_result_codes::ok)
+	{
+		BOOST_LOG(node.log) << "compose error: validate error, " + result.err_msg;
+		return czr::compose_result(czr::compose_result_codes::validate_error, nullptr);
+	}
+
+	return czr::compose_result(czr::compose_result_codes::ok, message);
 }
 
 void czr::composer::pick_parents_and_last_summary_and_wl_block(czr::error_message & err_msg, MDB_txn * transaction_a, 

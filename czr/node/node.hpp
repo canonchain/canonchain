@@ -4,7 +4,8 @@
 //#include <czr/lib/numbers.hpp>
 #include <czr/lib/utility.hpp>
 
-#include <czr/node/consensus.hpp>
+#include <czr/node/validation.hpp>
+#include <czr/node/chain.hpp>
 #include <czr/ledger.hpp>
 #include <czr/node/wallet.hpp>
 
@@ -274,7 +275,7 @@ namespace czr
 	class node_observers
 	{
 	public:
-		czr::observer_set<std::shared_ptr<czr::block>, czr::process_return const &> blocks;
+		czr::observer_set<std::shared_ptr<czr::block>, czr::validate_result const &> blocks;
 		czr::observer_set<bool> wallet;
 		czr::observer_set<czr::account const &, bool> account_balance;
 		czr::observer_set<czr::endpoint const &> endpoint;
@@ -300,7 +301,7 @@ namespace czr
 		void add(czr::block_processor_item const &);
 		void process_receive_many(czr::block_processor_item const &);
 		void process_receive_many(std::deque<czr::block_processor_item> &);
-		czr::process_return process_receive_one(MDB_txn *, czr::publish const &);
+		czr::validate_result process_receive_one(MDB_txn *, czr::publish const &);
 		void process_blocks();
 		czr::node & node;
 
@@ -311,6 +312,10 @@ namespace czr
 		std::mutex mutex;
 		std::condition_variable condition;
 	};
+
+	class chain;
+	class validation;
+
 	class node : public std::enable_shared_from_this<czr::node>
 	{
 	public:
@@ -351,6 +356,8 @@ namespace czr
 		czr::node_observers observers;
 		czr::wallets wallets;
 		unsigned warmed_up;
+		std::shared_ptr<czr::validation> validation;
+		std::shared_ptr<czr::chain> chain;
 		czr::block_processor block_processor;
 		std::thread block_processor_thread;
 		czr::block_arrival block_arrival;

@@ -168,7 +168,7 @@ public:
 	virtual ~message_visitor ();
 };
 
-enum class process_result
+enum class validate_result_codes
 {
 	ok, // Hasn't been seen before, signed correctly
 	old, // Already seen and was valid
@@ -178,10 +178,10 @@ enum class process_result
 	invalid_block,
 	invalid_message,
 };
-class process_return
+class validate_result
 {
 public:
-	czr::process_result code;
+	czr::validate_result_codes code;
 	std::string err_msg;
 	std::vector<czr::block_hash> missing_parents_and_previous;
 	czr::account account;

@@ -669,7 +669,7 @@ void czr::block_processor::process_receive_many(std::deque<czr::block_processor_
 {
 	while (!blocks_processing.empty())
 	{
-		std::deque<std::pair<std::shared_ptr<czr::block>, czr::process_return>> progress;
+		std::deque<std::pair<std::shared_ptr<czr::block>, czr::validate_result>> progress;
 		{
 			czr::transaction transaction(node.store.environment, nullptr, true);
 			auto cutoff(std::chrono::steady_clock::now() + czr::transaction_timeout);
@@ -679,14 +679,14 @@ void czr::block_processor::process_receive_many(std::deque<czr::block_processor_
 				auto block = item.publish.block;
 				blocks_processing.pop_front();
 				auto hash(block->hash());
-				auto process_result(process_receive_one(transaction, item.publish));
-				switch (process_result.code)
+				auto result(process_receive_one(transaction, item.publish));
+				switch (result.code)
 				{
-					case czr::process_result::ok:
+					case czr::validate_result_codes::ok:
 					{
-						progress.push_back(std::make_pair(block, process_result));
+						progress.push_back(std::make_pair(block, result));
 					}
-					case czr::process_result::old:
+					case czr::validate_result_codes::old:
 					{
 						//todo:check unhandle_message db if any unhandle message can be process again;
 
@@ -717,18 +717,17 @@ void czr::block_processor::process_receive_many(std::deque<czr::block_processor_
 	}
 }
 
-czr::process_return czr::block_processor::process_receive_one(MDB_txn * transaction_a, czr::publish const & message)
+czr::validate_result czr::block_processor::process_receive_one(MDB_txn * transaction_a, czr::publish const & message)
 {
-	czr::consensus consensus(node, transaction_a, [this](std::shared_ptr<czr::block> stable_block_a)
-	{
-	});
-
-	czr::process_return result(consensus.process(message));
+	czr::validate_result result(node.validation->validate(transaction_a, message));
 
 	switch (result.code)
 	{
-		case czr::process_result::ok:
+		case czr::validate_result_codes::ok:
 		{
+			czr::chain chain(node, [](std::shared_ptr<czr::block> block_a) {});
+			chain.save_block(transaction_a, *message.block);
+
 			if (node.config.logging.ledger_logging())
 			{
 				std::string block;
@@ -737,7 +736,7 @@ czr::process_return czr::block_processor::process_receive_one(MDB_txn * transact
 			}
 			break;
 		}
-		case czr::process_result::old:
+		case czr::validate_result_codes::old:
 		{
 			if (node.config.logging.ledger_duplicate_logging())
 			{
@@ -745,7 +744,7 @@ czr::process_return czr::block_processor::process_receive_one(MDB_txn * transact
 			}
 			break;
 		}
-		case czr::process_result::missing_parents_and_previous:
+		case czr::validate_result_codes::missing_parents_and_previous:
 		{
 			if (node.config.logging.ledger_logging())
 			{
@@ -756,7 +755,7 @@ czr::process_return czr::block_processor::process_receive_one(MDB_txn * transact
 			//todo: to request missing parents_and_previous
 			break;
 		}
-		case czr::process_result::missing_hash_tree_summary:
+		case czr::validate_result_codes::missing_hash_tree_summary:
 		{
 			if (node.config.logging.ledger_logging())
 			{
@@ -765,7 +764,7 @@ czr::process_return czr::block_processor::process_receive_one(MDB_txn * transact
 			//todo:to request catchup
 			break;
 		}
-		case czr::process_result::exec_timestamp_too_late:
+		case czr::validate_result_codes::exec_timestamp_too_late:
 		{
 			if (node.config.logging.ledger_logging())
 			{
@@ -775,7 +774,7 @@ czr::process_return czr::block_processor::process_receive_one(MDB_txn * transact
 			}
 			break;
 		}
-		case czr::process_result::invalid_block:
+		case czr::validate_result_codes::invalid_block:
 		{
 			if (node.config.logging.ledger_logging())
 			{
@@ -785,7 +784,7 @@ czr::process_return czr::block_processor::process_receive_one(MDB_txn * transact
 			//todo:to cache invalid block
 			break;
 		}
-		case czr::process_result::invalid_message:
+		case czr::validate_result_codes::invalid_message:
 		{
 			if (node.config.logging.ledger_logging())
 			{
@@ -816,6 +815,8 @@ czr::node::node(czr::node_init & init_a, boost::asio::io_service & service_a,
 	peers(network.endpoint()),
 	application_path(application_path_a),
 	warmed_up(0),
+	validation(std::make_shared<czr::validation>(*this)),
+	chain(std::make_shared<czr::chain>(*this, [](std::shared_ptr<czr::block> block_a){})),
 	block_processor(*this),
 	block_processor_thread([this]() { this->block_processor.process_blocks(); })
 {
@@ -828,7 +829,7 @@ czr::node::node(czr::node_init & init_a, boost::asio::io_service & service_a,
 	peers.disconnect_observer = [this]() {
 		observers.disconnect();
 	};
-	observers.blocks.add([this](std::shared_ptr<czr::block> block_a, czr::process_return const & result_a) {
+	observers.blocks.add([this](std::shared_ptr<czr::block> block_a, czr::validate_result const & result_a) {
 		if (this->block_arrival.recent(block_a->hash()))
 		{
 			auto node_l(shared_from_this());

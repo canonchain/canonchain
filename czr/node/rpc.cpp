@@ -887,8 +887,10 @@ void czr::rpc_handler::send()
 		case czr::send_result_codes::data_size_too_large:
 			error_response(response_a, "Data size to large");
 			break;
+		case czr::send_result_codes::validate_error:
+			error_response(response_a, "Generate block fail, please retry later");
 		case czr::send_result_codes::error:
-			error_response(response_a, "Generate block error");
+			error_response(response_a, "Send block error");
 			break;
 		default:
 			error_response(response_a, "Unknown error");

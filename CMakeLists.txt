@@ -249,8 +249,8 @@ add_library (node
 	${SECURE_RPC_SOURCE}
 	czr/node/common.cpp
 	czr/node/common.hpp
-	czr/node/consensus.hpp
-	czr/node/consensus.cpp
+	czr/node/chain.hpp
+	czr/node/chain.cpp
 	czr/node/composer.hpp
 	czr/node/composer.cpp
 	czr/node/node.hpp
@@ -259,6 +259,8 @@ add_library (node
 	czr/node/witness.cpp
 	czr/node/rpc.hpp
 	czr/node/rpc.cpp
+	czr/node/validation.hpp
+	czr/node/validation.cpp
 	czr/node/wallet.hpp
 	czr/node/wallet.cpp
 	czr/node/working.hpp)
