@@ -725,8 +725,7 @@ czr::validate_result czr::block_processor::process_receive_one(MDB_txn * transac
 	{
 		case czr::validate_result_codes::ok:
 		{
-			czr::chain chain(node, [](std::shared_ptr<czr::block> block_a) {});
-			chain.save_block(transaction_a, *message.block);
+			node.chain->save_block(transaction_a, *message.block);
 
 			if (node.config.logging.ledger_logging())
 			{

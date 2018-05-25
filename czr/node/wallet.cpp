@@ -774,9 +774,9 @@ czr::send_result czr::wallet::send_action(czr::account const & from_a, czr::acco
 	bool error = false;
 	bool cached_block = false;
 	{
-		czr::transaction transaction(store.environment, nullptr, (bool)id_mdb_val);
 		if (id_mdb_val)
 		{
+			czr::transaction transaction(store.environment, nullptr, false);
 			czr::mdb_val result;
 			auto status(mdb_get(transaction, node.wallets.send_action_ids, *id_mdb_val, result));
 			if (status == 0)
@@ -797,45 +797,53 @@ czr::send_result czr::wallet::send_action(czr::account const & from_a, czr::acco
 		}
 		if (!error && message == nullptr)
 		{
-			if (!store.valid_password(transaction))
-				return czr::send_result(czr::send_result_codes::insufficient_balance, nullptr);
-
-			auto existing(store.find(transaction, from_a));
-			if (existing != store.end())
 			{
-				czr::account_info info;
-				auto new_account(node.ledger.store.account_get(transaction, from_a, info));
-				czr::raw_key prv;
-				auto error2(store.fetch(transaction, from_a, prv));
-				assert(!error2);
-
-				czr::compose_result compose_result(composer->compose(transaction, from_a, to_a, amount_a, data_a, prv, from_a));
-				switch (compose_result.code)
-				{
-				case czr::compose_result_codes::ok:
-					message = compose_result.message;
-					if (id_mdb_val)
-					{
-						auto status(mdb_put(transaction, node.wallets.send_action_ids, *id_mdb_val, czr::mdb_val(message->block->hash()), 0));
-						if (status != 0)
-						{
-							message = nullptr;
-							error = true;
-						}
-					}
-					break;
-				case czr::compose_result_codes::insufficient_balance:
+				czr::transaction transaction(store.environment, nullptr, false);
+				if (!store.valid_password(transaction))
 					return czr::send_result(czr::send_result_codes::insufficient_balance, nullptr);
-				case czr::compose_result_codes::data_size_too_large:
-					return czr::send_result(czr::send_result_codes::data_size_too_large, nullptr);
-				case czr::compose_result_codes::validate_error:
-					return czr::send_result(czr::send_result_codes::validate_error, nullptr);
-				case czr::compose_result_codes::error:
-					error = true;
-					break;
-				default:
-					BOOST_LOG(node.log) << "invalid compose result codes";
-					return czr::send_result(czr::send_result_codes::error, nullptr);
+
+				auto existing(store.find(transaction, from_a));
+				if (existing != store.end())
+				{
+					czr::account_info info;
+					auto new_account(node.ledger.store.account_get(transaction, from_a, info));
+					czr::raw_key prv;
+					auto error2(store.fetch(transaction, from_a, prv));
+					assert(!error2);
+
+					czr::compose_result compose_result(composer->compose(transaction, from_a, to_a, amount_a, data_a, prv, from_a));
+					switch (compose_result.code)
+					{
+					case czr::compose_result_codes::ok:
+						message = compose_result.message;
+						break;
+					case czr::compose_result_codes::insufficient_balance:
+						return czr::send_result(czr::send_result_codes::insufficient_balance, nullptr);
+					case czr::compose_result_codes::data_size_too_large:
+						return czr::send_result(czr::send_result_codes::data_size_too_large, nullptr);
+					case czr::compose_result_codes::validate_error:
+						return czr::send_result(czr::send_result_codes::validate_error, nullptr);
+					case czr::compose_result_codes::error:
+						error = true;
+						break;
+					default:
+						BOOST_LOG(node.log) << "invalid compose result codes";
+						return czr::send_result(czr::send_result_codes::error, nullptr);
+					}
+				}
+			}
+
+			if (message != nullptr)
+			{
+				if (id_mdb_val)
+				{
+					czr::transaction transaction(store.environment, nullptr, true);
+					auto status(mdb_put(transaction, node.wallets.send_action_ids, *id_mdb_val, czr::mdb_val(message->block->hash()), 0));
+					if (status != 0)
+					{
+						message = nullptr;
+						error = true;
+					}
 				}
 			}
 		}
