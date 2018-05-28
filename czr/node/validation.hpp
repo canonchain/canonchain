@@ -4,6 +4,7 @@
 #include <czr/node/node.hpp>
 #include <czr/ledger.hpp>
 #include <czr/blockstore.hpp>
+#include <czr/graph.hpp>
 
 #include <set>
 #include <unordered_set>
@@ -23,5 +24,6 @@ namespace czr
 
 		czr::node & node;
 		czr::ledger & ledger;
+		czr::graph graph;
 	};
 }

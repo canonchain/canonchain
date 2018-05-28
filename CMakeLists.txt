@@ -227,6 +227,8 @@ add_library (secure
 	czr/blockstore.hpp
 	czr/genesis.cpp
 	czr/genesis.hpp
+	czr/graph.cpp
+	czr/graph.hpp
 	czr/ledger.cpp
 	czr/ledger.hpp
 	czr/node/utility.cpp

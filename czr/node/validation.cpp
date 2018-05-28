@@ -4,7 +4,8 @@
 
 czr::validation::validation(czr::node & node_a) :
 	node(node_a),
-	ledger(node_a.ledger)
+	ledger(node_a.ledger),
+	graph(ledger.store)
 {
 }
 
@@ -171,19 +172,28 @@ czr::validate_result czr::validation::validate(MDB_txn * transaction_a, czr::pub
 	{
 		std::unique_ptr<czr::block> previous_block = ledger.store.block_get(transaction_a, block->previous());
 		assert(previous_block != nullptr);
-
+		
+		//check pervious from
 		if (previous_block->hashables.from != block->hashables.from)
 		{
 			result.code = czr::validate_result_codes::invalid_block;
-			result.err_msg = boost::str(boost::format("current from %1% not equal to pervious from %2%") % block->hashables.from.to_string() % previous_block->hashables.from.to_string());
+			result.err_msg = boost::str(boost::format("block from %1% not equal to pervious from %2%") % block->hashables.from.to_account() % previous_block->hashables.from.to_account());
 			return result;
 		}
 
-		//todo:check previous must be included by parents
+		//previous must be included by or equal to parents
+		bool is_included(graph.determine_if_included_or_equal(transaction_a, block->previous(), block->parents()));
+		if (!is_included)
+		{
+			result.code = czr::validate_result_codes::invalid_block;
+			result.err_msg = boost::str(boost::format("pervious %1% not included by parents") % block->previous().to_string());
+			return result;
+		}
 	}
 
 	//check parents
 	czr::block_hash pre_pblock_hash;
+	std::list<czr::block_hash> pre_pblock_hashs;
 	for (czr::block_hash & pblock_hash : block->parents())
 	{
 		//check order
@@ -195,7 +205,18 @@ czr::validate_result czr::validation::validate(MDB_txn * transaction_a, czr::pub
 		}
 		pre_pblock_hash = pblock_hash;
 
-		//todo:graph.compareUnitsByProps
+		//check if related
+		for (czr::block_hash const & pre_hash : pre_pblock_hashs)
+		{
+			czr::graph_compare_result graph_result(graph.compare(transaction_a, pblock_hash, pre_hash));
+			if (graph_result != czr::graph_compare_result::non_related)
+			{
+				result.code = czr::validate_result_codes::invalid_block;
+				result.err_msg = boost::str(boost::format("parent %1% are related to parent %2%") % pblock_hash.to_string() % pre_hash.to_string());
+				return result;
+			}
+		}
+		pre_pblock_hashs.push_back(pblock_hash);
 	}
 
 #pragma endregion

@@ -2,6 +2,7 @@
 #include <czr/ledger.hpp>
 #include <czr/node/common.hpp>
 #include <czr/genesis.hpp>
+#include <czr/graph.hpp>
 #include <queue>
 #include <unordered_set>
 
@@ -409,13 +410,16 @@ bool czr::ledger::check_stable_from_later_blocks(MDB_txn * transaction_a, czr::b
 	std::shared_ptr<std::list<czr::block_hash>> temp_branch_child_hashs(new std::list<czr::block_hash>);
 	find_unstable_child_blocks(transaction_a, earlier_best_parent_hash, mc_child_hash, temp_branch_child_hashs);
 
+	czr::graph graph(store);
+
 	//remove non-included branch children
 	std::unique_ptr<std::list<czr::block_hash>> branch_child_hashs(new std::list <czr::block_hash>);
 	for (auto i(temp_branch_child_hashs->begin()); i != temp_branch_child_hashs->end(); i++)
 	{
 		czr::block_hash branch_child_hash(*i);
 
-		bool included; //todo:check later blocks include branch_child
+		//check later blocks include branch_child
+		bool included(graph.determine_if_included_or_equal(transaction_a, branch_child_hash, later_hashs));
 		if (!included)
 		{
 			branch_child_hashs->push_back(branch_child_hash);
@@ -476,13 +480,15 @@ bool czr::ledger::check_stable_from_later_blocks(MDB_txn * transaction_a, czr::b
 					if (key.hash != hash)
 						break;
 
+					czr::block_hash & branch_child_hash(key.child_hash);
 					czr::block_state branch_child_state;
-					bool branch_child_state_error(store.block_state_get(transaction_a, key.child_hash, branch_child_state));
+					bool branch_child_state_error(store.block_state_get(transaction_a, branch_child_hash, branch_child_state));
 					assert(!branch_child_state_error);
 
 					if (branch_child_state.best_parent == key.hash)
 					{
-						bool included; //todo:check later blocks include branch_child
+						//check later blocks include branch_child
+						bool included(graph.determine_if_included_or_equal(transaction_a, branch_child_hash, later_hashs));
 						if (included)
 						{
 							if (branch_child_state.witnessed_level > block_state.witnessed_level
