@@ -122,6 +122,9 @@ include_directories("${CMAKE_SOURCE_DIR}/phc-winner-argon2/include")
 include_directories("${CMAKE_SOURCE_DIR}/phc-winner-argon2/src")
 include_directories("${CMAKE_SOURCE_DIR}/blake2")
 
+include_directories("${CMAKE_SOURCE_DIR}/czr/p2p")
+
+
 if (CMAKE_SYSTEM_PROCESSOR STREQUAL "x86_64")
 	set (ARGON_CORE phc-winner-argon2/src/opt.c)
 else ()
@@ -266,6 +269,72 @@ add_library (node
 	czr/node/wallet.hpp
 	czr/node/wallet.cpp
 	czr/node/working.hpp)
+	
+add_library (p2p
+	${PLATFORM_P2P_SOURCE}
+	czr/p2p/BaseSocket.h
+	czr/p2p/BaseSocket.cpp
+	czr/p2p/base_socket.hpp
+	czr/p2p/bench.h
+	czr/p2p/bench.cpp
+	czr/p2p/compat.h
+	czr/p2p/EventDispatch.h
+	czr/p2p/EventDispatch.cpp
+	czr/p2p/fs.h
+	czr/p2p/fs.cpp
+	czr/p2p/hash.h
+	czr/p2p/hash.cpp
+	czr/p2p/imconn.h
+	czr/p2p/imconn.cpp
+	czr/p2p/ImPduBase.h
+	czr/p2p/ImPduBase.cpp
+	czr/p2p/lock.h
+	czr/p2p/lock.cpp
+	czr/p2p/logging.h
+	czr/p2p/logging.cpp
+	czr/p2p/net.h
+	czr/p2p/net.cpp
+	czr/p2p/netaddress.h
+	czr/p2p/netaddress.cpp
+	czr/p2p/net_process.h
+	czr/p2p/net_process.cpp
+	czr/p2p/netbase.h
+	czr/p2p/netbase.cpp
+	czr/p2p/lock.h
+	czr/p2p/lock.cpp
+	czr/p2p/netlib.h
+	czr/p2p/netlib.cpp
+	czr/p2p/ostype.h
+	czr/p2p/prevector.h
+	czr/p2p/prevector.cpp
+	czr/p2p/protocol.h
+	czr/p2p/protocol.cpp
+	czr/p2p/serialize.h
+	czr/p2p/span.h
+	czr/p2p/sync.h
+	czr/p2p/threadinterrupt.h
+	czr/p2p/threadinterrupt.cpp
+	czr/p2p/threadinterrupt.h
+	czr/p2p/threadinterrupt.cpp
+	czr/p2p/threadsafety.h
+	czr/p2p/tinyformat.h
+	czr/p2p/uint256.h
+	czr/p2p/uint256.cpp
+	czr/p2p/util.h
+	czr/p2p/util.cpp
+	czr/p2p/UtilPdu.h
+	czr/p2p/UtilPdu.cpp
+	czr/p2p/utilstrencodings.h
+	czr/p2p/utilstrencodings.cpp
+	czr/p2p/utiltime.h
+	czr/p2p/utiltime.cpp
+	czr/p2p/crypto/sha1.h
+	czr/p2p/crypto/sha1.cpp
+	czr/p2p/crypto/sha256.h
+	czr/p2p/crypto/sha256.cpp
+	czr/p2p/crypto/sha256_sse4.cpp
+	czr/p2p/crypto/sha512.cpp
+	)
 
 
 SET (ACTIVE_NETWORK czr_live_network CACHE STRING "Selects which network parameters are used")
@@ -275,6 +344,9 @@ add_executable (czr_node
 	czr/czr_node/daemon.cpp
 	czr/czr_node/daemon.hpp
 	czr/czr_node/entry.cpp)
+	
+add_executable (p2p_test
+	czr/p2p/test/main.cpp)
 
 set_target_properties (argon2 PROPERTIES COMPILE_FLAGS "${PLATFORM_C_FLAGS} ${PLATFORM_COMPILE_FLAGS}")
 set_target_properties (blake2 PROPERTIES COMPILE_FLAGS "${PLATFORM_C_FLAGS} ${PLATFORM_COMPILE_FLAGS} -D__SSE2__")
@@ -292,3 +364,4 @@ target_link_libraries (czr_lib ed25519 xxhash blake2 ${CRYPTOPP_LIBRARY})
 target_link_libraries (czr_lib_static ed25519 xxhash blake2 ${CRYPTOPP_LIBRARY})
 
 target_link_libraries (czr_node node secure lmdb ed25519 czr_lib_static argon2 ${OPENSSL_LIBRARIES} ${CRYPTOPP_LIBRARY} ${Boost_ATOMIC_LIBRARY} ${Boost_CHRONO_LIBRARY} ${Boost_REGEX_LIBRARY} ${Boost_DATE_TIME_LIBRARY} ${Boost_FILESYSTEM_LIBRARY} ${Boost_SYSTEM_LIBRARY} ${Boost_LOG_LIBRARY} ${Boost_PROGRAM_OPTIONS_LIBRARY} ${Boost_LOG_SETUP_LIBRARY} ${Boost_THREAD_LIBRARY} ${PLATFORM_LIBS})
+target_link_libraries (p2p_test p2p ${CRYPTOPP_LIBRARY} ${Boost_ATOMIC_LIBRARY} ${Boost_CHRONO_LIBRARY} ${Boost_DATE_TIME_LIBRARY} ${Boost_FILESYSTEM_LIBRARY} ${Boost_SYSTEM_LIBRARY} ${Boost_PROGRAM_OPTIONS_LIBRARY}  ${Boost_THREAD_LIBRARY} ${PLATFORM_LIBS})
