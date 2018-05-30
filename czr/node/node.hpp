@@ -313,6 +313,52 @@ namespace czr
 		std::condition_variable condition;
 	};
 
+	class late_message_info
+	{
+	public:
+		late_message_info(czr::publish const & message_a);
+		uint64_t timestamp;
+		czr::block_hash hash;
+		czr::publish const & message;
+	};
+
+	class late_message_cache
+	{
+	public:
+		late_message_cache(size_t const & capacity_a = 100000);
+
+		void add(czr::late_message_info const & info);
+		std::vector<czr::late_message_info> purge_list_ealier_than(uint64_t const & timestamp);
+
+	private:
+		boost::multi_index_container<
+			czr::late_message_info,
+			boost::multi_index::indexed_by<
+			boost::multi_index::hashed_unique<boost::multi_index::member<late_message_info, czr::block_hash, &late_message_info::hash>>,
+			boost::multi_index::ordered_non_unique<boost::multi_index::member<late_message_info, uint64_t, &late_message_info::timestamp>>>>
+			container;
+		size_t capacity;
+	};
+
+	class invalid_block_cache
+	{
+	public:
+		invalid_block_cache(size_t const & capacity_a = 1000);
+
+		void add(czr::block_hash const & hash_a);
+		bool contains(czr::block_hash const & hash_a);
+
+	private:
+		boost::multi_index_container<
+			czr::block_hash,
+			boost::multi_index::indexed_by<
+			boost::multi_index::sequenced<>,
+			boost::multi_index::hashed_unique<boost::multi_index::identity<czr::block_hash>>>>
+			container;
+		size_t capacity;
+	};
+
+
 	class chain;
 	class validation;
 
@@ -341,6 +387,7 @@ namespace czr
 		std::unique_ptr<czr::block> block(czr::block_hash const &);
 		void ongoing_keepalive();
 		void ongoing_store_flush();
+		void ongoing_retry_late_message();
 		void backup_wallet();
 		void add_initial_peers();
 		boost::asio::io_service & service;
@@ -361,6 +408,8 @@ namespace czr
 		czr::block_processor block_processor;
 		std::thread block_processor_thread;
 		czr::block_arrival block_arrival;
+		czr::late_message_cache late_message_cache;
+		czr::invalid_block_cache invalid_block_cache;
 		static std::chrono::seconds constexpr period = std::chrono::seconds(60);
 		static std::chrono::seconds constexpr cutoff = period * 5;
 		static std::chrono::minutes constexpr backup_interval = std::chrono::minutes(5);

@@ -26,7 +26,27 @@ czr::validate_result czr::validation::validate(MDB_txn * transaction_a, czr::pub
 	std::shared_ptr<czr::block> block(message.block);
 	auto hash(block->hash());
 
-	//todo:to check if block is in invalid block cache;
+	//check if block is in invalid block cache;
+	if (node.invalid_block_cache.contains(hash))
+	{
+		result.code = czr::validate_result_codes::known_invalid_block;
+		return result;
+	}
+
+	//check timestamp
+	if (czr::seconds_since_epoch() < block->hashables.exec_timestamp)
+	{
+		result.code = czr::validate_result_codes::exec_timestamp_too_late;
+		return result;
+	}
+
+	//data size
+	if (block->hashables.data.size() > czr::max_data_size)
+	{
+		result.code = czr::validate_result_codes::invalid_block;
+		result.err_msg = "data size too large";
+		return result;
+	}
 
 	if (validate_message(block->hashables.from, hash, block->signature))
 	{
@@ -39,21 +59,6 @@ czr::validate_result czr::validation::validate(MDB_txn * transaction_a, czr::pub
 	if (exists)
 	{
 		result.code = czr::validate_result_codes::old;
-		return result;
-	}
-
-	//check timestamp
-	if (czr::seconds_since_epoch() < block->hashables.exec_timestamp)
-	{
-		result.code = czr::validate_result_codes::exec_timestamp_too_late;
-		return result;
-	}
-
-	//data size
-	if(block->hashables.data.size() > czr::max_data_size)
-	{
-		result.code = czr::validate_result_codes::invalid_block;
-		result.err_msg = "data size too large";
 		return result;
 	}
 

@@ -176,6 +176,7 @@ enum class validate_result_codes
 	missing_parents_and_previous,
 	exec_timestamp_too_late,
 	invalid_block,
+	known_invalid_block,
 	invalid_message,
 };
 class validate_result

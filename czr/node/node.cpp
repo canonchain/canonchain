@@ -769,8 +769,14 @@ czr::validate_result czr::block_processor::process_receive_one(MDB_txn * transac
 			{
 				BOOST_LOG(node.log) << boost::str(boost::format("Exec timestamp too late, block: %1%, exec_timestamp: %2%")
 					% message.block->hash().to_string() % message.block->hashables.exec_timestamp);
-				//todo:store message and try later
 			}
+
+			//cache late message
+			if (message.block->hashables.exec_timestamp < czr::seconds_since_epoch() + 600) //10 minutes
+			{
+				node.late_message_cache.add(message);
+			}
+
 			break;
 		}
 		case czr::validate_result_codes::invalid_block:
@@ -780,7 +786,16 @@ czr::validate_result czr::block_processor::process_receive_one(MDB_txn * transac
 				BOOST_LOG(node.log) << boost::str(boost::format("Invalid block: %1%, error message: %2%") % message.block->hash().to_string() % result.err_msg);
 			}
 
-			//todo:to cache invalid block
+			//cache invalid block
+			node.invalid_block_cache.add(message.block->hash());
+			break;
+		}
+		case czr::validate_result_codes::known_invalid_block:
+		{
+			if (node.config.logging.ledger_logging())
+			{
+				BOOST_LOG(node.log) << boost::str(boost::format("Known invalid block: %1%") % message.block->hash().to_string());
+			}
 			break;
 		}
 		case czr::validate_result_codes::invalid_message:
@@ -1175,6 +1190,7 @@ void czr::node::start()
 	network.receive();
 	ongoing_keepalive();
 	ongoing_store_flush();
+	ongoing_retry_late_message();
 	backup_wallet();
 	add_initial_peers();
 	observers.started();
@@ -1250,6 +1266,21 @@ void czr::node::ongoing_store_flush()
 		if (auto node_l = node_w.lock())
 		{
 			node_l->ongoing_store_flush();
+		}
+	});
+}
+
+void czr::node::ongoing_retry_late_message()
+{
+	auto late_msg_info_list(late_message_cache.purge_list_ealier_than(czr::seconds_since_epoch()));
+	for (auto info : late_msg_info_list)
+		block_processor.add(czr::block_processor_item(info.message));
+
+	std::weak_ptr<czr::node> node_w(shared_from_this());
+	alarm.add(std::chrono::steady_clock::now() + std::chrono::seconds(5), [node_w]() {
+		if (auto node_l = node_w.lock())
+		{
+			node_l->ongoing_retry_late_message();
 		}
 	});
 }
@@ -2179,4 +2210,57 @@ czr::inactive_node::inactive_node(boost::filesystem::path const & path) :
 czr::inactive_node::~inactive_node()
 {
 	node->stop();
+}
+
+czr::late_message_info::late_message_info(czr::publish const & message_a) :
+	message(message_a),
+	timestamp(message_a.block->hashables.exec_timestamp),
+	hash(message_a.block->hash())
+{
+}
+
+czr::late_message_cache::late_message_cache(size_t const & capacity_a) :
+	capacity(capacity_a)
+{
+}
+
+void czr::late_message_cache::add(czr::late_message_info const & info)
+{
+	auto result(container.insert(info));
+	if (result.second && container.size() > capacity)
+	{
+		auto last(container.get<1>().rbegin().base());
+		container.get<1>().erase(last);
+	}
+}
+
+std::vector<czr::late_message_info> czr::late_message_cache::purge_list_ealier_than(uint64_t const & timestamp)
+{
+	std::vector<czr::late_message_info> result;
+	auto upper(container.get<1>().upper_bound(timestamp));//first element large than timestamp
+	for(auto i(container.get<1>().begin()); i != upper; i++)
+	{
+		result.push_back(*i);
+		container.get<1>().erase(i);
+	}
+	return result;
+}
+
+czr::invalid_block_cache::invalid_block_cache(size_t const & capacity_a):
+	capacity(capacity_a)
+{
+}
+
+void czr::invalid_block_cache::add(czr::block_hash const & hash_a)
+{
+	auto result(container.push_front(hash_a));
+	if (result.second && container.size() > capacity)
+	{
+		container.pop_back();
+	}
+}
+
+bool czr::invalid_block_cache::contains(czr::block_hash const & hash_a)
+{
+	return container.get<1>().find(hash_a) != container.get<1>().end();
 }
