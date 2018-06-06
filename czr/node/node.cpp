@@ -491,47 +491,25 @@ czr::node_init::node_init() :
 }
 
 czr::node_config::node_config() :
-	node_config(czr::network::node_port, czr::logging())
+	node_config(czr::logging())
 {
 }
 
-czr::node_config::node_config(uint16_t peering_port_a, czr::logging const & logging_a) :
-	peering_port(peering_port_a),
+czr::node_config::node_config(czr::logging const & logging_a) :
 	logging(logging_a),
 	password_fanout(1024),
 	io_threads(std::max<unsigned>(4, std::thread::hardware_concurrency())),
 	callback_port(0),
 	lmdb_max_dbs(128)
 {
-	switch (czr::czr_network)
-	{
-	case czr::czr_networks::czr_test_network:
-		break;
-	case czr::czr_networks::czr_beta_network:
-		break;
-	case czr::czr_networks::czr_live_network:
-		break;
-	default:
-		assert(false);
-		break;
-	}
 }
 
 void czr::node_config::serialize_json(boost::property_tree::ptree & tree_a) const
 {
 	tree_a.put("version", "1");
-	tree_a.put("peering_port", std::to_string(peering_port));
 	boost::property_tree::ptree logging_l;
 	logging.serialize_json(logging_l);
 	tree_a.add_child("logging", logging_l);
-	boost::property_tree::ptree preconfigured_peers_l;
-	for (auto i(preconfigured_peers.begin()), n(preconfigured_peers.end()); i != n; ++i)
-	{
-		boost::property_tree::ptree entry;
-		entry.put("", *i);
-		preconfigured_peers_l.push_back(std::make_pair("", entry));
-	}
-	tree_a.add_child("preconfigured_peers", preconfigured_peers_l);
 	tree_a.put("password_fanout", std::to_string(password_fanout));
 	tree_a.put("io_threads", std::to_string(io_threads));
 	tree_a.put("callback_address", callback_address);
@@ -552,16 +530,7 @@ bool czr::node_config::deserialize_json(bool & upgraded_a, boost::property_tree:
 			version_l = "1";
 			upgraded_a = true;
 		}
-		auto peering_port_l(tree_a.get<std::string>("peering_port"));
 		auto & logging_l(tree_a.get_child("logging"));
-		auto preconfigured_peers_l(tree_a.get_child("preconfigured_peers"));
-		preconfigured_peers.clear();
-		for (auto i(preconfigured_peers_l.begin()), n(preconfigured_peers_l.end()); i != n; ++i)
-		{
-			auto bootstrap_peer(i->second.get<std::string>(""));
-			preconfigured_peers.push_back(bootstrap_peer);
-		}
-
 		auto password_fanout_l(tree_a.get<std::string>("password_fanout"));
 		auto io_threads_l(tree_a.get<std::string>("io_threads"));
 		callback_address = tree_a.get<std::string>("callback_address");
@@ -571,11 +540,9 @@ bool czr::node_config::deserialize_json(bool & upgraded_a, boost::property_tree:
 		result |= parse_port(callback_port_l, callback_port);
 		try
 		{
-			peering_port = std::stoul(peering_port_l);
 			password_fanout = std::stoul(password_fanout_l);
 			io_threads = std::stoul(io_threads_l);
 			lmdb_max_dbs = std::stoi(lmdb_max_dbs_l);
-			result |= peering_port > std::numeric_limits<uint16_t>::max();
 			result |= logging.deserialize_json(upgraded_a, logging_l);
 			result |= password_fanout < 16;
 			result |= password_fanout > 1024 * 1024;
@@ -812,7 +779,7 @@ czr::validate_result czr::block_processor::process_receive_one(MDB_txn * transac
 
 czr::node::node(czr::node_init & init_a, boost::asio::io_service & service_a, uint16_t peering_port_a, 
 	boost::filesystem::path const & application_path_a, czr::alarm & alarm_a, czr::logging const & logging_a) :
-	node(init_a, service_a, application_path_a, alarm_a, czr::node_config(peering_port_a, logging_a))
+	node(init_a, service_a, application_path_a, alarm_a, czr::node_config(logging_a))
 {
 }
 
@@ -825,7 +792,7 @@ czr::node::node(czr::node_init & init_a, boost::asio::io_service & service_a,
 	gap_cache(*this),
 	ledger(store),
 	wallets(init_a.error, *this),
-	network(*this, config.peering_port),
+	network(*this, czr::p2p_config::default_port),
 	peers(network.endpoint()),
 	application_path(application_path_a),
 	warmed_up(0),
@@ -1216,7 +1183,7 @@ void czr::node::keepalive_preconfigured(std::vector<std::string> const & peers_a
 {
 	for (auto i(peers_a.begin()), n(peers_a.end()); i != n; ++i)
 	{
-		keepalive(*i, czr::network::node_port);
+		keepalive(*i, czr::p2p_config::default_port);
 	}
 }
 
@@ -1236,23 +1203,6 @@ std::unique_ptr<czr::block> czr::node::block(czr::block_hash const & hash_a)
 {
 	czr::transaction transaction(store.environment, nullptr, false);
 	return store.block_get(transaction, hash_a);
-}
-
-void czr::node::ongoing_keepalive()
-{
-	keepalive_preconfigured(config.preconfigured_peers);
-	auto peers_l(peers.purge_list(std::chrono::steady_clock::now() - cutoff));
-	for (auto i(peers_l.begin()), j(peers_l.end()); i != j && std::chrono::steady_clock::now() - i->last_attempt > period; ++i)
-	{
-		network.send_keepalive(i->endpoint);
-	}
-	std::weak_ptr<czr::node> node_w(shared_from_this());
-	alarm.add(std::chrono::steady_clock::now() + period, [node_w]() {
-		if (auto node_l = node_w.lock())
-		{
-			node_l->ongoing_keepalive();
-		}
-	});
 }
 
 void czr::node::ongoing_store_flush()

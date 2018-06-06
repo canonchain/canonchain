@@ -32,6 +32,8 @@
 #include "Exceptions.h"
 #include "FixedHash.h"
 
+#include <czr/lib/numbers.hpp>
+
 namespace dev
 {
 
@@ -189,6 +191,13 @@ public:
 	template <class T> explicit operator std::vector<T>() const { return toVector<T>(); }
 	template <class T> explicit operator std::set<T>() const { return toSet<T>(); }
 	template <class T, size_t N> explicit operator std::array<T, N>() const { return toArray<T, N>(); }
+
+	//czr number
+	explicit operator czr::uint128_t() const { return toInt<czr::uint128_t>(); }
+	explicit operator czr::uint128_union() const { return czr::uint128_union(toInt<u128>()); }
+	explicit operator czr::uint256_union() const { return czr::uint256_union(toInt<u256>()); }
+	explicit operator czr::uint512_t() const { return toInt<czr::uint512_t>(); }
+	explicit operator czr::uint512_union() const { return czr::uint512_union(toInt<u512>()); }
 
 	/// Converts to bytearray. @returns the empty byte array if not a string.
 	bytes toBytes(int _flags = LaissezFaire) const { if (!isData()) { if (_flags & ThrowOnFail) BOOST_THROW_EXCEPTION(BadCast()); else return bytes(); } return bytes(payload().data(), payload().data() + length()); }
@@ -408,6 +417,13 @@ public:
 	RLPStream& append(std::string const& _s) { return append(bytesConstRef(_s)); }
 	RLPStream& append(char const* _s) { return append(std::string(_s)); }
 	template <unsigned N> RLPStream& append(FixedHash<N> _s, bool _compact = false, bool _allOrNothing = false) { return _allOrNothing && !_s ? append(bytesConstRef()) : append(_s.ref(), _compact); }
+
+	//czr number
+	RLPStream& append(czr::uint128_t _s) { return append(bigint(_s)); }
+	RLPStream& append(czr::uint128_union _s) { return append(bigint(_s.number())); }
+	RLPStream& append(czr::uint256_union _s) { return append(bigint(_s.number())); }
+	RLPStream& append(czr::uint512_t _s) { return append(bigint(_s)); }
+	RLPStream& append(czr::uint512_union _s) { return append(bigint(_s.number())); }
 
 	/// Appends an arbitrary RLP fragment - this *must* be a single item unless @a _itemCount is given.
 	RLPStream& append(RLP const& _rlp, size_t _itemCount = 1) { return appendRaw(_rlp.data(), _itemCount); }

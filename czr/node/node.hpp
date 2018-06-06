@@ -8,6 +8,7 @@
 #include <czr/node/chain.hpp>
 #include <czr/ledger.hpp>
 #include <czr/node/wallet.hpp>
+#include <czr/p2p/common.hpp>
 
 #include <condition_variable>
 #include <memory>
@@ -209,7 +210,6 @@ namespace czr
 		uint64_t error_count;
 		czr::message_statistics incoming;
 		czr::message_statistics outgoing;
-		static uint16_t const node_port = czr::czr_network == czr::czr_networks::czr_live_network ? 7075 : 54000;
 	};
 	class logging
 	{
@@ -256,12 +256,10 @@ namespace czr
 	{
 	public:
 		node_config();
-		node_config(uint16_t, czr::logging const &);
+		node_config(czr::logging const &);
 		void serialize_json(boost::property_tree::ptree &) const;
 		bool deserialize_json(bool &, boost::property_tree::ptree &);
-		uint16_t peering_port;
 		czr::logging logging;
-		std::vector<std::string> preconfigured_peers;
 		unsigned password_fanout;
 		unsigned io_threads;
 		std::string callback_address;

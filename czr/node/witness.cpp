@@ -126,36 +126,35 @@ void czr::witness::do_witness()
 	std::vector<uint8_t> data;
 
 	auto this_l(shared_from_this());
-	auto node_l(node.shared());
-	wallet->send_async(from, to, amount, data, [this_l, node_l](czr::send_result result) {
+	wallet->send_async(from, to, amount, data, [this_l](czr::send_result result) {
 		switch (result.code)
 		{
 		case czr::send_result_codes::ok:
 			break;
 		case czr::send_result_codes::account_locked:
-			BOOST_LOG(node_l->log) << "Witness error: Account locked";
+			BOOST_LOG(this_l->node.log) << "Witness error: Account locked";
 			break;
 		case czr::send_result_codes::insufficient_balance:
-			BOOST_LOG(node_l->log) << "Witness error: Insufficient balance";
+			BOOST_LOG(this_l->node.log) << "Witness error: Insufficient balance";
 			break;
 		case czr::send_result_codes::data_size_too_large:
-			BOOST_LOG(node_l->log) << "Witness error: Data size to large";
+			BOOST_LOG(this_l->node.log) << "Witness error: Data size to large";
 			break;
 		case czr::send_result_codes::validate_error:
-			BOOST_LOG(node_l->log) << "Witness error: Validate error";
+			BOOST_LOG(this_l->node.log) << "Witness error: Validate error";
 
 			//wait some seconds and retry
 			std::chrono::milliseconds random_period(random_pool.GenerateWord32(0, max_do_witness_interval));
-			node_l->alarm.add(std::chrono::steady_clock::now() + random_period, [this_l]() {
+			this_l->node.alarm.add(std::chrono::steady_clock::now() + random_period, [this_l]() {
 				this_l->do_witness();
 			});
 
 			break;
 		case czr::send_result_codes::error:
-			BOOST_LOG(node_l->log) << "Witness error: Generate block error";
+			BOOST_LOG(this_l->node.log) << "Witness error: Generate block error";
 			break;
 		default:
-			BOOST_LOG(node_l->log) << "Unknown error";
+			BOOST_LOG(this_l->node.log) << "Unknown error";
 			break;
 		}
 
