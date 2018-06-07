@@ -290,7 +290,11 @@ add_library (p2p
 	czr/p2p/peer.hpp
 	czr/p2p/peer.cpp
 	czr/p2p/host.hpp
-	czr/p2p/host.cpp)
+	czr/p2p/host.cpp
+	czr/p2p/node_discover.hpp
+	czr/p2p/node_discover.cpp
+	czr/p2p/node_table.hpp
+	czr/p2p/node_table.cpp)
 
 
 SET (ACTIVE_NETWORK czr_live_network CACHE STRING "Selects which network parameters are used")
@@ -304,7 +308,7 @@ add_executable (czr_node
 set_target_properties (argon2 PROPERTIES COMPILE_FLAGS "${PLATFORM_C_FLAGS} ${PLATFORM_COMPILE_FLAGS}")
 set_target_properties (blake2 PROPERTIES COMPILE_FLAGS "${PLATFORM_C_FLAGS} ${PLATFORM_COMPILE_FLAGS} -D__SSE2__")
 set_target_properties (ed25519 PROPERTIES COMPILE_FLAGS "${PLATFORM_C_FLAGS} ${PLATFORM_COMPILE_FLAGS} -DED25519_CUSTOMHASH -DED25519_CUSTOMRNG")
-set_target_properties (secure node rlp p2p czr_node czr_lib czr_lib_static PROPERTIES COMPILE_FLAGS "${PLATFORM_CXX_FLAGS} ${PLATFORM_COMPILE_FLAGS} -DQT_NO_KEYWORDS -DACTIVE_NETWORK=${ACTIVE_NETWORK} -DCANONCHAIN_VERSION_MAJOR=${VERSION_MAJOR} -DCANONCHAIN_VERSION_MINOR=${VERSION_MINOR} -DBOOST_ASIO_HAS_STD_ARRAY=1")
+set_target_properties (secure node rlp p2p czr_node czr_lib czr_lib_static PROPERTIES COMPILE_FLAGS "${PLATFORM_CXX_FLAGS} ${PLATFORM_COMPILE_FLAGS} -DQT_NO_KEYWORDS -DACTIVE_NETWORK=${ACTIVE_NETWORK} -DCANONCHAIN_VERSION_MAJOR=${VERSION_MAJOR} -DCANONCHAIN_VERSION_MINOR=${VERSION_MINOR} -DBOOST_ASIO_HAS_STD_ARRAY=1 -DBOOST_LOG_DYN_LINK")
 set_target_properties (secure node czr_node PROPERTIES LINK_FLAGS "${PLATFORM_LINK_FLAGS}")
 
 if (WIN32)

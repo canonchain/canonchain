@@ -22,8 +22,10 @@ namespace czr
 	enum class packet_type
 	{
 		handshake = 0,
-		ping = 1,
-		pong = 2,
+		disconect = 1,
+		ping = 2,
+		pong = 3,
+
 
 		user_packet = 0x10
 	};
@@ -64,7 +66,7 @@ namespace czr
 	public:
 		icapability(czr::capability_desc const & desc_a, unsigned const & packet_count);
 		virtual void on_connect(czr::peer peer_a) = 0;
-		virtual void read_packet() = 0;
+		virtual bool read_packet(unsigned const & type, dev::RLP const & r) = 0;
 		unsigned packet_count() const;
 
 		czr::capability_desc desc;

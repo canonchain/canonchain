@@ -1,13 +1,13 @@
 #include "host.hpp"
 
-czr::host::host(czr::node & node_a, czr::p2p_config const & config_a, boost::asio::io_service & service_a,
+czr::host::host(czr::node & node_a, czr::p2p_config const & config_a, boost::asio::io_service & io_service_a,
 	czr::node_id const & node_id_a, std::list<std::shared_ptr<czr::icapability>> const & capabilities_a) :
 	node(node_a),
 	config(config_a),
-	io_service(service_a),
+	io_service(io_service_a),
 	node_id(node_id_a),
-	acceptor(std::make_unique<bi::tcp::acceptor>(service_a)),
-	resolver(std::make_unique<bi::tcp::resolver>(service_a))
+	acceptor(std::make_unique<bi::tcp::acceptor>(io_service_a)),
+	resolver(std::make_unique<bi::tcp::resolver>(io_service_a))
 {
 	for (auto & cap : capabilities_a)
 	{
@@ -85,10 +85,10 @@ void czr::host::accept_loop()
 
 void czr::host::do_handshake(std::shared_ptr<bi::tcp::socket> const & socket)
 {
-	std::shared_ptr<ba::deadline_timer> idleTimer(std::make_shared<ba::deadline_timer>(socket->get_io_service()));
-	idleTimer->expires_from_now(handshake_timeout);
+	std::shared_ptr<ba::deadline_timer> idle_timer(std::make_shared<ba::deadline_timer>(socket->get_io_service()));
+	idle_timer->expires_from_now(handshake_timeout);
 	auto this_l(shared_from_this());
-	idleTimer->async_wait([this_l, socket, idleTimer](boost::system::error_code const& _ec)
+	idle_timer->async_wait([this_l, socket, idle_timer](boost::system::error_code const& _ec)
 	{
 		if (!_ec)
 		{
@@ -98,15 +98,16 @@ void czr::host::do_handshake(std::shared_ptr<bi::tcp::socket> const & socket)
 			{
 				if (socket->is_open())
 					socket->close();
+				idle_timer->cancel();
 			}
 			catch (...) {}
 		}
 	});
 
-	write_handshake(socket, idleTimer);
+	write_handshake(socket, idle_timer);
 }
 
-void czr::host::write_handshake(std::shared_ptr<bi::tcp::socket> const & socket, std::shared_ptr<ba::deadline_timer> const & idleTimer)
+void czr::host::write_handshake(std::shared_ptr<bi::tcp::socket> const & socket, std::shared_ptr<ba::deadline_timer> const & idle_timer)
 {
 	std::list<capability_desc> cap_descs;
 	for (auto const & pair : capabilities)
@@ -117,17 +118,17 @@ void czr::host::write_handshake(std::shared_ptr<bi::tcp::socket> const & socket,
 	s.append((unsigned)czr::packet_type::handshake);
 	handshake.stream_RLP(s);
 
-	std::shared_ptr<std::vector<uint8_t>> data(std::make_shared<std::vector<uint8_t>>());
-	s.swapOut(*data);
+	dev::bytes write_buffer;
+	s.swapOut(write_buffer);
 
 	std::shared_ptr<czr::frame_coder> frame_coder(std::make_shared<czr::frame_coder>());
-	frame_coder->write_frame(data.get(), *data);
+	frame_coder->write_frame(&write_buffer, write_buffer);
 
 	auto this_l(shared_from_this());
-	ba::async_write(*socket, ba::buffer(*data), [this_l, socket, idleTimer, frame_coder](const boost::system::error_code& ec, std::size_t bytes_transferred) {
+	ba::async_write(*socket, ba::buffer(write_buffer), [this_l, socket, idle_timer, frame_coder](const boost::system::error_code& ec, std::size_t bytes_transferred) {
 		if (!ec)
 		{
-			this_l->read_handshake(socket, idleTimer, frame_coder);
+			this_l->read_handshake(socket, idle_timer, frame_coder);
 		}
 		else
 		{
@@ -136,31 +137,31 @@ void czr::host::write_handshake(std::shared_ptr<bi::tcp::socket> const & socket,
 	});
 }
 
-void czr::host::read_handshake(std::shared_ptr<bi::tcp::socket> const & socket, std::shared_ptr<ba::deadline_timer> const & idleTimer, std::shared_ptr<czr::frame_coder> const & frame_coder_a)
+void czr::host::read_handshake(std::shared_ptr<bi::tcp::socket> const & socket, std::shared_ptr<ba::deadline_timer> const & idle_timer, std::shared_ptr<czr::frame_coder> const & frame_coder_a)
 {
 	//read header
-	std::shared_ptr<std::vector<uint8_t>> data(std::make_shared<std::vector<uint8_t>>());
+	dev::bytes header_buffer;
 	auto this_l(shared_from_this());
-	ba::async_read(*socket, ba::buffer(*data, czr::message_header_size), [this_l, data, socket, idleTimer, frame_coder_a](const boost::system::error_code& ec, std::size_t bytes_transferred)
+	ba::async_read(*socket, ba::buffer(header_buffer, czr::message_header_size), [this_l, header_buffer, socket, idle_timer, frame_coder_a](const boost::system::error_code& ec, std::size_t bytes_transferred)
 	{
 		if (!ec)
 		{
 			//read packet
-			uint32_t packet_size(frame_coder_a->deserialize_packet_size(*data));
+			uint32_t packet_size(frame_coder_a->deserialize_packet_size(header_buffer));
 			if (packet_size > czr::max_packet_size)
 			{
 				BOOST_LOG(this_l->node.log) << boost::str(boost::format("Too large packet size %1%, max message packet size %2%") % packet_size % czr::max_packet_size);
 				return;
 			}
 
-			data->resize(packet_size);
-			ba::async_read(*socket, ba::buffer(*data, packet_size), [this_l, data, socket, idleTimer, frame_coder_a](const boost::system::error_code& ec, std::size_t bytes_transferred)
+			std::shared_ptr<dev::bytes> packet_buffer(std::make_shared<dev::bytes>());
+			ba::async_read(*socket, ba::buffer(*packet_buffer, packet_size), [this_l, packet_buffer, socket, idle_timer, frame_coder_a](const boost::system::error_code& ec, std::size_t bytes_transferred)
 			{
-				idleTimer->cancel();
+				idle_timer->cancel();
 
 				if (!ec)
 				{
-					dev::bytesConstRef packet(data.get());
+					dev::bytesConstRef packet(packet_buffer.get());
 					czr::packet_type packet_type = (czr::packet_type)dev::RLP(packet.cropped(0, 1)).toInt<unsigned>();
 					if(packet_type != czr::packet_type::handshake)
 					{

@@ -5,7 +5,7 @@ czr::peer::peer(czr::host & host_a, std::shared_ptr<bi::tcp::socket> const & soc
 	socket(socket_a),
 	my_node_id(node_id_a),
 	frame_coder(frame_coder_a),
-	is_drop(false)
+	is_dropped(false)
 {
 }
 
@@ -16,43 +16,67 @@ void czr::peer::register_capability(std::shared_ptr<czr::peer_capability> const 
 
 void czr::peer::start()
 {
+	ping();
 	read_loop();
-	ping_loop();
+}
+
+bool czr::peer::is_connected()
+{
+	return socket->is_open();
+}
+
+void czr::peer::disconnect(czr::disconnect_reason const & reason)
+{
+	BOOST_LOG(host.node.log) << "Disconnecting (our reason: " << czr::reason_of(reason) << ")";
+
+	if (socket->is_open())
+	{
+		dev::RLPStream s;
+		prep(s, czr::packet_type::disconect, 1) << (unsigned)reason;
+		send(s);
+	}
+	drop(reason);
+}
+
+void czr::peer::ping()
+{
+	dev::RLPStream s;
+	send(prep(s, czr::packet_type::ping));
 }
 
 void czr::peer::read_loop()
 {
-	if (is_drop)
+	if (is_dropped)
 		return;
 
 	auto this_l(shared_from_this());
-	data.reserve(czr::message_header_size);
-	ba::async_read(*socket, boost::asio::buffer(data, czr::message_header_size), [this, this_l](boost::system::error_code ec, std::size_t size)
+	read_buffer.reserve(czr::message_header_size);
+	ba::async_read(*socket, boost::asio::buffer(read_buffer, czr::message_header_size), [this, this_l](boost::system::error_code ec, std::size_t size)
 	{
 		if (!ec)
 		{
-			uint32_t body_size(this_l->frame_coder->deserialize_packet_size(data));
-			if (body_size > czr::max_packet_size)
+			uint32_t packet_size(this_l->frame_coder->deserialize_packet_size(read_buffer));
+			if (packet_size > czr::max_packet_size)
 			{
-				BOOST_LOG(this_l->host.node.log) << boost::str(boost::format("Too large body size %1%, max message body size %2%, node id") % body_size % czr::max_packet_size % my_node_id.to_string());
-				drop();
+				BOOST_LOG(this_l->host.node.log) << boost::str(boost::format("Too large body size %1%, max message body size %2%") % packet_size % czr::max_packet_size);
+				drop(czr::disconnect_reason::too_large_packet_size);
 				return;
 			}
-			data.reserve(body_size);
-			ba::async_read(*socket, boost::asio::buffer(data, body_size), [this, this_l, body_size](boost::system::error_code ec, std::size_t size)
+			read_buffer.reserve(packet_size);
+			ba::async_read(*socket, boost::asio::buffer(read_buffer, packet_size), [this, this_l, packet_size](boost::system::error_code ec, std::size_t size)
 			{
 				if (!ec)
 				{
-					dev::bytesConstRef packet(data.data(), body_size);
+					dev::bytesConstRef packet(read_buffer.data(), packet_size);
 					if (!check_packet(packet))
 					{
-						BOOST_LOG(this_l->host.node.log) << boost::str(boost::format("invalid packet, size: %1%, data: %2%") % packet.size() % toHex(packet));
+						BOOST_LOG(this_l->host.node.log) << boost::str(boost::format("invalid packet, size: %1%, packet: %2%") % packet.size() % toHex(packet));
 						disconnect(czr::disconnect_reason::bad_protocol);
 						return;
 					}
 					else
 					{
-						auto packet_type = (czr::packet_type)dev::RLP(packet.cropped(0, 1)).toInt<unsigned>();
+						auto packet_type = dev::RLP(packet.cropped(0, 1)).toInt<unsigned>();
 						dev::RLP r(packet.cropped(1));
 						bool ok = read_packet(packet_type, r);
 						if (!ok)
@@ -63,7 +87,7 @@ void czr::peer::read_loop()
 				else
 				{
 					BOOST_LOG(this_l->host.node.log) << "Error while peer reading data, message:" << ec.message();
-					drop();
+					drop(czr::disconnect_reason::tcp_error);
 					return;
 				}
 			});
@@ -71,7 +95,7 @@ void czr::peer::read_loop()
 		else
 		{
 			BOOST_LOG(this_l->host.node.log) << "Error while peer reading header, message:" << ec.message();
-			drop();
+			drop(czr::disconnect_reason::tcp_error);
 		}
 	});
 }
@@ -85,11 +109,51 @@ bool czr::peer::check_packet(dev::bytesConstRef msg)
 	return true;
 }
 
-bool czr::peer::read_packet(czr::packet_type & type, dev::RLP const & r)
+bool czr::peer::read_packet(unsigned const & type, dev::RLP const & r)
 {
 	try
 	{
-		//todo:
+		if (type < (unsigned)czr::packet_type::user_packet)
+		{
+			switch ((czr::packet_type)type)
+			{
+			case czr::packet_type::ping:
+			{
+				dev::RLPStream s;
+				send(prep(s, czr::packet_type::pong));
+				break;
+			}
+			case czr::packet_type::pong:
+			{
+				//todo: pong
+				break;
+			}
+			case czr::packet_type::disconect:
+			{
+				auto reason = (czr::disconnect_reason)r[0].toInt<unsigned>();
+				if (!r[0].isInt())
+					drop(czr::disconnect_reason::bad_protocol);
+				else
+				{
+					std::string reason_str = czr::reason_of(reason);
+					BOOST_LOG(host.node.log) << "Disconnect (reason: " << reason_str << ")";
+					drop(czr::disconnect_reason::disconnect_requested);
+				}
+				break;
+			}
+			default:
+				return false;
+			}
+
+			return true;
+		}
+
+		for (auto & p_cap : capabilities)
+		{
+			if (type >= p_cap->offset && type < p_cap->cap->packet_count())
+				return p_cap->cap->read_packet(type - p_cap->offset, r);
+		}
+
 		return false;
 	}
 	catch (std::exception const & e)
@@ -101,24 +165,77 @@ bool czr::peer::read_packet(czr::packet_type & type, dev::RLP const & r)
 	return true;
 }
 
-void czr::peer::ping_loop()
+dev::RLPStream & czr::peer::prep(dev::RLPStream & s, czr::packet_type const & type, unsigned const & size)
 {
-	//todo:
+	return s.append((unsigned)type).appendList(size);
 }
 
-
-bool czr::peer::is_connected()
+void czr::peer::send(dev::RLPStream & s)
 {
-	return socket->is_open();
+	dev::bytes b;
+	s.swapOut(b);
+	dev::bytesConstRef packet(&b);
+	if (!check_packet(packet))
+	{
+		BOOST_LOG(host.node.log) << "Invalid send packet:" << dev::toHex(packet);
+	}
+
+	if (!socket->is_open())
+		return;
+
+	bool doWrite = false;
+	{
+		std::lock_guard<std::mutex> lock(write_queue_mutex);
+		write_queue.push_back(std::move(b));
+		doWrite = (write_queue.size() == 1);
+	}
+
+	if (doWrite)
+		do_write();
 }
 
-void czr::peer::drop()
+void czr::peer::do_write()
 {
-	is_drop = true;
-	//todo:
+	dev::bytes const* out = nullptr;
+	{
+		std::lock_guard<std::mutex> lock(write_queue_mutex);
+		frame_coder->write_frame(&write_queue[0], write_queue[0]);
+		out = &write_queue[0];
+	}
+	auto this_l(shared_from_this());
+	ba::async_write(*socket, ba::buffer(*out),
+		[this, this_l](boost::system::error_code ec, std::size_t size) {
+
+		if (ec)
+		{
+			BOOST_LOG(this_l->host.node.log) << boost::str(boost::format("Error sending: %1%")% ec.message());
+			drop(czr::disconnect_reason::tcp_error);
+			return;
+		}
+
+		{
+			std::lock_guard<std::mutex> lock(write_queue_mutex);
+			write_queue.pop_front();
+			if (write_queue.empty())
+				return;
+		}
+		do_write();
+	});
 }
 
-void czr::peer::disconnect(czr::disconnect_reason const & reason)
+void czr::peer::drop(czr::disconnect_reason const & reason)
 {
-	//todo:
+	if (is_dropped)
+		return;
+	if (socket->is_open())
+	try
+	{
+		boost::system::error_code ec;
+		BOOST_LOG(host.node.log) << "Closing " << socket->remote_endpoint(ec) << " (" << reason_of(reason) << ")";
+		socket->shutdown(boost::asio::ip::tcp::socket::shutdown_both, ec);
+		socket->close();
+	}
+	catch (...) {}
+
+	is_dropped = true;
 }

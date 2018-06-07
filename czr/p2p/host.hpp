@@ -25,14 +25,14 @@ namespace czr
 	class host : std::enable_shared_from_this<czr::host>
 	{
 	public:
-		host(czr::node & node_a, czr::p2p_config const & config_a, boost::asio::io_service & service_a, 
+		host(czr::node & node_a, czr::p2p_config const & config_a, boost::asio::io_service & io_service_a,
 			czr::node_id const & node_id_a, std::list<std::shared_ptr<czr::icapability>> const & capabilities_a);
 		void start();
 		void start_listen();
 		void accept_loop();
 		void do_handshake(std::shared_ptr<bi::tcp::socket> const & socket);
-		void write_handshake(std::shared_ptr<bi::tcp::socket> const & socket, std::shared_ptr<ba::deadline_timer> const & idleTimer);
-		void read_handshake(std::shared_ptr<bi::tcp::socket> const & socket, std::shared_ptr<ba::deadline_timer> const & idleTimer, std::shared_ptr<czr::frame_coder> const & frame_coder_a);
+		void write_handshake(std::shared_ptr<bi::tcp::socket> const & socket, std::shared_ptr<ba::deadline_timer> const & idle_timer);
+		void read_handshake(std::shared_ptr<bi::tcp::socket> const & socket, std::shared_ptr<ba::deadline_timer> const & idle_timer, std::shared_ptr<czr::frame_coder> const & frame_coder_a);
 		void start_peer(std::shared_ptr<bi::tcp::socket> const & socket, czr::handshake_message const & handshake, std::shared_ptr<czr::frame_coder> const & frame_coder_a);
 		void stop();
 
