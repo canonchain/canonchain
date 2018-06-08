@@ -227,7 +227,8 @@ void czr::block_hashables::hash (blake2b_state & hash_a) const
 	blake2b_update(&hash_a, last_summary.bytes.data(), sizeof(last_summary.bytes));
 	blake2b_update(&hash_a, last_summary_block.bytes.data(), sizeof(last_summary_block.bytes));
 	
-	blake2b_update(&hash_a, data.data(), data.size());
+	if(data.size() > 0)
+		blake2b_update(&hash_a, &data[0], data.size());
 	blake2b_update(&hash_a, &exec_timestamp, sizeof(exec_timestamp));
 }
 

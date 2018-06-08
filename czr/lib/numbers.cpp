@@ -1,3 +1,4 @@
+#include "numbers.hpp"
 #include <czr/lib/numbers.hpp>
 
 #include <ed25519-donna/ed25519.h>
@@ -386,6 +387,11 @@ std::string czr::uint512_union::to_string () const
 	std::string result;
 	encode_hex (result);
 	return result;
+}
+
+czr::raw_key::raw_key(czr::private_key const & prv_a):
+	data(prv_a)
+{
 }
 
 czr::raw_key::~raw_key ()

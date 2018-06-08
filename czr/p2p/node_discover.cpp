@@ -2,9 +2,10 @@
 
 #include<boost/log/trivial.hpp>
 
-czr::node_discover::node_discover(boost::asio::io_service & io_service_a, czr::node_id const & node_id_a, czr::node_endpoint const & endpoint):
+czr::node_discover::node_discover(boost::asio::io_service & io_service_a, czr::keypair const & alias_a, czr::node_endpoint const & endpoint):
 	io_service(io_service_a),
-	node_info(node_id_a, endpoint),
+	node_info(alias_a.pub, endpoint),
+	secret(alias_a.prv.data),
 	table(),
 	socket(std::make_unique<bi::udp::socket>(io_service_a)),
 	endpoint((bi::udp::endpoint)endpoint)
@@ -63,14 +64,18 @@ void czr::node_discover::do_discover(czr::node_id const & rand_node_id, unsigned
 	for (unsigned i = 0; i < nearest.size() && tried.size() < s_alpha; i++)
 		if (!tried_a->count(nearest[i]))
 		{
-			auto r = nearest[i];
-			tried.push_back(r);
-			//todo:send find node
-			//FindNode p(r->endpoint, _node);
-			//p.sign(m_secret);
+			auto n = nearest[i];
+			tried.push_back(n);
+
+			//send find node
+			czr::find_node_packet p(rand_node_id);
+			czr::send_udp_datagram datagram(n->endpoint, node_info.node_id);
+			datagram.add_packet_and_sign(secret, p);
+
+			//todo:findNodeTimeout
 			//DEV_GUARDED(x_findNodeTimeout)
 			//	m_findNodeTimeout.push_back(make_pair(r->id, chrono::steady_clock::now()));
-			//send(p);
+			send(datagram);
 		}
 
 	if (tried.empty())
@@ -119,7 +124,58 @@ void czr::node_discover::handle_receive(bi::udp::endpoint const & recv_endpoint_
 	//todo:
 }
 
-void czr::node_discover::send(czr::udp_datagram const & datagram)
+std::unique_ptr<czr::recv_udp_datagram> czr::node_discover::interpret_packet(bi::udp::endpoint const & from, dev::bytesConstRef data)
+{
+	std::unique_ptr<czr::recv_udp_datagram> datagram;
+	// hash + node id + sig + packet type + packet (smallest possible packet is empty neighbours packet which is 3 bytes)
+	if (data.size() < sizeof(czr::hash256) + sizeof(czr::node_id) + sizeof(czr::signature) + 1 + 3)
+	{
+		BOOST_LOG_TRIVIAL(debug) << "Invalid packet (too small) from "	<< from.address().to_string() << ":" << from.port();
+		return datagram;
+	}
+	dev::bytesConstRef hash(data.cropped(0, sizeof(czr::hash256)));
+	dev::bytesConstRef bytes_to_hash_cref(data.cropped(sizeof(czr::hash256), data.size() - sizeof(czr::hash256)));
+	dev::bytesConstRef node_id_cref(bytes_to_hash_cref.cropped(0, sizeof(czr::node_id)));
+	dev::bytesConstRef sig_cref(bytes_to_hash_cref.cropped(sizeof(czr::node_id), sizeof(czr::signature)));
+	dev::bytesConstRef rlp_cref(bytes_to_hash_cref.cropped(sizeof(czr::node_id) + sizeof(czr::signature)));
+
+	czr::hash256 echo(czr::blake2b_hash(bytes_to_hash_cref));
+	dev::bytes echo_bytes(&echo.bytes[0], &echo.bytes[0] + echo.bytes.size());
+	if (!hash.contentsEqual(echo_bytes))
+	{
+		BOOST_LOG_TRIVIAL(debug) << "Invalid packet (bad hash) from " << from.address().to_string() << ":" << from.port();
+		return datagram;
+	}
+
+	czr::node_id from_node_id;
+	dev::bytesRef from_node_id_ref(from_node_id.bytes.data(), from_node_id.bytes.size());
+	node_id_cref.copyTo(from_node_id_ref);
+
+	czr::signature sig;
+	dev::bytesRef sig_ref(sig.bytes.data(), sig.bytes.size());
+	sig_cref.copyTo(sig_ref);
+
+	bool sig_valid(czr::validate_message(from_node_id, czr::blake2b_hash(rlp_cref), sig));
+	if (!sig_valid)
+	{
+		BOOST_LOG_TRIVIAL(debug) << "Invalid packet (bad signature) from " << from.address().to_string() << ":" << from.port();
+		return datagram;
+	}
+
+	try
+	{
+		datagram->interpret(from, from_node_id, rlp_cref);
+	}
+	catch (std::exception const & e)
+	{
+		BOOST_LOG_TRIVIAL(debug) << "Invalid packet format " << from.address().to_string() << ":" << from.port() << " message:" <<e.what();
+		return datagram;
+	}
+
+	return datagram;
+}
+
+void czr::node_discover::send(czr::send_udp_datagram const & datagram)
 {
 	std::lock_guard<std::mutex> lock(send_queue_mutex);
 	send_queue.push_back(datagram);
@@ -129,7 +185,7 @@ void czr::node_discover::send(czr::udp_datagram const & datagram)
 
 void czr::node_discover::do_write()
 {
-	const udp_datagram & datagram = send_queue[0];
+	const send_udp_datagram & datagram = send_queue[0];
 	auto this_l(shared_from_this());
 	bi::udp::endpoint endpoint(datagram.endpoint);
 	socket->async_send_to(boost::asio::buffer(datagram.data), endpoint, [this, this_l, endpoint](boost::system::error_code ec, std::size_t size)
