@@ -127,9 +127,19 @@ namespace czr
 	class node_table
 	{
 	public:
-		node_table();
+		node_table(czr::node_id const & node_id_a);
 		std::vector<std::shared_ptr<czr::node_entry>> nearest_node_entries(czr::node_id const & node_id_a);
+		std::shared_ptr<czr::node_entry> get_node(czr::node_id const & node_id);
+		bool have_node(czr::node_id const & node_id);
+		void add_node(czr::node_info const & node_info);
+		void active_node(czr::node_id const & node_id, bi::udp::endpoint const & from);
+		void drop_node(czr::node_id const & node_id);
 
+		
+		czr::node_id my_node_id;
 		std::array<czr::node_bucket, s_bins> buckets;
+
+		std::mutex nodes_mutex;
+		std::unordered_map<czr::node_id, std::shared_ptr<czr::node_entry>> nodes;	
 	};
 }

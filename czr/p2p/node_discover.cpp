@@ -6,10 +6,15 @@ czr::node_discover::node_discover(boost::asio::io_service & io_service_a, czr::k
 	io_service(io_service_a),
 	node_info(alias_a.pub, endpoint),
 	secret(alias_a.prv.data),
-	table(),
+	table(alias_a.pub),
 	socket(std::make_unique<bi::udp::socket>(io_service_a)),
 	endpoint((bi::udp::endpoint)endpoint)
 {
+}
+
+czr::node_discover::~node_discover()
+{
+	socket->close();
 }
 
 void czr::node_discover::start()
@@ -69,13 +74,14 @@ void czr::node_discover::do_discover(czr::node_id const & rand_node_id, unsigned
 
 			//send find node
 			czr::find_node_packet p(rand_node_id);
-			czr::send_udp_datagram datagram(n->endpoint, node_info.node_id);
-			datagram.add_packet_and_sign(secret, p);
 
-			//todo:findNodeTimeout
-			//DEV_GUARDED(x_findNodeTimeout)
-			//	m_findNodeTimeout.push_back(make_pair(r->id, chrono::steady_clock::now()));
-			send(datagram);
+			//add find node timeout
+			{
+				std::lock_guard<std::mutex> lock(find_node_timeouts_mutex);
+				find_node_timeouts.insert(std::make_pair(n->node_id, std::chrono::steady_clock::now()));
+			}
+
+			send((bi::udp::endpoint)n->endpoint, p);
 		}
 
 	if (tried.empty())
@@ -92,7 +98,7 @@ void czr::node_discover::do_discover(czr::node_id const & rand_node_id, unsigned
 	}
 
 	discover_timer = std::make_unique<ba::deadline_timer>(io_service);
-	discover_timer->expires_from_now(req_timeout);
+	discover_timer->expires_from_now(boost::posix_time::milliseconds(req_timeout.count() * 2));
 	discover_timer->async_wait([this, rand_node_id, round, tried_a](boost::system::error_code const& ec)
 	{
 		if (ec.value() == boost::asio::error::operation_aborted)
@@ -119,19 +125,142 @@ void czr::node_discover::receive_loop()
 	});
 }
 
-void czr::node_discover::handle_receive(bi::udp::endpoint const & recv_endpoint_a, dev::bytesConstRef const & data)
+void czr::node_discover::handle_receive(bi::udp::endpoint const & from, dev::bytesConstRef const & data)
 {
-	//todo:
+	try {
+		std::unique_ptr<czr::discover_packet> packet = interpret_packet(from, data);
+		if (!packet)
+			return;
+
+		if (packet->is_expired())
+		{
+			BOOST_LOG_TRIVIAL(debug) << "Invalid packet (timestamp in the past) from " << from.address().to_string() << ":" << from.port();
+			return;
+		}
+
+		switch (packet->packet_type())
+		{
+		case  czr::discover_packet_type::ping:
+		{
+			auto in = dynamic_cast<czr::ping_packet const&>(*packet);
+			czr::node_endpoint from_node_endpoint(from.address(), from.port(), in.tcp_port);
+			table.add_node(czr::node_info(packet->node_id, from_node_endpoint));
+
+			czr::pong_packet p(node_info.node_id);
+			send(from, p);
+			break;
+		}
+		case czr::discover_packet_type::pong:
+		{
+			auto in = dynamic_cast<czr::pong_packet const &>(*packet);
+			// whenever a pong is received, check if it's in evictions
+			bool found = false;
+			czr::node_id evicted_node_id;
+			eviction_entry eviction_entry;
+			{
+				std::lock_guard<std::mutex> lock(evictions_mutex);
+				auto exists = evictions.find(packet->node_id);
+				if (exists != evictions.end())
+				{
+					if (exists->second.evicted_time > std::chrono::steady_clock::now())
+					{
+						found = true;
+						evicted_node_id = exists->first;
+						eviction_entry = exists->second;
+						evictions.erase(exists);
+					}
+				}
+			}
+
+			if (found)
+			{
+				if (auto n = table.get_node(eviction_entry.new_node_id))
+					table.drop_node(n->node_id);
+				if (auto n = table.get_node(evicted_node_id))
+					n->pending = false;
+			}
+			else
+			{
+				// if not, check if it's known/pending or a pubk discovery ping
+				if (auto n = table.get_node(packet->node_id))
+					n->pending = false;
+				else
+				{
+					{
+						std::lock_guard<std::mutex> lock(pubk_discover_pings_mutex);
+
+						if (!pubk_discover_pings.count(from.address()))
+							return; // unsolicited pong; don't note node as active
+						pubk_discover_pings.erase(from.address());
+					}
+					if (!table.have_node(packet->node_id))
+						table.add_node(czr::node_info(packet->node_id, czr::node_endpoint(from.address(), from.port(), from.port())));
+				}
+			}
+
+			BOOST_LOG_TRIVIAL(debug) << "PONG from "  << packet->node_id.to_string() << ":" << from;
+			break;
+		}
+		case czr::discover_packet_type::find_node:
+		{
+			auto in = dynamic_cast<czr::find_node_packet const&>(*packet);
+			std::vector<std::shared_ptr<czr::node_entry>> nearest = table.nearest_node_entries(in.target);
+			static unsigned const nlimit = (czr::max_udp_packet_size - 129) / czr::neighbour::max_size;
+			for (unsigned offset = 0; offset < nearest.size(); offset += nlimit)
+			{
+				czr::neighbours_packet p(node_info.node_id, nearest, offset, nlimit);
+				send(from, p);
+			}
+			break;
+		}
+		case  czr::discover_packet_type::neighbours:
+		{
+			auto in = dynamic_cast<czr::neighbours_packet const&>(*packet);
+			bool expected = false;
+			auto now = std::chrono::steady_clock::now();
+			{
+				std::lock_guard<std::mutex> lock(find_node_timeouts_mutex);
+				auto it(find_node_timeouts.find(in.node_id));
+				if (it != find_node_timeouts.end())
+				{
+					if (now - it->second < req_timeout)
+						expected = true;
+					else
+						find_node_timeouts.erase(it);
+				}
+			}
+			if (!expected)
+			{
+				BOOST_LOG_TRIVIAL(debug) << "Dropping unsolicited neighbours packet from " << from.address();
+				break;
+			}
+
+			for (auto n : in.neighbours)
+				table.add_node(czr::node_info(n.node_id, n.endpoint));
+			break;
+		}
+		}
+
+		table.active_node(packet->node_id, from);
+	}
+	catch (std::exception const& _e)
+	{
+		BOOST_LOG_TRIVIAL(error) << "Exception processing message from " << from.address().to_string() << ":" << from.port() << ": " << _e.what();
+	}
+	catch (...)
+	{
+		BOOST_LOG_TRIVIAL(error) << "Exception processing message from " << from.address().to_string() << ":" << from.port();
+	}
 }
 
-std::unique_ptr<czr::recv_udp_datagram> czr::node_discover::interpret_packet(bi::udp::endpoint const & from, dev::bytesConstRef data)
+std::unique_ptr<czr::discover_packet> czr::node_discover::interpret_packet(bi::udp::endpoint const & from, dev::bytesConstRef data)
 {
-	std::unique_ptr<czr::recv_udp_datagram> datagram;
+	std::unique_ptr<czr::discover_packet> packet;
 	// hash + node id + sig + packet type + packet (smallest possible packet is empty neighbours packet which is 3 bytes)
 	if (data.size() < sizeof(czr::hash256) + sizeof(czr::node_id) + sizeof(czr::signature) + 1 + 3)
 	{
 		BOOST_LOG_TRIVIAL(debug) << "Invalid packet (too small) from "	<< from.address().to_string() << ":" << from.port();
-		return datagram;
+		return packet;
 	}
 	dev::bytesConstRef hash(data.cropped(0, sizeof(czr::hash256)));
 	dev::bytesConstRef bytes_to_hash_cref(data.cropped(sizeof(czr::hash256), data.size() - sizeof(czr::hash256)));
@@ -144,7 +273,7 @@ std::unique_ptr<czr::recv_udp_datagram> czr::node_discover::interpret_packet(bi:
 	if (!hash.contentsEqual(echo_bytes))
 	{
 		BOOST_LOG_TRIVIAL(debug) << "Invalid packet (bad hash) from " << from.address().to_string() << ":" << from.port();
-		return datagram;
+		return packet;
 	}
 
 	czr::node_id from_node_id;
@@ -159,24 +288,59 @@ std::unique_ptr<czr::recv_udp_datagram> czr::node_discover::interpret_packet(bi:
 	if (!sig_valid)
 	{
 		BOOST_LOG_TRIVIAL(debug) << "Invalid packet (bad signature) from " << from.address().to_string() << ":" << from.port();
-		return datagram;
+		return packet;
 	}
 
 	try
 	{
-		datagram->interpret(from, from_node_id, rlp_cref);
+		dev::bytesConstRef packet_cref(rlp_cref.cropped(1));
+		switch ((czr::discover_packet_type)rlp_cref[0])
+		{
+		case czr::discover_packet_type::ping:
+		{
+			packet = std::make_unique<czr::ping_packet>(from_node_id);
+			break;
+		}
+		case  czr::discover_packet_type::pong:
+		{
+			packet = std::make_unique<czr::pong_packet>(from_node_id);
+			break;
+		}
+		case czr::discover_packet_type::find_node:
+		{
+			packet = std::make_unique<czr::find_node_packet>(from_node_id);
+			break;
+		}
+		case  czr::discover_packet_type::neighbours:
+		{
+			packet = std::make_unique<czr::neighbours_packet>(from_node_id);
+			break;
+		}
+		default:
+		{
+			BOOST_LOG_TRIVIAL(debug) << "Invalid packet (unknown packet type) from " << from.address().to_string() << ":" << from.port();
+			break;
+		}
+		}
+		packet->interpret_RLP(packet_cref);
 	}
 	catch (std::exception const & e)
 	{
 		BOOST_LOG_TRIVIAL(debug) << "Invalid packet format " << from.address().to_string() << ":" << from.port() << " message:" <<e.what();
-		return datagram;
+		return packet;
 	}
 
-	return datagram;
+	return packet;
 }
 
-void czr::node_discover::send(czr::send_udp_datagram const & datagram)
+void czr::node_discover::send(bi::udp::endpoint const & to_endpoint, czr::discover_packet const & packet)
 {
+	czr::send_udp_datagram datagram(to_endpoint);
+	datagram.add_packet_and_sign(secret, packet);
+
+	if (datagram.data.size() > czr::max_udp_packet_size)
+		BOOST_LOG_TRIVIAL(debug) << "Sending truncated datagram, size: " << datagram.data.size() << ", packet type:" << (unsigned)packet.packet_type();
+
 	std::lock_guard<std::mutex> lock(send_queue_mutex);
 	send_queue.push_back(datagram);
 	if (send_queue.size() == 1)

@@ -194,6 +194,12 @@ public:
  */
 inline uint64_t seconds_since_epoch ()
 {
-	return std::chrono::duration_cast<std::chrono::seconds> (std::chrono::system_clock::now ().time_since_epoch ()).count ();
+	return std::chrono::duration_cast<std::chrono::seconds> (std::chrono::system_clock::now().time_since_epoch()).count();
 }
+
+inline uint64_t future_from_epoch(std::chrono::seconds sec)
+{
+	return std::chrono::duration_cast<std::chrono::seconds>((std::chrono::system_clock::now() + sec).time_since_epoch()).count();
+}
+
 }

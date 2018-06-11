@@ -56,9 +56,9 @@ void czr::peer::read_loop()
 		if (!ec)
 		{
 			uint32_t packet_size(this_l->frame_coder->deserialize_packet_size(read_buffer));
-			if (packet_size > czr::max_packet_size)
+			if (packet_size > czr::max_tcp_packet_size)
 			{
-				BOOST_LOG(this_l->host.node.log) << boost::str(boost::format("Too large body size %1%, max message body size %2%") % packet_size % czr::max_packet_size);
+				BOOST_LOG(this_l->host.node.log) << boost::str(boost::format("Too large body size %1%, max message body size %2%") % packet_size % czr::max_tcp_packet_size);
 				drop(czr::disconnect_reason::too_large_packet_size);
 				return;
 			}

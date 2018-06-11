@@ -148,9 +148,9 @@ void czr::host::read_handshake(std::shared_ptr<bi::tcp::socket> const & socket, 
 		{
 			//read packet
 			uint32_t packet_size(frame_coder_a->deserialize_packet_size(header_buffer));
-			if (packet_size > czr::max_packet_size)
+			if (packet_size > czr::max_tcp_packet_size)
 			{
-				BOOST_LOG(this_l->node.log) << boost::str(boost::format("Too large packet size %1%, max message packet size %2%") % packet_size % czr::max_packet_size);
+				BOOST_LOG(this_l->node.log) << boost::str(boost::format("Too large packet size %1%, max message packet size %2%") % packet_size % czr::max_tcp_packet_size);
 				return;
 			}
 
