@@ -282,19 +282,70 @@ namespace czr
 		std::chrono::steady_clock::time_point evicted_time;
 	};
 
-	static boost::posix_time::milliseconds const discover_interval = boost::posix_time::milliseconds(7200);
-	//How long to wait for requests (evict, find iterations).
-	static std::chrono::milliseconds const req_timeout = std::chrono::milliseconds(300);
-	//Max iterations of discover. (discover)
-	static unsigned const max_discover_rounds = boost::static_log2<s_bits>::value;
+	enum class node_relation
+	{
+		unknown = 0,
+		known = 1
+	};
 
-	static size_t const max_udp_packet_size = 1028;
+	enum class node_discover_event_type
+	{
+		node_entry_added = 0,
+		node_entry_dropped = 1
+	};
+
+	class node_discover_event_handler
+	{
+	public:
+		virtual ~node_discover_event_handler() = default;
+
+		virtual void process_event(czr::node_id const& node_id_a, czr::node_discover_event_type const & typea_a) = 0;
+
+		void process_events()
+		{
+			std::list<std::pair<czr::node_id, czr::node_discover_event_type>> temp_events;
+			{
+				std::lock_guard<std::mutex> lock(events_mutex);
+				if (!node_event_handler.size())
+					return;
+				node_event_handler.unique();
+				for (auto const & n : node_event_handler)
+					temp_events.push_back(std::make_pair(n, events[n]));
+				node_event_handler.clear();
+				events.clear();
+			}
+			for (auto const & e : temp_events)
+				process_event(e.first, e.second);
+		}
+
+		virtual void append_event(czr::node_id const & node_id_a, czr::node_discover_event_type const & type_a)
+		{ 
+			std::lock_guard<std::mutex> lock(events_mutex);
+			node_event_handler.push_back(node_id_a);
+			events[node_id_a] = type_a;
+		}
+
+		std::list<czr::node_id> node_event_handler;
+		std::mutex events_mutex;
+		std::unordered_map<czr::node_id, czr::node_discover_event_type> events;
+	};
 
 	class node_discover :std::enable_shared_from_this<czr::node_discover>
 	{
 	public:
 		node_discover(boost::asio::io_service & io_service_a, czr::keypair const & alias_a, czr::node_endpoint const & endpoint);
 		~node_discover();
+
+		boost::posix_time::milliseconds const discover_interval = boost::posix_time::milliseconds(7200);
+
+		boost::posix_time::milliseconds const eviction_check_interval = boost::posix_time::milliseconds(75);
+
+		//How long to wait for requests (evict, find iterations).
+		std::chrono::milliseconds const req_timeout = std::chrono::milliseconds(300);
+		//Max iterations of discover. (discover)
+		unsigned const max_discover_rounds = boost::static_log2<s_bits>::value;
+
+		static size_t const max_udp_packet_size = 1028;
 
 		void start();
 		void discover_loop();
@@ -304,33 +355,49 @@ namespace czr
 		std::unique_ptr<czr::discover_packet> interpret_packet(bi::udp::endpoint const & from, dev::bytesConstRef data);
 		void send(bi::udp::endpoint const & to_endpoint, czr::discover_packet const & packet);
 		void do_write();
+		void ping(czr::node_endpoint const & to);
+		std::shared_ptr<czr::node_entry> get_node(czr::node_id node_id_a);
+		std::vector<std::shared_ptr<czr::node_entry>> nearest_node_entries(czr::node_id const & target_a);
+		std::shared_ptr<czr::node_entry> add_node(czr::node_info const & node_indo_a, czr::node_relation relation_a = czr::node_relation::unknown);
+		void drop_node(std::shared_ptr<czr::node_entry> _n);
+		czr::node_bucket & bucket_UNSAFE(czr::node_entry const * node_a);
+		void note_active_node(czr::node_id const & node_id, bi::udp::endpoint const & _endpoint);
+		void evict(std::shared_ptr<czr::node_entry> const & node_to_evict, std::shared_ptr<czr::node_entry> const & new_node);
+		void do_check_evictions();
+		void process_events();
+		void set_event_handler(czr::node_discover_event_handler* handler);
 
 		ba::io_service & io_service;
 		czr::node_info node_info;
 		czr::private_key secret;
 		bi::udp::endpoint endpoint;
-		czr::node_table table;
 
 		std::unique_ptr<bi::udp::socket> socket;
 
 		bi::udp::endpoint recv_endpoint;
-		std::array<byte, czr::max_udp_packet_size> recv_buffer;
+		std::array<byte, max_udp_packet_size> recv_buffer;
 
 		std::deque<czr::send_udp_datagram> send_queue;
 		std::mutex send_queue_mutex;
 
 		std::unique_ptr<ba::deadline_timer> discover_timer;
 
+		//Known Node Endpoints
+		std::unordered_map<czr::node_id, std::shared_ptr<czr::node_entry>> nodes;
+		mutable std::mutex nodes_mutex;
+
+		//State of p2p node network
+		std::array<czr::node_bucket, s_bins> states;
+		mutable std::mutex states_mutex;
+
+		std::unique_ptr<ba::deadline_timer> eviction_check_timer;
 		std::unordered_map<czr::node_id, czr::eviction_entry> evictions;
 		std::mutex evictions_mutex;
-
-		//List of pending pings where node entry wasn't created due to unkown pubk.
-		std::unordered_map<bi::address, std::chrono::steady_clock::time_point> pubk_discover_pings;
-		std::mutex  pubk_discover_pings_mutex;
 
 		//Timeouts for FindNode requests.
 		std::unordered_map<czr::node_id, std::chrono::steady_clock::time_point> find_node_timeouts;
 		std::mutex  find_node_timeouts_mutex;
 
+		std::unique_ptr<czr::node_discover_event_handler> node_event_handler;
 	};
 }

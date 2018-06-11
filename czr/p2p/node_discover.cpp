@@ -6,10 +6,11 @@ czr::node_discover::node_discover(boost::asio::io_service & io_service_a, czr::k
 	io_service(io_service_a),
 	node_info(alias_a.pub, endpoint),
 	secret(alias_a.prv.data),
-	table(alias_a.pub),
 	socket(std::make_unique<bi::udp::socket>(io_service_a)),
 	endpoint((bi::udp::endpoint)endpoint)
 {
+	for (unsigned i = 0; i < s_bins; i++)
+		states[i].distance = i;
 }
 
 czr::node_discover::~node_discover()
@@ -22,14 +23,21 @@ void czr::node_discover::start()
 	socket->open(bi::udp::v4());
 	try
 	{
-		socket->bind(endpoint);
+		try
+		{
+			socket->bind(endpoint);
+		}
+		catch (...)
+		{
+			socket->bind(bi::udp::endpoint(bi::udp::v4(), endpoint.port()));
+		}
+		receive_loop();
+		discover_loop();
 	}
-	catch (...)
+	catch (std::exception const & e)
 	{
-		socket->bind(bi::udp::endpoint(bi::udp::v4(), endpoint.port()));
+		BOOST_LOG_TRIVIAL(error) << "Node discovery start fail: " << e.what();
 	}
-	receive_loop();
-	discover_loop();
 }
 
 void czr::node_discover::discover_loop()
@@ -64,7 +72,7 @@ void czr::node_discover::do_discover(czr::node_id const & rand_node_id, unsigned
 		// initialized tried on first round
 		tried_a = std::make_shared<std::set<std::shared_ptr<czr::node_entry>>>();
 
-	std::vector<std::shared_ptr<czr::node_entry>> nearest = table.nearest_node_entries(rand_node_id);
+	std::vector<std::shared_ptr<czr::node_entry>> nearest = nearest_node_entries(rand_node_id);
 	std::list<std::shared_ptr<czr::node_entry>> tried;
 	for (unsigned i = 0; i < nearest.size() && tried.size() < s_alpha; i++)
 		if (!tried_a->count(nearest[i]))
@@ -144,7 +152,7 @@ void czr::node_discover::handle_receive(bi::udp::endpoint const & from, dev::byt
 		{
 			auto in = dynamic_cast<czr::ping_packet const&>(*packet);
 			czr::node_endpoint from_node_endpoint(from.address(), from.port(), in.tcp_port);
-			table.add_node(czr::node_info(packet->node_id, from_node_endpoint));
+			add_node(czr::node_info(packet->node_id, from_node_endpoint));
 
 			czr::pong_packet p(node_info.node_id);
 			send(from, p);
@@ -174,28 +182,18 @@ void czr::node_discover::handle_receive(bi::udp::endpoint const & from, dev::byt
 
 			if (found)
 			{
-				if (auto n = table.get_node(eviction_entry.new_node_id))
-					table.drop_node(n->node_id);
-				if (auto n = table.get_node(evicted_node_id))
+				if (auto n = get_node(eviction_entry.new_node_id))
+					drop_node(n);
+				if (auto n = get_node(evicted_node_id))
 					n->pending = false;
 			}
 			else
 			{
 				// if not, check if it's known/pending or a pubk discovery ping
-				if (auto n = table.get_node(packet->node_id))
+				if (auto n = get_node(packet->node_id))
 					n->pending = false;
 				else
-				{
-					{
-						std::lock_guard<std::mutex> lock(pubk_discover_pings_mutex);
-
-						if (!pubk_discover_pings.count(from.address()))
-							return; // unsolicited pong; don't note node as active
-						pubk_discover_pings.erase(from.address());
-					}
-					if (!table.have_node(packet->node_id))
-						table.add_node(czr::node_info(packet->node_id, czr::node_endpoint(from.address(), from.port(), from.port())));
-				}
+					add_node(czr::node_info(packet->node_id, czr::node_endpoint(from.address(), from.port(), from.port())));
 			}
 
 			BOOST_LOG_TRIVIAL(debug) << "PONG from "  << packet->node_id.to_string() << ":" << from;
@@ -204,8 +202,8 @@ void czr::node_discover::handle_receive(bi::udp::endpoint const & from, dev::byt
 		case czr::discover_packet_type::find_node:
 		{
 			auto in = dynamic_cast<czr::find_node_packet const&>(*packet);
-			std::vector<std::shared_ptr<czr::node_entry>> nearest = table.nearest_node_entries(in.target);
-			static unsigned const nlimit = (czr::max_udp_packet_size - 129) / czr::neighbour::max_size;
+			std::vector<std::shared_ptr<czr::node_entry>> nearest = nearest_node_entries(in.target);
+			static unsigned const nlimit = (max_udp_packet_size - 129) / czr::neighbour::max_size;
 			for (unsigned offset = 0; offset < nearest.size(); offset += nlimit)
 			{
 				czr::neighbours_packet p(node_info.node_id, nearest, offset, nlimit);
@@ -236,12 +234,12 @@ void czr::node_discover::handle_receive(bi::udp::endpoint const & from, dev::byt
 			}
 
 			for (auto n : in.neighbours)
-				table.add_node(czr::node_info(n.node_id, n.endpoint));
+				add_node(czr::node_info(n.node_id, n.endpoint));
 			break;
 		}
 		}
 
-		table.active_node(packet->node_id, from);
+		note_active_node(packet->node_id, from);
 	}
 	catch (std::exception const& _e)
 	{
@@ -255,7 +253,7 @@ void czr::node_discover::handle_receive(bi::udp::endpoint const & from, dev::byt
 
 std::unique_ptr<czr::discover_packet> czr::node_discover::interpret_packet(bi::udp::endpoint const & from, dev::bytesConstRef data)
 {
-	std::unique_ptr<czr::discover_packet> packet;
+	std::unique_ptr<czr::discover_packet> packet = std::unique_ptr<czr::discover_packet>();
 	// hash + node id + sig + packet type + packet (smallest possible packet is empty neighbours packet which is 3 bytes)
 	if (data.size() < sizeof(czr::hash256) + sizeof(czr::node_id) + sizeof(czr::signature) + 1 + 3)
 	{
@@ -338,7 +336,7 @@ void czr::node_discover::send(bi::udp::endpoint const & to_endpoint, czr::discov
 	czr::send_udp_datagram datagram(to_endpoint);
 	datagram.add_packet_and_sign(secret, packet);
 
-	if (datagram.data.size() > czr::max_udp_packet_size)
+	if (datagram.data.size() > max_udp_packet_size)
 		BOOST_LOG_TRIVIAL(debug) << "Sending truncated datagram, size: " << datagram.data.size() << ", packet type:" << (unsigned)packet.packet_type();
 
 	std::lock_guard<std::mutex> lock(send_queue_mutex);
@@ -365,4 +363,262 @@ void czr::node_discover::do_write()
 		}
 		do_write();
 	});
+}
+
+void czr::node_discover::ping(czr::node_endpoint const & to)
+{
+	czr::node_endpoint src;
+	czr::ping_packet p(node_info.node_id);
+	send(to, p);
+}
+
+std::shared_ptr<czr::node_entry> czr::node_discover::get_node(czr::node_id node_id_a)
+{
+	std::lock_guard<std::mutex> lock(nodes_mutex);
+	return nodes.count(node_id_a) ? nodes[node_id_a] : std::shared_ptr<czr::node_entry>();
+}
+
+std::vector<std::shared_ptr<czr::node_entry>> czr::node_discover::nearest_node_entries(czr::node_id const & target_a)
+{
+	// send s_alpha FindNode packets to nodes we know, closest to target
+	static unsigned last_bin = s_bins - 1;
+	unsigned head = czr::node_entry::calc_distance(node_info.node_id, target_a);
+	unsigned tail = head == 0 ? last_bin : (head - 1) % s_bins;
+
+	std::map<unsigned, std::list<std::shared_ptr<czr::node_entry>>> found;
+
+	// if d is 0, then we roll look forward, if last, we reverse, else, spread from d
+	if (head > 1 && tail != last_bin)
+		while (head != tail && head < s_bins)
+		{
+			std::lock_guard<std::mutex> lock(states_mutex);
+			for (auto const & n : states[head].nodes)
+				if (auto p = n.lock())
+					found[czr::node_entry::calc_distance(target_a, p->node_id)].push_back(p);
+
+			if (tail)
+				for (auto const & n : states[tail].nodes)
+					if (auto p = n.lock())
+						found[czr::node_entry::calc_distance(target_a, p->node_id)].push_back(p);
+
+			head++;
+			if (tail)
+				tail--;
+		}
+	else if (head < 2)
+		while (head < s_bins)
+		{
+			std::lock_guard<std::mutex> lock(states_mutex);
+			for (auto const & n : states[head].nodes)
+				if (auto p = n.lock())
+					found[czr::node_entry::calc_distance(target_a, p->node_id)].push_back(p);
+			head++;
+		}
+	else
+		while (tail > 0)
+		{
+			std::lock_guard<std::mutex> lock(states_mutex);
+			for (auto const& n : states[tail].nodes)
+				if (auto p = n.lock())
+					found[czr::node_entry::calc_distance(target_a, p->node_id)].push_back(p);
+			tail--;
+		}
+
+	std::vector<std::shared_ptr<czr::node_entry>> ret;
+	for (auto& nodes : found)
+		for (auto const& n : nodes.second)
+			if (ret.size() < s_bucket_size && !!n->endpoint)
+				ret.push_back(n);
+	return ret;
+}
+
+std::shared_ptr<czr::node_entry> czr::node_discover::add_node(czr::node_info const & node_a, czr::node_relation relation_a)
+{
+	if (relation_a == czr::node_relation::known)
+	{
+		auto ret = std::make_shared<czr::node_entry>(node_info.node_id, node_a.node_id, node_a.endpoint);
+		ret->pending = false;
+		{
+			std::lock_guard<std::mutex> lock(nodes_mutex);
+			nodes[node_a.node_id] = ret;
+		}
+		note_active_node(node_a.node_id, node_a.endpoint);
+		return ret;
+	}
+
+	if (!node_a.endpoint)
+		return std::shared_ptr<czr::node_entry>();
+
+	{
+		std::lock_guard<std::mutex> lock(nodes_mutex);
+		if (nodes.count(node_a.node_id))
+			return nodes[node_a.node_id];
+	}
+
+	auto ret = std::make_shared<czr::node_entry>(node_info.node_id, node_a.node_id, node_a.endpoint);
+	{
+		std::lock_guard<std::mutex> lock(nodes_mutex);
+		nodes[node_a.node_id] = ret;
+	}
+
+	BOOST_LOG_TRIVIAL(debug) << "addNode pending for " << node_a.endpoint;
+
+	ping(node_a.endpoint);
+
+	return ret;
+}
+
+void czr::node_discover::drop_node(std::shared_ptr<czr::node_entry> node_a)
+{
+	{
+		std::lock_guard<std::mutex> lock(states_mutex);
+		czr::node_bucket & s = bucket_UNSAFE(node_a.get());
+		s.nodes.remove_if([node_a](std::weak_ptr<czr::node_entry> const & bucket_entry)
+		{
+			return bucket_entry.lock() == node_a;
+		});
+	}
+
+	{
+		std::lock_guard<std::mutex> lock(nodes_mutex);
+		nodes.erase(node_a->node_id);
+	}
+
+	// notify host
+	BOOST_LOG_TRIVIAL(debug) << "p2p.nodes.drop " << node_a->node_id.to_string();
+	if (node_event_handler)
+		node_event_handler->append_event(node_a->node_id, czr::node_discover_event_type::node_entry_dropped);
+}
+
+czr::node_bucket & czr::node_discover::bucket_UNSAFE(czr::node_entry const * node_a)
+{
+	return states[node_a->distance - 1];
+}
+
+void czr::node_discover::note_active_node(czr::node_id const & node_id_a, bi::udp::endpoint const& endpoint_a)
+{
+	//self
+	if (node_id_a == node_info.node_id)
+		return;
+
+	std::shared_ptr<czr::node_entry> new_node = get_node(node_id_a);
+	if (new_node && !new_node->pending)
+	{
+		BOOST_LOG_TRIVIAL(debug) << "Noting active node: " << node_id_a.to_string() << " " << endpoint_a.address().to_string()	<< ":" << endpoint.port();
+		new_node->endpoint.address = endpoint_a.address();
+		new_node->endpoint.udp_port = endpoint_a.port();
+
+		std::shared_ptr<czr::node_entry> node_to_evict;
+		{
+			std::lock_guard<std::mutex> lock(states_mutex);
+			// Find a bucket to put a node to
+			czr::node_bucket & s = bucket_UNSAFE(new_node.get());
+			auto & bucket_nodes = s.nodes;
+
+			// check if the node is already in the bucket
+			auto it = bucket_nodes.begin();
+			for (; it != bucket_nodes.end() ; it++)
+			{
+				if (it->lock() == new_node)
+					break;
+			}
+
+			if (it != bucket_nodes.end())
+			{
+				// if it was in the bucket, move it to the last position
+				bucket_nodes.splice(bucket_nodes.end(), bucket_nodes, it);
+			}
+			else
+			{
+				if (bucket_nodes.size() < czr::s_bucket_size)
+				{
+					// if it was not there, just add it as a most recently seen node
+					// (i.e. to the end of the list)
+					bucket_nodes.push_back(new_node);
+					if (node_event_handler)
+						node_event_handler->append_event(new_node->node_id, czr::node_discover_event_type::node_entry_added);
+				}
+				else
+				{
+					// if bucket is full, start eviction process for the least recently seen node
+					node_to_evict = bucket_nodes.front().lock();
+					// It could have been replaced in addNode(), then weak_ptr is expired.
+					// If so, just add a new one instead of expired
+					if (!node_to_evict)
+					{
+						bucket_nodes.pop_front();
+						bucket_nodes.push_back(new_node);
+						if (node_event_handler)
+							node_event_handler->append_event(new_node->node_id, czr::node_discover_event_type::node_entry_added);
+					}
+				}
+			}
+		}
+
+		if (node_to_evict)
+			evict(node_to_evict, new_node);
+	}
+}
+
+void czr::node_discover::evict(std::shared_ptr<czr::node_entry> const & node_to_evict, std::shared_ptr<czr::node_entry> const & new_node)
+{
+	if (!socket->is_open())
+		return;
+
+	unsigned evicts = 0;
+	{
+		std::lock_guard<std::mutex> lock(evictions_mutex);
+		czr::eviction_entry eviction_entry{ new_node->node_id, std::chrono::steady_clock::now() };
+		evictions.emplace(node_to_evict->node_id, eviction_entry);
+		evicts = evictions.size();
+	}
+
+	if (evicts == 1)
+		do_check_evictions();
+	if (node_to_evict)
+		ping(node_to_evict->endpoint);
+}
+
+void czr::node_discover::do_check_evictions()
+{
+	eviction_check_timer = std::make_unique<ba::deadline_timer>(io_service);
+	eviction_check_timer->expires_from_now(eviction_check_interval);
+	eviction_check_timer->async_wait([this](boost::system::error_code const& ec)
+	{
+		if (ec)
+			BOOST_LOG_TRIVIAL(debug) << "Check Evictions timer was probably cancelled: " << ec.value() << " " << ec.message();
+
+		if (ec.value() == boost::asio::error::operation_aborted)
+			return;
+
+		bool evictions_remain = false;
+		std::list<std::shared_ptr<czr::node_entry>> drop;
+		{
+			std::lock_guard<std::mutex> evictions_lock(evictions_mutex);
+			std::lock_guard<std::mutex> nodes_lock(nodes_mutex);
+			for (auto & e : evictions)
+				if (std::chrono::steady_clock::now() - e.second.evicted_time > req_timeout)
+					if (nodes.count(e.second.new_node_id))
+						drop.push_back(nodes[e.second.new_node_id]);
+			evictions_remain = (evictions.size() - drop.size() > 0);
+		}
+
+		drop.unique();
+		for (auto n : drop)
+			drop_node(n);
+
+		if (evictions_remain)
+			do_check_evictions();
+	});
+}
+
+void czr::node_discover::process_events()
+{
+	if (node_event_handler)
+		node_event_handler->process_events();
+}
+
+void czr::node_discover::set_event_handler(czr::node_discover_event_handler * handler)
+{
+	node_event_handler.reset(handler);
 }

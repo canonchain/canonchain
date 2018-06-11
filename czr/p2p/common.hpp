@@ -8,33 +8,8 @@
 
 #include <vector>
 
-#include <boost/asio.hpp>
 #include <boost/property_tree/ptree.hpp>
 #include <boost/date_time/posix_time/posix_time.hpp>
-
-namespace bi = boost::asio::ip;
-
-//std::hash for asio::adress
-namespace std
-{
-	template <> struct hash<bi::address>
-	{
-		size_t operator()(bi::address const& _a) const
-		{
-			if (_a.is_v4())
-				return std::hash<unsigned long>()(_a.to_v4().to_ulong());
-			if (_a.is_v6())
-			{
-				auto const& range = _a.to_v6().to_bytes();
-				return boost::hash_range(range.begin(), range.end());
-			}
-			if (_a.is_unspecified())
-				return static_cast<size_t>(0x3487194039229152ull);  // Chosen by fair dice roll, guaranteed to be random
-			return std::hash<std::string>()(_a.to_string());
-		}
-	};
-
-}
 
 namespace czr
 {

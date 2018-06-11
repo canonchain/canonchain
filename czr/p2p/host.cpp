@@ -19,6 +19,12 @@ void czr::host::start()
 {
 	start_listen();
 	accept_loop();
+
+	run();
+}
+
+void czr::host::run()
+{
 }
 
 void czr::host::start_listen()

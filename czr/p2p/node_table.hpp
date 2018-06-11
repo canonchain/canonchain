@@ -71,6 +71,15 @@ namespace czr
 		operator bi::udp::endpoint() const { return bi::udp::endpoint(address, udp_port); }
 		operator bi::tcp::endpoint() const { return bi::tcp::endpoint(address, tcp_port); }
 
+		operator bool() const { return !address.is_unspecified() && udp_port > 0 && tcp_port > 0; }
+
+		bool operator==(czr::node_endpoint const& other) const {
+			return address == other.address && udp_port == other.udp_port && tcp_port == other.tcp_port;
+		}
+		bool operator!=(czr::node_endpoint const& other) const {
+			return !operator==(other);
+		}
+
 		bi::address address;
 		uint16_t udp_port = 0;
 		uint16_t tcp_port = 0;
@@ -122,24 +131,5 @@ namespace czr
 	public:
 		unsigned distance;
 		std::list<std::weak_ptr<czr::node_entry>> nodes;
-	};
-
-	class node_table
-	{
-	public:
-		node_table(czr::node_id const & node_id_a);
-		std::vector<std::shared_ptr<czr::node_entry>> nearest_node_entries(czr::node_id const & node_id_a);
-		std::shared_ptr<czr::node_entry> get_node(czr::node_id const & node_id);
-		bool have_node(czr::node_id const & node_id);
-		void add_node(czr::node_info const & node_info);
-		void active_node(czr::node_id const & node_id, bi::udp::endpoint const & from);
-		void drop_node(czr::node_id const & node_id);
-
-		
-		czr::node_id my_node_id;
-		std::array<czr::node_bucket, s_bins> buckets;
-
-		std::mutex nodes_mutex;
-		std::unordered_map<czr::node_id, std::shared_ptr<czr::node_entry>> nodes;	
 	};
 }
