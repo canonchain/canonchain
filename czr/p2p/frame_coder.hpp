@@ -1,8 +1,6 @@
 #pragma once
 
 #include <czr/p2p/common.hpp>
-#include <czr/rlp/Common.h>
-
 
 namespace czr
 {

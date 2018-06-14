@@ -24,7 +24,7 @@ czr::graph_compare_result czr::graph::compare(MDB_txn * transaction_a, czr::bloc
 
 	if (state1.level == state2.level)
 		return graph_compare_result::non_related;
-	if(state1.is_free || state2.is_free)
+	if(state1.is_free && state2.is_free)
 		return graph_compare_result::non_related;
 
 	// genesis

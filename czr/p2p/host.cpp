@@ -1,52 +1,87 @@
 #include "host.hpp"
 
-czr::host::host(czr::node & node_a, czr::p2p_config const & config_a, boost::asio::io_service & io_service_a,
-	czr::node_id const & node_id_a, std::list<std::shared_ptr<czr::icapability>> const & capabilities_a) :
-	node(node_a),
+#include<boost/algorithm/string.hpp>
+
+czr::host::host(czr::p2p_config const & config_a, boost::asio::io_service & io_service_a,
+	std::list<std::shared_ptr<czr::icapability>> const & capabilities_a, 
+	dev::bytesConstRef restore_network_bytes_a) :
 	config(config_a),
 	io_service(io_service_a),
-	node_id(node_id_a),
+	alias(network_alias(restore_network_bytes_a)),
 	acceptor(std::make_unique<bi::tcp::acceptor>(io_service_a)),
-	resolver(std::make_unique<bi::tcp::resolver>(io_service_a))
+	restore_network_bytes(restore_network_bytes_a.toBytes()),
+	is_run(false),
+	last_ping(std::chrono::steady_clock::time_point::min())
 {
 	for (auto & cap : capabilities_a)
 	{
 		capabilities.insert(std::make_pair(cap->desc, cap));
 	}
+
+	for (std::string const & bn : config.bootstrap_nodes)
+	{
+		if (!boost::istarts_with(bn, "czrnode://"))
+			BOOST_LOG_TRIVIAL(warning) << "Invald boostrap node :" << bn;
+
+		std::string node_str(bn.substr(10));
+
+		std::vector<std::string> node_id_and_addr;
+		boost::split(node_id_and_addr, node_str, boost::is_any_of("@"));
+		if (node_id_and_addr.size() != 2)
+			BOOST_LOG_TRIVIAL(warning) << "Invald boostrap node :" << bn;
+		czr::node_id node_id;
+		bool error(node_id.decode_hex(node_id_and_addr[0]));
+		if(error)
+			BOOST_LOG_TRIVIAL(warning) << "Invald boostrap node :" << bn;
+
+		std::string addr(node_id_and_addr[1]);
+		bi::tcp::endpoint ep;
+		error = resolve_host(addr, ep);
+		if(error)
+			BOOST_LOG_TRIVIAL(warning) << "Invald boostrap node :" << bn;
+
+		czr::node_endpoint node_ep (ep.address(), ep.port(), ep.port());
+		bootstrap_nodes.push_back(std::make_shared<czr::node_info>(node_id, node_ep));
+	}
 }
 
 void czr::host::start()
 {
-	start_listen();
-	accept_loop();
+	start_time = std::chrono::steady_clock::now();
 
-	run();
-}
+	is_run = true;
 
-void czr::host::run()
-{
-}
-
-void czr::host::start_listen()
-{
-	//todo: support ipv6
-
-	bi::tcp::endpoint endpoint;
+	bi::address listen_ip;
 	try
 	{
-		bi::tcp::resolver::query query(bi::tcp::v4(), config.host.empty() ? bi::address_v4::any().to_string() : config.host, 
-			std::to_string(config.port));
-		endpoint = *resolver->resolve(query);	
+		listen_ip = config.listen_ip.empty() ? bi::address_v4() : bi::address::from_string(config.listen_ip);
 	}
 	catch (std::exception const & e)
 	{
-		BOOST_LOG(node.log) << boost::str(boost::format("Error while resolve %1%:%2%, message: %3%")
-			% config.host % config.port % e.what());
-		throw;
+		BOOST_LOG_TRIVIAL(error) << "Invalid listen_ip:" << listen_ip << ", message:" << e.what();
+		return;
 	}
 
+	start_listen(listen_ip, config.port);
+	accept_loop();
+
+	node_table = std::make_shared<czr::node_table>(io_service, alias, czr::node_endpoint(listen_ip, config.port, config.port));
+	node_table->set_event_handler(new czr::host_node_table_event_handler(*this));
+	node_table->start();
+
+	restore_network(&restore_network_bytes);
+
+	BOOST_LOG_TRIVIAL(info) << "P2P started, node id: " << alias.pub.to_string();
+
+	run_timer = std::make_unique<ba::deadline_timer>(io_service);
+	run();
+}
+
+void czr::host::start_listen(bi::address const & listen_ip, uint16_t const & port)
+{
 	try
 	{
+		bi::tcp::endpoint endpoint(listen_ip, port);
 		acceptor->open(endpoint.protocol());
 		acceptor->set_option(bi::tcp::acceptor::reuse_address(true));
 		acceptor->bind(endpoint);
@@ -54,26 +89,37 @@ void czr::host::start_listen()
 	}
 	catch (std::exception const & e)
 	{
-		BOOST_LOG(node.log) << boost::str(boost::format("Error while acceptor listen on %1%:%2%, message: %3%")
-			% (config.host.empty() ? endpoint.address().to_string() : config.host) % endpoint.port() % e.what());
+		BOOST_LOG_TRIVIAL(error) << boost::str(boost::format("Error while acceptor listen on %1%:%2%, message: %3%")
+			% listen_ip % port % e.what());
 		throw;
 	}
 }
 
 void czr::host::accept_loop()
 {
+	if (!is_run)
+		return;
+
 	auto socket(std::make_shared<bi::tcp::socket>(io_service));
 	auto this_l(shared_from_this());
 	acceptor->async_accept(*socket, [socket, this_l](boost::system::error_code const & ec) {
-		if (ec)
+		if (ec || !this_l->is_run)
 		{
-			BOOST_LOG(this_l->node.log) << boost::str(boost::format("Error while accepting connections: %1%") % ec.message());
+			BOOST_LOG_TRIVIAL(warning) << boost::str(boost::format("Error while accepting connections: %1%") % ec.message());
+			try
+			{
+				if (socket->is_open())
+					socket->close();
+			}
+			catch (...) {}
 		}
 		else
 		{
-			if (this_l->peers.size() > this_l->config.max_peers)
+			if (this_l->avaliable_peer_count(peer_type::ingress) > 0)
 			{
-				BOOST_LOG(this_l->node.log) << boost::str(boost::format("Dropping socket due to maximum peer count %1%, current peer count %2%, remote endpoint: %3%") % this_l->config.max_peers % this_l->peers.size() % socket->remote_endpoint());
+				BOOST_LOG_TRIVIAL(info) << "Dropping socket due to too many peers, peer count: " << this_l->peers.size() 
+					<< ",pending peers: " << this_l->pending_conns.size() << ",remote endpoint: " << socket->remote_endpoint() 
+					<< ",max peers: " << this_l->max_peer_size(peer_type::ingress);
 				try
 				{
 					if (socket->is_open())
@@ -89,17 +135,175 @@ void czr::host::accept_loop()
 	});
 }
 
+void czr::host::run()
+{
+	if (!is_run)
+		return;
+
+	node_table->process_events();
+
+	keep_alive_peers();
+
+	size_t avaliable_count = avaliable_peer_count(peer_type::egress);
+	if (avaliable_count > 0)
+	{
+		//random find node in node table
+		auto node_infos(node_table->get_random_nodes(avaliable_count));
+		for (auto nf : node_infos)
+		{
+			connect(nf);
+		}
+
+		//connect to bootstrap nodes
+		if (peers.size() == 0 && std::chrono::steady_clock::now() - start_time > node_fallback_interval)
+		{
+			for (auto bn : bootstrap_nodes)
+			{
+				if (!avaliable_peer_count(peer_type::egress))
+					break;
+				connect(bn);
+			}
+		}
+	}
+
+	run_timer->expires_from_now(run_interval);
+	run_timer->async_wait([this](boost::system::error_code const & error)
+	{
+		run();
+	});
+}
+
+bool czr::host::resolve_host(std::string const & addr, bi::tcp::endpoint & ep)
+{
+	bool error;
+	std::vector<std::string> split;
+	boost::split(split, addr, boost::is_any_of(":"));
+	unsigned port = czr::p2p_default_port;
+
+	std::string host(split[0]);
+	std::string port_str(split[1]);
+
+	try
+	{
+		if (split.size() > 1)
+			port = static_cast<uint16_t>(stoi(port_str));
+	}
+	catch (...) {}
+
+	boost::system::error_code ec;
+	bi::address address = bi::address::from_string(host, ec);
+	if (!ec)
+	{
+		ep.address(address);
+		ep.port(port);
+	}
+	else
+	{
+		boost::system::error_code ec;
+		// resolve returns an iterator (host can resolve to multiple addresses)
+		bi::tcp::resolver r(io_service);
+		auto it = r.resolve(bi::tcp::resolver::query(host, std::to_string(port)), ec);
+		if (ec)
+		{
+			BOOST_LOG_TRIVIAL(info) << "Error resolving host address... " << addr << " : " << ec.message();
+			error = false;
+		}
+		else
+			ep = *it;
+	}
+	return error;
+}
+
+void czr::host::connect(std::shared_ptr<czr::node_info> const & ne)
+{
+	if (!is_run)
+		return;
+
+	{
+		std::lock_guard<std::mutex> lock(peers_mutex);
+		if(peers.count(ne->node_id))
+			BOOST_LOG_TRIVIAL(debug) << "Aborted connect, node already connected, node id: " << ne->node_id.to_string();
+		return;
+	}
+
+	{
+		std::lock_guard<std::mutex> lock(pending_conns_mutex);
+		// prevent concurrently connecting to a node
+		if (pending_conns.count(ne->node_id))
+			return;
+		pending_conns.insert(ne->node_id);
+	}
+
+	bi::tcp::endpoint ep(ne->endpoint);
+	BOOST_LOG_TRIVIAL(debug) << "Attempting connection to node " << ne->node_id.to_string() << "@" << ep;
+	std::shared_ptr<bi::tcp::socket> socket = std::make_shared<bi::tcp::socket>(io_service);
+	auto this_l(shared_from_this());
+	socket->async_connect(ep, [ne, ep, socket, this_l](boost::system::error_code const& ec)
+	{
+		if (ec)
+		{
+			BOOST_LOG_TRIVIAL(info) << "Connection refused to node " << ne->node_id.to_string() << "@" << ep << ", message: " << ec.message();
+		}
+		else
+		{
+			BOOST_LOG_TRIVIAL(info) << "Connecting to " << ne->node_id.to_string() << "@" << ep;
+			this_l->do_handshake(socket);
+		}
+
+		{
+			std::lock_guard<std::mutex> lock(this_l->pending_conns_mutex);
+			this_l->pending_conns.erase(ne->node_id);
+		}	
+	});
+}
+
+size_t czr::host::avaliable_peer_count(peer_type const & type)
+{
+	return peers.size() + pending_conns.size() - max_peer_size(type);
+}
+
+uint32_t czr::host::max_peer_size(peer_type const & type)
+{
+	if (type == peer_type::egress)
+		return config.max_peers / 2 + 1;
+	else
+		return config.max_peers;
+}
+
+void czr::host::keep_alive_peers()
+{
+	if (std::chrono::steady_clock::now() - keep_alive_interval < last_ping)
+		return;
+
+	{
+		std::lock_guard<std::mutex> lock(peers_mutex);
+		for (auto it = peers.begin(); it != peers.end();)
+			if (auto p = it->second.lock())
+			{
+				p->ping();
+				++it;
+			}
+			else
+				it = peers.erase(it);
+	}
+
+	last_ping = std::chrono::steady_clock::now();
+}
+
 void czr::host::do_handshake(std::shared_ptr<bi::tcp::socket> const & socket)
 {
+	if (!is_run)
+		return;
+
 	std::shared_ptr<ba::deadline_timer> idle_timer(std::make_shared<ba::deadline_timer>(socket->get_io_service()));
 	idle_timer->expires_from_now(handshake_timeout);
 	auto this_l(shared_from_this());
-	idle_timer->async_wait([this_l, socket, idle_timer](boost::system::error_code const& _ec)
+	idle_timer->async_wait([this_l, socket, idle_timer](boost::system::error_code const& ec)
 	{
-		if (!_ec)
+		if (!ec)
 		{
 			if (!socket->remote_endpoint().address().is_unspecified())
-				BOOST_LOG(this_l->node.log) << boost::str(boost::format("Handshake timeout, remote endpoint: %1%") % socket->remote_endpoint());
+				BOOST_LOG_TRIVIAL(warning) << boost::str(boost::format("Handshake timeout, remote endpoint: %1%") % socket->remote_endpoint());
 			try
 			{
 				if (socket->is_open())
@@ -115,10 +319,12 @@ void czr::host::do_handshake(std::shared_ptr<bi::tcp::socket> const & socket)
 
 void czr::host::write_handshake(std::shared_ptr<bi::tcp::socket> const & socket, std::shared_ptr<ba::deadline_timer> const & idle_timer)
 {
-	std::list<capability_desc> cap_descs;
-	for (auto const & pair : capabilities)
-		cap_descs.push_back(pair.second->desc);
-	czr::handshake_message handshake(czr::p2p_version, czr::czr_network, node_id, cap_descs);
+	if (!is_run)
+		return;
+	
+	czr::uint256_union my_nonce;
+	czr::random_pool.GenerateBlock(my_nonce.bytes.data(), my_nonce.bytes.size());
+	czr::handshake_message handshake(czr::p2p_version, czr::czr_network, my_nonce);
 
 	dev::RLPStream s;
 	s.append((unsigned)czr::packet_type::handshake);
@@ -127,51 +333,53 @@ void czr::host::write_handshake(std::shared_ptr<bi::tcp::socket> const & socket,
 	dev::bytes write_buffer;
 	s.swapOut(write_buffer);
 
-	std::shared_ptr<czr::frame_coder> frame_coder(std::make_shared<czr::frame_coder>());
-	frame_coder->write_frame(&write_buffer, write_buffer);
+	czr::frame_coder frame_coder;
+	frame_coder.write_frame(&write_buffer, write_buffer);
 
 	auto this_l(shared_from_this());
-	ba::async_write(*socket, ba::buffer(write_buffer), [this_l, socket, idle_timer, frame_coder](const boost::system::error_code& ec, std::size_t bytes_transferred) {
+	ba::async_write(*socket, ba::buffer(write_buffer), [this_l, socket, idle_timer, my_nonce](const boost::system::error_code& ec, std::size_t bytes_transferred) {
 		if (!ec)
 		{
-			this_l->read_handshake(socket, idle_timer, frame_coder);
+			this_l->read_handshake(socket, idle_timer, my_nonce);
 		}
 		else
 		{
-			BOOST_LOG(this_l->node.log) << boost::str(boost::format("Error while sending handshake, message: %1%") % ec.message());
+			BOOST_LOG_TRIVIAL(warning) << boost::str(boost::format("Error while sending handshake, message: %1%") % ec.message());
 		}
 	});
 }
 
-void czr::host::read_handshake(std::shared_ptr<bi::tcp::socket> const & socket, std::shared_ptr<ba::deadline_timer> const & idle_timer, std::shared_ptr<czr::frame_coder> const & frame_coder_a)
+void czr::host::read_handshake(std::shared_ptr<bi::tcp::socket> const & socket, std::shared_ptr<ba::deadline_timer> const & idle_timer, czr::uint256_union const & my_nonce)
 {
+	if (!is_run)
+		return;
+
 	//read header
 	dev::bytes header_buffer;
 	auto this_l(shared_from_this());
-	ba::async_read(*socket, ba::buffer(header_buffer, czr::message_header_size), [this_l, header_buffer, socket, idle_timer, frame_coder_a](const boost::system::error_code& ec, std::size_t bytes_transferred)
+	ba::async_read(*socket, ba::buffer(header_buffer, czr::tcp_header_size), [this_l, header_buffer, socket, idle_timer, my_nonce](const boost::system::error_code& ec, std::size_t bytes_transferred)
 	{
 		if (!ec)
 		{
 			//read packet
-			uint32_t packet_size(frame_coder_a->deserialize_packet_size(header_buffer));
+			czr::frame_coder frame_coder;
+			uint32_t packet_size(frame_coder.deserialize_packet_size(header_buffer));
 			if (packet_size > czr::max_tcp_packet_size)
 			{
-				BOOST_LOG(this_l->node.log) << boost::str(boost::format("Too large packet size %1%, max message packet size %2%") % packet_size % czr::max_tcp_packet_size);
+				BOOST_LOG_TRIVIAL(debug) << boost::str(boost::format("Too large packet size %1%, max message packet size %2%") % packet_size % czr::max_tcp_packet_size);
 				return;
 			}
 
 			std::shared_ptr<dev::bytes> packet_buffer(std::make_shared<dev::bytes>());
-			ba::async_read(*socket, ba::buffer(*packet_buffer, packet_size), [this_l, packet_buffer, socket, idle_timer, frame_coder_a](const boost::system::error_code& ec, std::size_t bytes_transferred)
+			ba::async_read(*socket, ba::buffer(*packet_buffer, packet_size), [this_l, packet_buffer, socket, idle_timer, my_nonce](const boost::system::error_code& ec, std::size_t bytes_transferred)
 			{
-				idle_timer->cancel();
-
 				if (!ec)
 				{
 					dev::bytesConstRef packet(packet_buffer.get());
 					czr::packet_type packet_type = (czr::packet_type)dev::RLP(packet.cropped(0, 1)).toInt<unsigned>();
 					if(packet_type != czr::packet_type::handshake)
 					{
-						BOOST_LOG(this_l->node.log) <<boost::str(boost::format("Invalid shakehand packet type: %1%") % (unsigned)packet_type);
+						BOOST_LOG_TRIVIAL(debug) <<boost::str(boost::format("Invalid shakehand packet type: %1%") % (unsigned)packet_type);
 						return;
 					}
 
@@ -179,34 +387,141 @@ void czr::host::read_handshake(std::shared_ptr<bi::tcp::socket> const & socket, 
 					{
 						dev::RLP r(packet.cropped(1));
 						czr::handshake_message handshake(r);
-						this_l->start_peer(socket, handshake, frame_coder_a);
+						if(handshake.network != czr::czr_network)
+							return;
+
+						this_l->write_ack(socket, idle_timer, handshake, my_nonce);
 					}
 					catch (std::exception const & e)
 					{
-						BOOST_LOG(this_l->node.log) << "Error while starting peer, message: " << e.what();
+						BOOST_LOG_TRIVIAL(debug) << "Error while starting peer, message: " << e.what();
 					}
 				}
 				else
 				{
-					BOOST_LOG(this_l->node.log) << boost::str(boost::format("Error while reading handshake data, message: %1%") % ec.message());
+					BOOST_LOG_TRIVIAL(debug) << boost::str(boost::format("Error while reading handshake data, message: %1%") % ec.message());
 				}
 			});
 		}
 		else
 		{
-			BOOST_LOG(this_l->node.log) << boost::str(boost::format("Error while reading handshake header, message: %1%") % ec.message());
+			BOOST_LOG_TRIVIAL(warning) << boost::str(boost::format("Error while reading handshake header, message: %1%") % ec.message());
 		}
 	});
 }
 
-void czr::host::start_peer(std::shared_ptr<bi::tcp::socket> const & socket, czr::handshake_message const & handshake, std::shared_ptr<czr::frame_coder> const & frame_coder_a)
+void czr::host::write_ack(std::shared_ptr<bi::tcp::socket> const & socket, std::shared_ptr<ba::deadline_timer> const & idle_timer, czr::handshake_message const & handshake, czr::uint256_union const & my_nonce)
 {
-	czr::node_id remote_node_id(handshake.node_id);
+	if (!is_run)
+		return;
+
+	std::list<capability_desc> cap_descs;
+	for (auto const & pair : capabilities)
+		cap_descs.push_back(pair.second->desc);
+
+	czr::signature nonce_sig(czr::sign_message(alias.prv, alias.pub, handshake.nonce));
+	czr::ack_message ack(alias.pub, nonce_sig, cap_descs);
+
+	dev::RLPStream s;
+	s.append((unsigned)czr::packet_type::ack);
+	ack.stream_RLP(s);
+
+	dev::bytes write_buffer;
+	s.swapOut(write_buffer);
+
+	czr::frame_coder frame_coder;
+	frame_coder.write_frame(&write_buffer, write_buffer);
+
+	auto this_l(shared_from_this());
+	ba::async_write(*socket, ba::buffer(write_buffer), [this_l, socket, idle_timer, my_nonce](const boost::system::error_code& ec, std::size_t bytes_transferred) {
+		if (!ec)
+		{
+			this_l->read_ack(socket, idle_timer, my_nonce);
+		}
+		else
+		{
+			BOOST_LOG_TRIVIAL(warning) << boost::str(boost::format("Error while sending handshake, message: %1%") % ec.message());
+		}
+	});
+}
+
+void czr::host::read_ack(std::shared_ptr<bi::tcp::socket> const & socket, std::shared_ptr<ba::deadline_timer> const & idle_timer, czr::uint256_union const & my_nonce)
+{
+	if (!is_run)
+		return;
+
+	//read header
+	dev::bytes header_buffer;
+	auto this_l(shared_from_this());
+	ba::async_read(*socket, ba::buffer(header_buffer, czr::tcp_header_size), [this_l, header_buffer, socket, idle_timer, my_nonce](const boost::system::error_code& ec, std::size_t bytes_transferred)
+	{
+		if (!ec)
+		{
+			//read packet
+			czr::frame_coder frame_coder;
+			uint32_t packet_size(frame_coder.deserialize_packet_size(header_buffer));
+			if (packet_size > czr::max_tcp_packet_size)
+			{
+				BOOST_LOG_TRIVIAL(debug) << boost::str(boost::format("Too large packet size %1%, max message packet size %2%") % packet_size % czr::max_tcp_packet_size);
+				return;
+			}
+
+			std::shared_ptr<dev::bytes> packet_buffer(std::make_shared<dev::bytes>());
+			ba::async_read(*socket, ba::buffer(*packet_buffer, packet_size), [this_l, packet_buffer, socket, idle_timer, my_nonce](const boost::system::error_code& ec, std::size_t bytes_transferred)
+			{
+				idle_timer->cancel();
+
+				if (!ec)
+				{
+					dev::bytesConstRef packet(packet_buffer.get());
+					czr::packet_type packet_type = (czr::packet_type)dev::RLP(packet.cropped(0, 1)).toInt<unsigned>();
+					if (packet_type != czr::packet_type::ack)
+					{
+						BOOST_LOG_TRIVIAL(debug) << boost::str(boost::format("Invalid shakehand packet type: %1%") % (unsigned)packet_type);
+						return;
+					}
+
+					try
+					{
+						dev::RLP r(packet.cropped(1));
+						czr::ack_message ack(r);
+						if (!czr::validate_message(ack.node_id, my_nonce, ack.nonce_sig))
+						{
+							BOOST_LOG_TRIVIAL(debug) << "Invalid nonce sig, node id: " << ack.node_id.to_string() << ", nonce: " << my_nonce.to_string() << ", sig:" << ack.nonce_sig.to_string();
+							return;
+						}
+
+						this_l->start_peer(socket, ack);
+					}
+					catch (std::exception const & e)
+					{
+						BOOST_LOG_TRIVIAL(debug) << "Error while starting peer, message: " << e.what();
+					}
+				}
+				else
+				{
+					BOOST_LOG_TRIVIAL(debug) << boost::str(boost::format("Error while reading handshake data, message: %1%") % ec.message());
+				}
+			});
+		}
+		else
+		{
+			BOOST_LOG_TRIVIAL(warning) << boost::str(boost::format("Error while reading handshake header, message: %1%") % ec.message());
+		}
+	});
+}
+
+void czr::host::start_peer(std::shared_ptr<bi::tcp::socket> const & socket, czr::ack_message const & ack)
+{
+	if (!is_run)
+		return;
+
+	czr::node_id remote_node_id(ack.node_id);
 	try
 	{
-		std::shared_ptr<czr::peer> new_peer(std::make_shared<czr::peer>(*this, socket, remote_node_id, frame_coder_a));
+		std::shared_ptr<czr::peer> new_peer(std::make_shared<czr::peer>(socket, remote_node_id));
 		//check self connect
-		if (remote_node_id == node_id)
+		if (remote_node_id == alias.pub)
 		{
 			new_peer->disconnect(czr::disconnect_reason::self_connect);
 			return;
@@ -221,27 +536,30 @@ void czr::host::start_peer(std::shared_ptr<bi::tcp::socket> const & socket, czr:
 				auto exist_peer(peers[remote_node_id].lock());
 				if (exist_peer->is_connected())
 				{
-					BOOST_LOG(node.log) << boost::str(boost::format("Peer already exists, node id: %1%") % remote_node_id.to_string());
+					BOOST_LOG_TRIVIAL(info) << boost::str(boost::format("Peer already exists, node id: %1%") % remote_node_id.to_string());
 					new_peer->disconnect(czr::disconnect_reason::duplicate_peer);
 					return;
 				}
 			}
 
 			//check max peers
-			if(peers.size() >= config.max_peers)
+			if(avaliable_peer_count(peer_type::ingress) > 0)
 			{
-				BOOST_LOG(node.log) << boost::str(boost::format("Too many peer, maximum peer count %1%, current peer count %2%, node id: %3%") % config.max_peers % peers.size() % remote_node_id.to_string());
+				BOOST_LOG_TRIVIAL(info) << "Too many peers. peer count: " << peers.size() << ",pending peers: " << pending_conns.size() 
+					<< ",remote node id: " << remote_node_id.to_string() << ",remote endpoint: " << socket->remote_endpoint() 
+					<< ",max peers: " << max_peer_size(peer_type::ingress);
+
 				new_peer->disconnect(czr::disconnect_reason::too_many_peers);
 				return;
 			}
 
 			//get peer capabilities
 			unsigned offset = (unsigned)czr::packet_type::user_packet;
-			std::map<capability_desc, std::shared_ptr<peer_capability>> p_caps;
+			std::map<czr::capability_desc, std::shared_ptr<czr::peer_capability>> p_caps;
 			for (auto const & pair : capabilities)
 			{
 				capability_desc const & desc(pair.first);
-				if (std::find(handshake.cap_descs.begin(), handshake.cap_descs.end(), desc) != handshake.cap_descs.end())
+				if (std::find(ack.cap_descs.begin(), ack.cap_descs.end(), desc) != ack.cap_descs.end())
 				{
 					auto it(p_caps.find(desc));
 					if (it != p_caps.end())
@@ -250,7 +568,7 @@ void czr::host::start_peer(std::shared_ptr<bi::tcp::socket> const & socket, czr:
 					}
 
 					auto const & cap(pair.second);
-					p_caps[desc] = std::make_shared<czr::peer_capability>(desc, offset, cap);
+					p_caps[desc] = std::make_shared<czr::peer_capability>(offset, cap);
 					offset += cap->packet_count();
 				}
 			}
@@ -270,7 +588,7 @@ void czr::host::start_peer(std::shared_ptr<bi::tcp::socket> const & socket, czr:
 	}
 	catch (std::exception const & e)
 	{
-		BOOST_LOG(node.log) << boost::str(boost::format("Error while starting Peer %1% : %2%, message: %3%") 
+		BOOST_LOG_TRIVIAL(warning) << boost::str(boost::format("Error while starting Peer %1% : %2%, message: %3%")
 			% remote_node_id.to_string() % socket->remote_endpoint() % e.what());
 		try
 		{
@@ -283,5 +601,108 @@ void czr::host::start_peer(std::shared_ptr<bi::tcp::socket> const & socket, czr:
 
 void czr::host::stop()
 {
+	is_run = false;
+
+	acceptor->cancel();
+	if (acceptor->is_open())
+		acceptor->close();
+
+	// disconnect peers
+	for (unsigned n = 0;; n = 0)
+	{
+		std::lock_guard<std::mutex> lock(peers_mutex);
+		for (auto i : peers)
+			if (auto p = i.second.lock())
+				if (p->is_connected())
+				{
+					p->disconnect(czr::disconnect_reason::client_quit);
+					n++;
+				}
+		if (!n)
+			break;
+
+		// poll so that peers send out disconnect packets
+		io_service.poll();
+	}
+
+	//clear peers
+	{
+		std::lock_guard<std::mutex> lock(peers_mutex);
+		peers.clear();
+	}
 }
 
+void czr::host::on_node_table_event(czr::node_id const & node_id_a, czr::node_table_event_type const & type_a)
+{
+	if (type_a == czr::node_table_event_type::node_entry_added)
+	{
+		BOOST_LOG_TRIVIAL(info) << "Node entry added, id:" << node_id_a.to_string();
+
+		if (std::shared_ptr<czr::node_info> nf = node_table->get_node(node_id_a))
+		{
+			if(avaliable_peer_count(peer_type::egress) > 0)
+				connect(nf);
+		}
+	}
+	else if (type_a == czr::node_table_event_type::node_entry_dropped)
+	{
+		BOOST_LOG_TRIVIAL(info) << "Node entry dropped, id:" << node_id_a.to_string();
+	}
+}
+
+czr::keypair czr::host::network_alias(dev::bytesConstRef const & bytes)
+{
+	dev::RLP r(bytes);
+	if (r.itemCount() > 1)
+		return czr::keypair((czr::private_key)r[1]);
+	else
+		return czr::keypair();
+}
+
+void czr::host::restore_network(dev::bytesConstRef const & bytes)
+{
+	if (!bytes.size())
+		return;
+
+	dev::RLP r(bytes);
+	unsigned version = r[0].toInt<unsigned>();
+	if (r.itemCount() > 0 && r[0].isInt() && version >= czr::p2p_version)
+	{
+		// r[0] = version
+		// r[1] = key
+		// r[2] = nodes
+
+		for (auto i : r[2])
+		{
+			// todo: ipv6
+			if (i[0].itemCount() != 4 && i[0].size() != 4)
+				continue;
+
+			czr::node_info n((czr::node_id)i[3], czr::node_endpoint(i));
+			node_table->add_node(n);
+		}
+	}
+}
+
+dev::bytes czr::host::save_network() const
+{
+	dev::RLPStream network;
+	int count = 0;
+
+	auto node_infos = node_table->snapshot();
+	for (auto const & nf : node_infos)
+	{
+		network.appendList(4);
+		nf->endpoint.stream_RLP(network, czr::RLP_append::stream_inline);
+		network << nf->node_id;
+		count++;
+	}
+	// else: TODO: use previous configuration if available
+
+	dev::RLPStream ret(3);
+	ret << czr::p2p_version << alias.prv.data;
+	ret.appendList(count);
+	if (!!count)
+		ret.appendRaw(network.out(), count);
+	return ret.out();
+}

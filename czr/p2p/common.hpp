@@ -1,6 +1,6 @@
 #pragma once
 
-#include <czr/p2p/peer.hpp>
+#include <czr/common.hpp>
 #include <czr/config.hpp>
 #include <czr/lib/numbers.hpp>
 #include <czr/rlp/Common.h>
@@ -10,22 +10,31 @@
 
 #include <boost/property_tree/ptree.hpp>
 #include <boost/date_time/posix_time/posix_time.hpp>
+#include<boost/log/trivial.hpp>
+#include <boost/asio.hpp>
+
+namespace ba = boost::asio;
+namespace bi = boost::asio::ip;
 
 namespace czr
 {
 	using node_id = uint256_union;
+	using hash256 = uint256_union;
 
-	uint16_t const p2p_version(0);
-	boost::posix_time::milliseconds const handshake_timeout = boost::posix_time::milliseconds(5000);
-	size_t const message_header_size(4);
-	size_t const max_tcp_packet_size(4 * 1024 * 1024);
+	static uint16_t const p2p_version(0);
+	static uint16_t const p2p_default_port = czr::czr_network == czr::czr_networks::czr_live_network ? 7075 : 54000;
+	static uint16_t const p2p_default_max_peers(25);
+
+	static size_t const tcp_header_size(4);
+	static size_t const max_tcp_packet_size(4 * 1024 * 1024);
 
 	enum class packet_type
 	{
 		handshake = 0,
-		disconect = 1,
-		ping = 2,
-		pong = 3,
+		ack = 1,
+		disconect = 2,
+		ping = 3,
+		pong = 4,
 
 
 		user_packet = 0x10
@@ -37,63 +46,94 @@ namespace czr
 		p2p_config();
 		void serialize_json(boost::property_tree::ptree &) const;
 		bool deserialize_json(bool &, boost::property_tree::ptree &);
-		std::string host;
+		std::string listen_ip;
 		uint16_t port;
 		uint32_t max_peers;
-		std::vector<std::string> preconfigured_peers;
-
-		static uint16_t const default_port = czr::czr_network == czr::czr_networks::czr_live_network ? 7075 : 54000;
+		std::vector<std::string> bootstrap_nodes;
 	};
 
-	class capability_desc
+	enum RLP_append
 	{
-	public:
-		capability_desc(std::string const & name_a, uint32_t const & version_a);
-		capability_desc(dev::RLP const & r);
-		void stream_RLP(dev::RLPStream & s);
-
-		bool operator==(czr::capability_desc const & other_a) const;
-		bool operator<(czr::capability_desc const & other_a) const;
-
-		std::string name;
-		uint32_t version;
-
+		stream_list,
+		stream_inline
 	};
 
-	class peer;
-
-	class icapability
+	class node_endpoint
 	{
 	public:
-		icapability(czr::capability_desc const & desc_a, unsigned const & packet_count);
-		virtual void on_connect(czr::peer peer_a) = 0;
-		virtual bool read_packet(unsigned const & type, dev::RLP const & r) = 0;
-		unsigned packet_count() const;
+		node_endpoint() {}
 
-		czr::capability_desc desc;
-	private:
-		unsigned _packet_count;
+		node_endpoint(bi::address addr_a, uint16_t udp_a, uint16_t tcp_a) :
+			address(addr_a),
+			udp_port(udp_a),
+			tcp_port(tcp_a)
+		{
+		}
+
+		node_endpoint(dev::RLP const & r)
+		{
+			interpret_RLP(r);
+		}
+
+		void stream_RLP(dev::RLPStream & s, RLP_append append = czr::RLP_append::stream_list) const
+		{
+			if (append == czr::RLP_append::stream_list)
+				s.appendList(3);
+			if (address.is_v4())
+				s << dev::bytesConstRef(&address.to_v4().to_bytes()[0], 4);
+			else if (address.is_v6())
+				s << dev::bytesConstRef(&address.to_v6().to_bytes()[0], 16);
+			else
+				s << dev::bytes();
+			s << udp_port << tcp_port;
+		}
+
+		void interpret_RLP(dev::RLP const & r)
+		{
+			if (r[0].size() == 4)
+				address = bi::address_v4(*(bi::address_v4::bytes_type*)r[0].toBytes().data());
+			else if (r[0].size() == 16)
+				address = bi::address_v6(*(bi::address_v6::bytes_type*)r[0].toBytes().data());
+			else
+				address = bi::address();
+			udp_port = r[1].toInt<uint16_t>();
+			tcp_port = r[2].toInt<uint16_t>();
+		}
+
+		operator bi::udp::endpoint() const { return bi::udp::endpoint(address, udp_port); }
+		operator bi::tcp::endpoint() const { return bi::tcp::endpoint(address, tcp_port); }
+
+		operator bool() const { return !address.is_unspecified() && udp_port > 0 && tcp_port > 0; }
+
+		bool operator==(czr::node_endpoint const& other) const {
+			return address == other.address && udp_port == other.udp_port && tcp_port == other.tcp_port;
+		}
+		bool operator!=(czr::node_endpoint const& other) const {
+			return !operator==(other);
+		}
+
+		bi::address address;
+		uint16_t udp_port = 0;
+		uint16_t tcp_port = 0;
 	};
 
-	class peer_capability
+	class node_info
 	{
 	public:
-		peer_capability(czr::capability_desc const & desc_a, unsigned const & offset_a, std::shared_ptr<czr::icapability> const & cap_a);
-		czr::capability_desc desc;
-		unsigned offset;
-		std::shared_ptr<czr::icapability> cap;
-	};
+		node_info(czr::node_id const & node_id_a, czr::node_endpoint const & endpoint_a) :
+			node_id(node_id_a),
+			endpoint(endpoint_a)
+		{
+		}
 
-	class handshake_message
-	{
-	public:
-		handshake_message(uint16_t const & version_a, czr::czr_networks const & network_a, czr::node_id const & node_id_a, std::list<capability_desc> const & caps_a);
-		handshake_message(dev::RLP const & r);
-		void stream_RLP(dev::RLPStream & s);
+		node_info(czr::node_info const & other) :
+			node_id(other.node_id),
+			endpoint(other.endpoint)
+		{
 
-		uint16_t version;
-		czr::czr_networks network;
+		}
+
 		czr::node_id node_id;
-		std::list<capability_desc> cap_descs;
+		czr::node_endpoint endpoint;
 	};
 }

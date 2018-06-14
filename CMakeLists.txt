@@ -285,16 +285,22 @@ add_library (p2p
 	${PLATFORM_P2P_SOURCE}
 	czr/p2p/common.hpp
 	czr/p2p/common.cpp
+	czr/p2p/capability.hpp
+	czr/p2p/capability.cpp
 	czr/p2p/frame_coder.hpp
 	czr/p2p/frame_coder.cpp
+	czr/p2p/handshake.hpp
+	czr/p2p/handshake.cpp
 	czr/p2p/peer.hpp
 	czr/p2p/peer.cpp
 	czr/p2p/host.hpp
 	czr/p2p/host.cpp
-	czr/p2p/node_discover.hpp
-	czr/p2p/node_discover.cpp
 	czr/p2p/node_table.hpp
-	czr/p2p/node_table.cpp)
+	czr/p2p/node_table.cpp
+	czr/p2p/node_entry.hpp
+	czr/p2p/node_entry.cpp
+	czr/p2p/discover_packet.hpp
+	czr/p2p/discover_packet.cpp)
 
 
 SET (ACTIVE_NETWORK czr_live_network CACHE STRING "Selects which network parameters are used")

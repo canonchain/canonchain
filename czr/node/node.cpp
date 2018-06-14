@@ -792,7 +792,7 @@ czr::node::node(czr::node_init & init_a, boost::asio::io_service & service_a,
 	gap_cache(*this),
 	ledger(store),
 	wallets(init_a.error, *this),
-	network(*this, czr::p2p_config::default_port),
+	network(*this, czr::p2p_default_port),
 	peers(network.endpoint()),
 	application_path(application_path_a),
 	warmed_up(0),
@@ -1183,7 +1183,7 @@ void czr::node::keepalive_preconfigured(std::vector<std::string> const & peers_a
 {
 	for (auto i(peers_a.begin()), n(peers_a.end()); i != n; ++i)
 	{
-		keepalive(*i, czr::p2p_config::default_port);
+		keepalive(*i, czr::p2p_default_port);
 	}
 }
 

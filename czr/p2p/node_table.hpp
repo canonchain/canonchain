@@ -1,135 +1,228 @@
 #pragma once
 
-#include <czr/lib/numbers.hpp>
-#include <czr/rlp/RLP.h>
+#include <czr/p2p/common.hpp>
+#include <czr/p2p/node_entry.hpp>
+#include <czr/p2p/discover_packet.hpp>
 
-
-#include <array>
-
-#include <boost/asio.hpp>
-#include <boost/integer/static_log2.hpp>
-
-namespace ba = boost::asio;
-namespace bi = boost::asio::ip;
+#include <blake2/blake2.h>
+#include <ed25519-donna/ed25519.h>
 
 namespace czr
 {
-	using node_id = uint256_union;
-
-	// Constants for Kademlia, derived from address space.
-
-	static unsigned const s_address_byte_size = 32;							//< Size of address type in bytes.
-	static unsigned const s_bits = 8 * s_address_byte_size;					//< Denoted by n in [Kademlia].
-	static unsigned const s_bins = s_bits - 1;								//< Size of buckets (excludes root, which is us).
-
-	static unsigned const s_bucket_size = 16;								//< Denoted by k in [Kademlia]. Number of nodes stored in each bucket.
-	static unsigned const s_alpha = 3;										//< Denoted by \alpha in [Kademlia]. Number of concurrent FindNode requests.
-
-	enum RLP_append
+	static czr::hash256 blake2b_hash(dev::bytesConstRef const & bytes)
 	{
-		stream_list,
-		stream_inline
-	};
+		czr::hash256 result;
+		blake2b_state hash_l;
+		auto status(blake2b_init(&hash_l, sizeof(result.bytes)));
+		assert(status == 0);
 
-	class node_endpoint
-	{
-	public:
-		node_endpoint() {}
+		if (bytes.size() > 0)
+			blake2b_update(&hash_l, bytes.data(), bytes.size());
 
-		node_endpoint(bi::address addr_a, uint16_t udp_a, uint16_t tcp_a) :
-			address(addr_a),
-			udp_port(udp_a), 
-			tcp_port(tcp_a) 
-		{
-		}
-
-		void stream_RLP(dev::RLPStream & s, RLP_append append = czr::RLP_append::stream_list) const
-		{
-			if (append == czr::RLP_append::stream_list)
-				s.appendList(3);
-			if (address.is_v4())
-				s << dev::bytesConstRef(&address.to_v4().to_bytes()[0], 4);
-			else if (address.is_v6())
-				s << dev::bytesConstRef(&address.to_v6().to_bytes()[0], 16);
-			else
-				s << dev::bytes();
-			s << udp_port << tcp_port;
-		}
-
-		void interpret_RLP(dev::RLP const & r)
-		{
-			if (r[0].size() == 4)
-				address = bi::address_v4(*(bi::address_v4::bytes_type*)r[0].toBytes().data());
-			else if (r[0].size() == 16)
-				address = bi::address_v6(*(bi::address_v6::bytes_type*)r[0].toBytes().data());
-			else
-				address = bi::address();
-			udp_port = r[1].toInt<uint16_t>();
-			tcp_port = r[2].toInt<uint16_t>();
-		}
-
-		operator bi::udp::endpoint() const { return bi::udp::endpoint(address, udp_port); }
-		operator bi::tcp::endpoint() const { return bi::tcp::endpoint(address, tcp_port); }
-
-		operator bool() const { return !address.is_unspecified() && udp_port > 0 && tcp_port > 0; }
-
-		bool operator==(czr::node_endpoint const& other) const {
-			return address == other.address && udp_port == other.udp_port && tcp_port == other.tcp_port;
-		}
-		bool operator!=(czr::node_endpoint const& other) const {
-			return !operator==(other);
-		}
-
-		bi::address address;
-		uint16_t udp_port = 0;
-		uint16_t tcp_port = 0;
-	};
-
-	class node_info
-	{
-	public:
-		node_info(czr::node_id const & node_id_a, czr::node_endpoint const & endpoint_a):
-			node_id(node_id_a),
-			endpoint(endpoint_a)
-		{
-		}
-
-		node_info(czr::node_info const & other):
-			node_id(other.node_id),
-			endpoint(other.endpoint)
-		{
-		
-		}
-
-		czr::node_id node_id;
-		czr::node_endpoint endpoint;
-	};
-
-	class node_entry : public node_info
-	{
-	public:
-		node_entry(czr::node_id const & my_node_id, czr::node_id const & remote_node_id, czr::node_endpoint const & endpoint_a) :
-			node_info(remote_node_id, endpoint_a),
-			distance(czr::node_entry::calc_distance(my_node_id, remote_node_id)),
-			pending(true)
-		{
-		}
-		unsigned distance;	//< Node's distance (xor of _src as integer).
-		bool pending;				//< Node will be ignored until Pong is received
-
-		static unsigned calc_distance(czr::node_id const & a, czr::node_id const & b)
-		{
-			uint256_t d = (a ^ b).number();
-			unsigned ret; 
-			for (ret = 0; d >>= 1; ++ret) {};
-			return ret;
-		}
-	};
+		status = blake2b_final(&hash_l, result.bytes.data(), sizeof(result.bytes));
+		assert(status == 0);
+		return result;
+	}
 
 	class node_bucket
 	{
 	public:
 		unsigned distance;
 		std::list<std::weak_ptr<czr::node_entry>> nodes;
+	};
+
+	class send_udp_datagram
+	{
+	public:
+		send_udp_datagram(bi::udp::endpoint const & endpoint_a) :
+			endpoint(endpoint_a)
+		{
+		}
+
+		czr::hash256 add_packet_and_sign(czr::private_key const & prv_a, czr::discover_packet const & packet_a)
+		{
+			assert((byte)packet_a.packet_type());
+
+			//rlp: type || data
+			dev::RLPStream s;
+			s.appendRaw(dev::bytes(1, (byte)packet_a.packet_type()));
+			packet_a.stream_RLP(s);
+			dev::bytes const & rlp(s.out());
+			dev::bytesConstRef rlp_cref(&rlp);
+
+			//rlp hash : H(type || data)
+			czr::hash256 rlp_hash(czr::blake2b_hash(rlp_cref));
+
+			//rlp sig : S(H(type||data))
+			czr::signature rlp_sig(czr::sign_message(prv_a, packet_a.node_id, rlp_hash));
+
+			//data:  H( node id || rlp sig || rlp ) || node id || rlp sig || rlp 
+			data.resize(sizeof(czr::hash256) + sizeof(czr::node_id) + sizeof(czr::signature) + rlp.size());
+			dev::bytesRef data_hash_ref(&data[0], sizeof(czr::hash256));
+			dev::bytesRef data_node_id_ref(&data[sizeof(czr::hash256)], sizeof(czr::node_id));
+			dev::bytesRef data_sig_ref(&data[sizeof(czr::hash256) + sizeof(czr::node_id)], sizeof(czr::signature));
+			dev::bytesRef data_rlp_ref(&data[sizeof(czr::hash256) + sizeof(czr::node_id) + sizeof(czr::signature)], rlp_cref.size());
+
+			dev::bytesConstRef node_id_cref(packet_a.node_id.bytes.data(), packet_a.node_id.bytes.size());
+			node_id_cref.copyTo(data_node_id_ref);
+
+			dev::bytesConstRef sig_cref(rlp_sig.bytes.data(), rlp_sig.bytes.size());
+			sig_cref.copyTo(data_sig_ref);
+
+			rlp_cref.copyTo(data_rlp_ref);
+
+			dev::bytesConstRef bytes_to_hash(&data[sizeof(czr::hash256)], data.size() - sizeof(czr::hash256));
+			czr::hash256 hash(czr::blake2b_hash(bytes_to_hash));
+
+			dev::bytesConstRef hash_cref(hash.bytes.data(), hash.bytes.size());
+			hash_cref.copyTo(data_hash_ref);
+
+			return rlp_hash;
+		}
+
+		bi::udp::endpoint endpoint;
+		dev::bytes data;
+	};
+
+	struct eviction_entry
+	{
+		czr::node_id new_node_id;
+		std::chrono::steady_clock::time_point evicted_time;
+	};
+
+	enum class node_relation
+	{
+		unknown = 0,
+		known = 1
+	};
+
+	enum class node_table_event_type
+	{
+		node_entry_added = 0,
+		node_entry_dropped = 1
+	};
+
+	class node_table_event_handler
+	{
+	public:
+		node_table_event_handler() = default;
+		~node_table_event_handler() = default;
+
+		virtual void process_event(czr::node_id const & node_id_a, czr::node_table_event_type const & typea_a) = 0;
+
+		void process_events()
+		{
+			std::list<std::pair<czr::node_id, czr::node_table_event_type>> temp_events;
+			{
+				std::lock_guard<std::mutex> lock(events_mutex);
+				if (!node_event_handler.size())
+					return;
+				node_event_handler.unique();
+				for (auto const & n : node_event_handler)
+					temp_events.push_back(std::make_pair(n, events[n]));
+				node_event_handler.clear();
+				events.clear();
+			}
+			for (auto const & e : temp_events)
+				process_event(e.first, e.second);
+		}
+
+		void append_event(czr::node_id const & node_id_a, czr::node_table_event_type const & type_a)
+		{
+			std::lock_guard<std::mutex> lock(events_mutex);
+			node_event_handler.push_back(node_id_a);
+			events[node_id_a] = type_a;
+		}
+
+		std::list<czr::node_id> node_event_handler;
+		std::mutex events_mutex;
+		std::unordered_map<czr::node_id, czr::node_table_event_type> events;
+	};
+
+	class node_table :std::enable_shared_from_this<czr::node_table>
+	{
+	public:
+		node_table(boost::asio::io_service & io_service_a, czr::keypair const & alias_a, czr::node_endpoint const & endpoint);
+		~node_table();
+
+		void start();
+		void add_node(czr::node_info const & node_indo_a, czr::node_relation relation_a = czr::node_relation::unknown);
+		std::shared_ptr<czr::node_entry> get_node(czr::node_id node_id_a);
+		std::list<std::shared_ptr<czr::node_info>> get_random_nodes(size_t const & max_size) const;
+		std::list<std::shared_ptr<czr::node_info>> snapshot() const;
+		void process_events();
+		void set_event_handler(czr::node_table_event_handler* handler);
+
+	private:
+		// Constants for Kademlia, derived from address space.
+		static unsigned const s_address_byte_size = 32;							//< Size of address type in bytes.
+		static unsigned const s_bits = 8 * s_address_byte_size;					//< Denoted by n in [Kademlia].
+		static unsigned const s_bins = s_bits - 1;								//< Size of buckets (excludes root, which is us).
+
+		static unsigned const s_bucket_size = 16;								//< Denoted by k in [Kademlia]. Number of nodes stored in each bucket.
+		static unsigned const s_alpha = 3;										//< Denoted by \alpha in [Kademlia]. Number of concurrent FindNode requests.
+		
+		//Max iterations of discover. (discover)
+		static unsigned const max_discover_rounds = boost::static_log2<s_bits>::value;
+
+		boost::posix_time::milliseconds const discover_interval = boost::posix_time::milliseconds(7200);
+		boost::posix_time::milliseconds const eviction_check_interval = boost::posix_time::milliseconds(75);
+		//How long to wait for requests (evict, find iterations).
+		std::chrono::milliseconds const req_timeout = std::chrono::milliseconds(300);
+
+		static size_t const max_udp_packet_size = 1028;
+
+		void discover_loop();
+		void do_discover(czr::node_id const & rand_node_id, unsigned const & round = 0, std::shared_ptr<std::set<std::shared_ptr<czr::node_entry>>> tried = nullptr);
+		
+		void receive_loop();
+		void handle_receive(bi::udp::endpoint const & recv_endpoint_a, dev::bytesConstRef const & data);
+		std::unique_ptr<czr::discover_packet> interpret_packet(bi::udp::endpoint const & from, dev::bytesConstRef data);
+
+		void send(bi::udp::endpoint const & to_endpoint, czr::discover_packet const & packet);
+		void do_write();
+
+		void ping(czr::node_endpoint const & to);
+
+		void evict(std::shared_ptr<czr::node_entry> const & node_to_evict, std::shared_ptr<czr::node_entry> const & new_node);
+		void do_check_evictions();
+
+		czr::node_bucket & bucket_UNSAFE(czr::node_entry const * node_a);
+		std::vector<std::shared_ptr<czr::node_entry>> nearest_node_entries(czr::node_id const & target_a);
+		void drop_node(std::shared_ptr<czr::node_entry> _n);
+		void note_active_node(czr::node_id const & node_id, bi::udp::endpoint const & _endpoint);
+
+		ba::io_service & io_service;
+		czr::node_info my_node_info;
+		czr::private_key secret;
+		czr::node_endpoint my_endpoint;
+
+		std::unique_ptr<bi::udp::socket> socket;
+
+		bi::udp::endpoint recv_endpoint;
+		std::array<byte, max_udp_packet_size> recv_buffer;
+
+		std::deque<czr::send_udp_datagram> send_queue;
+		std::mutex send_queue_mutex;
+
+		std::unique_ptr<ba::deadline_timer> discover_timer;
+
+		//Known Node Endpoints
+		std::unordered_map<czr::node_id, std::shared_ptr<czr::node_entry>> nodes;
+		mutable std::mutex nodes_mutex;
+
+		//State of p2p node network
+		std::array<czr::node_bucket, s_bins> states;
+		mutable std::mutex states_mutex;
+
+		std::unique_ptr<ba::deadline_timer> eviction_check_timer;
+		std::unordered_map<czr::node_id, czr::eviction_entry> evictions;
+		std::mutex evictions_mutex;
+
+		//Timeouts for FindNode requests.
+		std::unordered_map<czr::node_id, std::chrono::steady_clock::time_point> find_node_timeouts;
+		std::mutex  find_node_timeouts_mutex;
+
+		std::unique_ptr<czr::node_table_event_handler> node_event_handler;
 	};
 }

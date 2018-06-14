@@ -33,6 +33,7 @@ namespace czr
 	public:
 		keypair();
 		keypair(std::string const &);
+		keypair(czr::private_key const &);
 		czr::public_key pub;
 		czr::raw_key prv;
 	};

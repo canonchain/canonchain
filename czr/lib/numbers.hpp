@@ -94,8 +94,6 @@ public:
 	raw_key(czr::private_key const & prv_a);
 	~raw_key ();
 	void decrypt (czr::uint256_union const &, czr::raw_key const &, uint128_union const &);
-	raw_key (czr::raw_key const &) = delete;
-	raw_key (czr::raw_key const &&) = delete;
 	czr::raw_key & operator= (czr::raw_key const &) = delete;
 	bool operator== (czr::raw_key const &) const;
 	bool operator!= (czr::raw_key const &) const;

@@ -19,6 +19,12 @@ czr::keypair::keypair(std::string const & prv_a)
 	ed25519_publickey(prv.data.bytes.data(), pub.bytes.data());
 }
 
+czr::keypair::keypair(czr::private_key const & prv_a) :
+	prv(prv_a)
+{
+	ed25519_publickey(prv_a.bytes.data(), pub.bytes.data());
+}
+
 czr::account_info::account_info() :
 	head(0),
 	open_block(0),
