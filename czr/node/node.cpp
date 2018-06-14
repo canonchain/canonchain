@@ -792,7 +792,7 @@ czr::node::node(czr::node_init & init_a, boost::asio::io_service & service_a,
 	gap_cache(*this),
 	ledger(store),
 	wallets(init_a.error, *this),
-	network(*this, czr::p2p_default_port),
+	network(*this, czr::p2p::default_port),
 	peers(network.endpoint()),
 	application_path(application_path_a),
 	warmed_up(0),
@@ -1155,7 +1155,6 @@ bool czr::parse_tcp_endpoint(std::string const & string, czr::tcp_endpoint & end
 void czr::node::start()
 {
 	network.receive();
-	ongoing_keepalive();
 	ongoing_store_flush();
 	ongoing_retry_late_message();
 	backup_wallet();
@@ -1183,7 +1182,7 @@ void czr::node::keepalive_preconfigured(std::vector<std::string> const & peers_a
 {
 	for (auto i(peers_a.begin()), n(peers_a.end()); i != n; ++i)
 	{
-		keepalive(*i, czr::p2p_default_port);
+		keepalive(*i, czr::p2p::default_port);
 	}
 }
 
@@ -1586,6 +1585,10 @@ czr::thread_runner::thread_runner(boost::asio::io_service & service_a, unsigned 
 			try
 			{
 				service_a.run();
+			}
+			catch (std::exception const & e)
+			{
+				auto msg = e.what();
 			}
 			catch (...)
 			{

@@ -462,10 +462,15 @@ void node_table::add_node(node_info const & node_a, node_relation relation_a)
 		return;
 	}
 
-	auto node = std::make_shared<node_entry>(my_node_info.id, node_a.id, node_a.endpoint);
 	{
 		std::lock_guard<std::mutex> lock(nodes_mutex);
-		nodes[node_a.id] = node;
+		if (nodes.count(node_a.id))
+		{
+			auto ne(nodes[node_a.id]);
+			if (ne->endpoint != node_a.endpoint)
+				ne->endpoint = node_a.endpoint;
+			return;
+		}
 	}
 
 	BOOST_LOG_TRIVIAL(debug) << "addNode pending for " << node_a.endpoint;

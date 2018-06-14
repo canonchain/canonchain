@@ -14,14 +14,14 @@ void p2p_config::serialize_json(boost::property_tree::ptree & tree_a) const
 	tree_a.put("host", listen_ip);
 	tree_a.put("port", std::to_string(port));
 	tree_a.put("max_peers", std::to_string(max_peers));
-	boost::property_tree::ptree preconfigured_peers_l;
+	boost::property_tree::ptree bootstrap_nodes_l;
 	for (auto i(bootstrap_nodes.begin()), n(bootstrap_nodes.end()); i != n; ++i)
 	{
 		boost::property_tree::ptree entry;
 		entry.put("", *i);
-		preconfigured_peers_l.push_back(std::make_pair("", entry));
+		bootstrap_nodes_l.push_back(std::make_pair("", entry));
 	}
-	tree_a.add_child("bootstrap_nodes", preconfigured_peers_l);
+	tree_a.add_child("bootstrap_nodes", bootstrap_nodes_l);
 }
 
 bool p2p_config::deserialize_json(bool & upgraded_a, boost::property_tree::ptree & tree_a)
@@ -39,9 +39,9 @@ bool p2p_config::deserialize_json(bool & upgraded_a, boost::property_tree::ptree
 		listen_ip = (tree_a.get<std::string>("host"));
 		auto port_l(tree_a.get<std::string>("port"));
 		auto max_peers_l(tree_a.get<std::string>("max_peers"));
-		auto preconfigured_peers_l(tree_a.get_child("bootstrap_nodes"));
+		auto bootstrap_nodes_l(tree_a.get_child("bootstrap_nodes"));
 		bootstrap_nodes.clear();
-		for (auto i(preconfigured_peers_l.begin()), n(preconfigured_peers_l.end()); i != n; ++i)
+		for (auto i(bootstrap_nodes_l.begin()), n(bootstrap_nodes_l.end()); i != n; ++i)
 		{
 			auto bootstrap_peer(i->second.get<std::string>(""));
 			bootstrap_nodes.push_back(bootstrap_peer);

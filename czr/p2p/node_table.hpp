@@ -141,7 +141,7 @@ namespace czr
 			std::unordered_map<node_id, node_table_event_type> events;
 		};
 
-		class node_table :std::enable_shared_from_this<node_table>
+		class node_table : public std::enable_shared_from_this<node_table>
 		{
 		public:
 			node_table(boost::asio::io_service & io_service_a, czr::keypair const & alias_a, node_endpoint const & endpoint);

@@ -383,7 +383,6 @@ namespace czr
 		czr::block_hash latest(czr::account const &);
 		czr::uint128_t balance(czr::account const &);
 		std::unique_ptr<czr::block> block(czr::block_hash const &);
-		void ongoing_keepalive();
 		void ongoing_store_flush();
 		void ongoing_retry_late_message();
 		void backup_wallet();

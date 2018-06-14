@@ -18,6 +18,7 @@ namespace czr_daemon
 		bool rpc_enable;
 		czr::rpc_config rpc;
 		czr::node_config node;
+		czr::p2p::p2p_config p2p;
 		bool witness_enable;
 	};
 }

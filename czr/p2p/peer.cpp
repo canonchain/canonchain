@@ -66,7 +66,7 @@ void peer::read_loop()
 		return;
 
 	auto this_l(shared_from_this());
-	read_buffer.reserve(czr::p2p::tcp_header_size);
+	read_buffer.resize(czr::p2p::tcp_header_size);
 	ba::async_read(*socket, boost::asio::buffer(read_buffer, czr::p2p::tcp_header_size), [this, this_l](boost::system::error_code ec, std::size_t size)
 	{
 		if (!ec)
@@ -78,7 +78,7 @@ void peer::read_loop()
 				drop(disconnect_reason::too_large_packet_size);
 				return;
 			}
-			read_buffer.reserve(packet_size);
+			read_buffer.resize(packet_size);
 			ba::async_read(*socket, boost::asio::buffer(read_buffer, packet_size), [this, this_l, packet_size](boost::system::error_code ec, std::size_t size)
 			{
 				if (!ec)

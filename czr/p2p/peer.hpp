@@ -33,25 +33,7 @@ namespace czr
 			no_disconnect = 0xffff,
 		};
 
-		std::string reason_of(disconnect_reason reason)
-		{
-			switch (reason)
-			{
-			case disconnect_reason::disconnect_requested: return "Disconnect was requested.";
-			case disconnect_reason::tcp_error: return "Low-level TCP communication error.";
-			case disconnect_reason::bad_protocol: return "Data format error.";
-			case disconnect_reason::useless_peer: return "Peer had no use for this node.";
-			case disconnect_reason::too_many_peers: return "Peer had too many connections.";
-			case disconnect_reason::duplicate_peer: return "Peer was already connected.";
-			case disconnect_reason::client_quit: return "Peer is exiting.";
-			case disconnect_reason::self_connect: return "Connected to ourselves.";
-			case disconnect_reason::too_large_packet_size: return "Too large packet size.";
-			case disconnect_reason::no_disconnect: return "(No disconnect has happened.)";
-			default: return "Unknown reason.";
-			}
-		}
-
-		class peer : std::enable_shared_from_this<peer>
+		class peer : public std::enable_shared_from_this<peer>
 		{
 		public:
 			peer(std::shared_ptr<bi::tcp::socket> const & socket_a, node_id const & node_id_a);
@@ -71,6 +53,23 @@ namespace czr
 			bool read_packet(unsigned const & type, dev::RLP const & r);
 			void do_write();
 			void drop(disconnect_reason const & reason);
+			std::string reason_of(disconnect_reason reason)
+			{
+				switch (reason)
+				{
+				case disconnect_reason::disconnect_requested: return "Disconnect was requested.";
+				case disconnect_reason::tcp_error: return "Low-level TCP communication error.";
+				case disconnect_reason::bad_protocol: return "Data format error.";
+				case disconnect_reason::useless_peer: return "Peer had no use for this node.";
+				case disconnect_reason::too_many_peers: return "Peer had too many connections.";
+				case disconnect_reason::duplicate_peer: return "Peer was already connected.";
+				case disconnect_reason::client_quit: return "Peer is exiting.";
+				case disconnect_reason::self_connect: return "Connected to ourselves.";
+				case disconnect_reason::too_large_packet_size: return "Too large packet size.";
+				case disconnect_reason::no_disconnect: return "(No disconnect has happened.)";
+				default: return "Unknown reason.";
+				}
+			}
 
 			std::shared_ptr<bi::tcp::socket> socket;
 			node_id remote_node_id;

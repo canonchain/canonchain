@@ -71,6 +71,9 @@ void host::start()
 	m_node_table->set_event_handler(new host_node_table_event_handler(*this));
 	m_node_table->start();
 
+	for (auto & node : bootstrap_nodes)
+		m_node_table->add_node(*node);
+
 	restore_network(&restore_network_bytes);
 
 	BOOST_LOG_TRIVIAL(info) << "P2P started, node id: " << alias.pub.to_string();
@@ -117,7 +120,7 @@ void host::accept_loop()
 		}
 		else
 		{
-			if (this_l->avaliable_peer_count(peer_type::ingress) > 0)
+			if (this_l->avaliable_peer_count(peer_type::ingress) == 0)
 			{
 				BOOST_LOG_TRIVIAL(info) << "Dropping socket due to too many peers, peer count: " << this_l->peers.size() 
 					<< ",pending peers: " << this_l->pending_conns.size() << ",remote endpoint: " << socket->remote_endpoint() 
@@ -261,7 +264,10 @@ void host::connect(std::shared_ptr<node_info> const & ne)
 
 size_t host::avaliable_peer_count(peer_type const & type)
 {
-	return peers.size() + pending_conns.size() - max_peer_size(type);
+	size_t count = peers.size() + pending_conns.size();
+	if (max_peer_size(type) <= count)
+		return 0;
+	return max_peer_size(type) - peers.size() - pending_conns.size();
 }
 
 uint32_t host::max_peer_size(peer_type const & type)
@@ -331,15 +337,15 @@ void host::write_handshake(std::shared_ptr<bi::tcp::socket> const & socket, std:
 	dev::RLPStream s;
 	s.append((unsigned)packet_type::handshake);
 	handshake.stream_RLP(s);
-
-	dev::bytes write_buffer;
-	s.swapOut(write_buffer);
+	
+	std::shared_ptr<dev::bytes> write_buffer(std::make_shared<dev::bytes>());
+	s.swapOut(*write_buffer);
 
 	frame_coder frame_coder;
-	frame_coder.write_frame(&write_buffer, write_buffer);
+	frame_coder.write_frame(write_buffer.get(), *write_buffer);
 
 	auto this_l(shared_from_this());
-	ba::async_write(*socket, ba::buffer(write_buffer), [this_l, socket, idle_timer, my_nonce](const boost::system::error_code& ec, std::size_t bytes_transferred) {
+	ba::async_write(*socket, ba::buffer(*write_buffer), [this_l, socket, idle_timer, my_nonce, write_buffer](const boost::system::error_code& ec, std::size_t bytes_transferred) {
 		if (!ec)
 		{
 			this_l->read_handshake(socket, idle_timer, my_nonce);
@@ -357,22 +363,22 @@ void host::read_handshake(std::shared_ptr<bi::tcp::socket> const & socket, std::
 		return;
 
 	//read header
-	dev::bytes header_buffer;
+	std::shared_ptr<dev::bytes> header_buffer(std::make_shared<dev::bytes>(czr::p2p::tcp_header_size));
 	auto this_l(shared_from_this());
-	ba::async_read(*socket, ba::buffer(header_buffer, czr::p2p::tcp_header_size), [this_l, header_buffer, socket, idle_timer, my_nonce](const boost::system::error_code& ec, std::size_t bytes_transferred)
+	ba::async_read(*socket, ba::buffer(*header_buffer, czr::p2p::tcp_header_size), [this_l, header_buffer, socket, idle_timer, my_nonce](const boost::system::error_code& ec, std::size_t bytes_transferred)
 	{
 		if (!ec)
 		{
 			//read packet
 			frame_coder frame_coder;
-			uint32_t packet_size(frame_coder.deserialize_packet_size(header_buffer));
+			uint32_t packet_size(frame_coder.deserialize_packet_size(*header_buffer));
 			if (packet_size > czr::p2p::max_tcp_packet_size)
 			{
 				BOOST_LOG_TRIVIAL(debug) << boost::str(boost::format("Too large packet size %1%, max message packet size %2%") % packet_size % czr::p2p::max_tcp_packet_size);
 				return;
 			}
 
-			std::shared_ptr<dev::bytes> packet_buffer(std::make_shared<dev::bytes>());
+			std::shared_ptr<dev::bytes> packet_buffer(std::make_shared<dev::bytes>(packet_size));
 			ba::async_read(*socket, ba::buffer(*packet_buffer, packet_size), [this_l, packet_buffer, socket, idle_timer, my_nonce](const boost::system::error_code& ec, std::size_t bytes_transferred)
 			{
 				if (!ec)
@@ -428,14 +434,14 @@ void host::write_ack(std::shared_ptr<bi::tcp::socket> const & socket, std::share
 	s.append((unsigned)packet_type::ack);
 	ack.stream_RLP(s);
 
-	dev::bytes write_buffer;
-	s.swapOut(write_buffer);
+	std::shared_ptr<dev::bytes> write_buffer(std::make_shared<dev::bytes>());
+	s.swapOut(*write_buffer);
 
 	frame_coder frame_coder;
-	frame_coder.write_frame(&write_buffer, write_buffer);
+	frame_coder.write_frame(write_buffer.get(), *write_buffer);
 
 	auto this_l(shared_from_this());
-	ba::async_write(*socket, ba::buffer(write_buffer), [this_l, socket, idle_timer, my_nonce](const boost::system::error_code& ec, std::size_t bytes_transferred) {
+	ba::async_write(*socket, ba::buffer(*write_buffer), [this_l, socket, idle_timer, my_nonce, write_buffer](const boost::system::error_code& ec, std::size_t bytes_transferred) {
 		if (!ec)
 		{
 			this_l->read_ack(socket, idle_timer, my_nonce);
@@ -453,22 +459,22 @@ void host::read_ack(std::shared_ptr<bi::tcp::socket> const & socket, std::shared
 		return;
 
 	//read header
-	dev::bytes header_buffer;
+	std::shared_ptr<dev::bytes> header_buffer(std::make_shared<dev::bytes>(czr::p2p::tcp_header_size));
 	auto this_l(shared_from_this());
-	ba::async_read(*socket, ba::buffer(header_buffer, czr::p2p::tcp_header_size), [this_l, header_buffer, socket, idle_timer, my_nonce](const boost::system::error_code& ec, std::size_t bytes_transferred)
+	ba::async_read(*socket, ba::buffer(*header_buffer, czr::p2p::tcp_header_size), [this_l, header_buffer, socket, idle_timer, my_nonce](const boost::system::error_code& ec, std::size_t bytes_transferred)
 	{
 		if (!ec)
 		{
 			//read packet
 			frame_coder frame_coder;
-			uint32_t packet_size(frame_coder.deserialize_packet_size(header_buffer));
+			uint32_t packet_size(frame_coder.deserialize_packet_size(*header_buffer));
 			if (packet_size > czr::p2p::max_tcp_packet_size)
 			{
 				BOOST_LOG_TRIVIAL(debug) << boost::str(boost::format("Too large packet size %1%, max message packet size %2%") % packet_size % czr::p2p::max_tcp_packet_size);
 				return;
 			}
 
-			std::shared_ptr<dev::bytes> packet_buffer(std::make_shared<dev::bytes>());
+			std::shared_ptr<dev::bytes> packet_buffer(std::make_shared<dev::bytes>(packet_size));
 			ba::async_read(*socket, ba::buffer(*packet_buffer, packet_size), [this_l, packet_buffer, socket, idle_timer, my_nonce](const boost::system::error_code& ec, std::size_t bytes_transferred)
 			{
 				idle_timer->cancel();
@@ -545,7 +551,7 @@ void host::start_peer(std::shared_ptr<bi::tcp::socket> const & socket, ack_messa
 			}
 
 			//check max peers
-			if(avaliable_peer_count(peer_type::ingress) > 0)
+			if(avaliable_peer_count(peer_type::ingress) == 0)
 			{
 				BOOST_LOG_TRIVIAL(info) << "Too many peers. peer count: " << peers.size() << ",pending peers: " << pending_conns.size() 
 					<< ",remote node id: " << remote_node_id.to_string() << ",remote endpoint: " << socket->remote_endpoint() 

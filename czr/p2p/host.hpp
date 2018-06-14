@@ -14,7 +14,7 @@ namespace czr
 {
 	namespace p2p
 	{
-		class host : std::enable_shared_from_this<host>
+		class host : public std::enable_shared_from_this<host>
 		{
 		public:
 			host(p2p_config const & config_a, ba::io_service & io_service_a,
