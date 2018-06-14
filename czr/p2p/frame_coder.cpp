@@ -28,7 +28,7 @@ std::vector<uint8_t> frame_coder::serialize_packet_size(uint32_t const & size)
 
 uint32_t frame_coder::deserialize_packet_size(std::vector<uint8_t> const & data)
 {
-	uint32_t size(data[0] << 24 + data[1] << 16 + data[2] << 8 + data[3]);
+	uint32_t size((data[0] << 24) + (data[1] << 16) + (data[2] << 8) + data[3]);
 	return size;
 }
 
