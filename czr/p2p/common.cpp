@@ -1,12 +1,14 @@
 #include "common.hpp"
 
-czr::p2p_config::p2p_config() :
-	port(czr::p2p_default_port),
-	max_peers(czr::p2p_default_max_peers)
+using namespace czr::p2p;
+
+p2p_config::p2p_config() :
+	port(czr::p2p::default_port),
+	max_peers(czr::p2p::default_max_peers)
 {
 }
 
-void czr::p2p_config::serialize_json(boost::property_tree::ptree & tree_a) const
+void p2p_config::serialize_json(boost::property_tree::ptree & tree_a) const
 {
 	tree_a.put("version", "1");
 	tree_a.put("host", listen_ip);
@@ -22,7 +24,7 @@ void czr::p2p_config::serialize_json(boost::property_tree::ptree & tree_a) const
 	tree_a.add_child("bootstrap_nodes", preconfigured_peers_l);
 }
 
-bool czr::p2p_config::deserialize_json(bool & upgraded_a, boost::property_tree::ptree & tree_a)
+bool p2p_config::deserialize_json(bool & upgraded_a, boost::property_tree::ptree & tree_a)
 {
 	auto result(false);
 	try
