@@ -21,12 +21,11 @@ namespace czr
 				std::list<std::shared_ptr<icapability>> const & capabilities_a,
 				dev::bytesConstRef restore_network_bytes_a);
 			void start();
+			dev::bytes save_network() const;
 			void stop();
 			void on_node_table_event(node_id const & node_id_a, node_table_event_type const & type_a);
 
 		private:
-			std::chrono::seconds node_fallback_interval = std::chrono::seconds(20);
-
 			enum class peer_type
 			{
 				egress = 0,
@@ -39,6 +38,7 @@ namespace czr
 			size_t avaliable_peer_count(peer_type const & type);
 			uint32_t max_peer_size(peer_type const & type);
 			void keep_alive_peers();
+			void try_connect_nodes(size_t const & avaliable_count);
 			void start_listen(bi::address const & listen_ip, uint16_t const & port);
 			void accept_loop();
 			void do_handshake(std::shared_ptr<bi::tcp::socket> const & socket);
@@ -50,11 +50,10 @@ namespace czr
 
 			czr::keypair network_alias(dev::bytesConstRef const & bytes);
 			void restore_network(dev::bytesConstRef const & bytes);
-			dev::bytes save_network() const;
 
 			p2p_config const & config;
 			boost::asio::io_service & io_service;
-			czr::keypair const & alias;
+			czr::keypair alias;
 			std::map<capability_desc, std::shared_ptr<icapability>> capabilities;
 
 			std::unique_ptr<bi::tcp::acceptor> acceptor;
@@ -74,6 +73,10 @@ namespace czr
 
 			std::chrono::seconds const keep_alive_interval = std::chrono::seconds(30);
 			std::chrono::steady_clock::time_point last_ping;
+
+			std::chrono::seconds const try_connect_interval = std::chrono::seconds(3);
+			std::chrono::steady_clock::time_point last_try_connect;
+			std::chrono::seconds node_fallback_interval = std::chrono::seconds(20);
 
 			std::chrono::steady_clock::time_point start_time;
 			std::vector<std::shared_ptr<node_info>> bootstrap_nodes;

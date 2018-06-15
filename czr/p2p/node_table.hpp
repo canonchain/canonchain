@@ -58,6 +58,9 @@ namespace czr
 				//rlp sig : S(H(type||data))
 				czr::signature rlp_sig(czr::sign_message(prv_a, packet_a.source_id, rlp_hash));
 
+				BOOST_LOG_TRIVIAL(debug) << boost::str(boost::format("send packet sig, node id:%1%, hash:%2%, sig:%3%") 
+					% packet_a.source_id.to_string() % rlp_hash.to_string() % rlp_sig.to_string());
+
 				//data:  H( node id || rlp sig || rlp ) || node id || rlp sig || rlp 
 				data.resize(sizeof(hash256) + sizeof(node_id) + sizeof(czr::signature) + rlp.size());
 				dev::bytesRef data_hash_ref(&data[0], sizeof(hash256));
@@ -226,6 +229,8 @@ namespace czr
 			std::mutex  find_node_timeouts_mutex;
 
 			std::unique_ptr<node_table_event_handler> node_event_handler;
+
+			bool is_cancel;
 		};
 	}
 }

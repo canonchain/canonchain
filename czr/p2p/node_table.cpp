@@ -7,7 +7,8 @@ node_table::node_table(boost::asio::io_service & io_service_a, czr::keypair cons
 	my_node_info(alias_a.pub, endpoint_a),
 	secret(alias_a.prv.data),
 	socket(std::make_unique<bi::udp::socket>(io_service_a)),
-	my_endpoint(endpoint_a)
+	my_endpoint(endpoint_a),
+	is_cancel(false)
 {
 	for (unsigned i = 0; i < s_bins; i++)
 		states[i].distance = i;
@@ -15,6 +16,8 @@ node_table::node_table(boost::asio::io_service & io_service_a, czr::keypair cons
 
 node_table::~node_table()
 {
+	is_cancel = true;
+	discover_timer->cancel();
 	socket->close();
 }
 
@@ -34,15 +37,21 @@ void node_table::start()
 		}
 		receive_loop();
 		discover_loop();
+
+		BOOST_LOG_TRIVIAL(info) << "Node discovery start on " << udp_endpoint;
 	}
 	catch (std::exception const & e)
 	{
-		BOOST_LOG_TRIVIAL(error) << "Node discovery start fail: " << e.what();
+		BOOST_LOG_TRIVIAL(error) << "Node discovery start fail: " << e.what() << ", endpoint:" << udp_endpoint;
 	}
+
 }
 
 void node_table::discover_loop()
 {
+	if (is_cancel)
+		return;
+
 	discover_timer = std::make_unique<ba::deadline_timer>(io_service);
 	discover_timer->expires_from_now(discover_interval);
 	auto this_l(shared_from_this());
@@ -64,6 +73,9 @@ void node_table::discover_loop()
 
 void node_table::do_discover(node_id const & rand_node_id, unsigned const & round, std::shared_ptr<std::set<std::shared_ptr<node_entry>>> tried_a)
 {
+	if (is_cancel)
+		return;
+
 	if (round == max_discover_rounds)
 	{
 		BOOST_LOG_TRIVIAL(debug) << "Terminating discover after " << round << " rounds.";
@@ -83,7 +95,7 @@ void node_table::do_discover(node_id const & rand_node_id, unsigned const & roun
 			tried.push_back(n);
 
 			//send find node
-			find_node_packet p(rand_node_id);
+			find_node_packet p(my_node_info.id, rand_node_id);
 
 			//add find node timeout
 			{
@@ -123,9 +135,15 @@ void node_table::do_discover(node_id const & rand_node_id, unsigned const & roun
 
 void node_table::receive_loop()
 {
+	if (is_cancel)
+		return;
+
 	auto this_l(shared_from_this());
 	socket->async_receive_from(boost::asio::buffer(recv_buffer), recv_endpoint, [this, this_l](boost::system::error_code ec, size_t size)
 	{
+		if (is_cancel)
+			return;
+
 		if (ec)
 			BOOST_LOG_TRIVIAL(warning) << "Receiving UDP message failed. " << ec.value() << " : " << ec.message();
 
@@ -265,7 +283,7 @@ std::unique_ptr<discover_packet> node_table::interpret_packet(bi::udp::endpoint 
 	dev::bytesConstRef hash(data.cropped(0, sizeof(hash256)));
 	dev::bytesConstRef bytes_to_hash_cref(data.cropped(sizeof(hash256), data.size() - sizeof(hash256)));
 	dev::bytesConstRef node_id_cref(bytes_to_hash_cref.cropped(0, sizeof(node_id)));
-	dev::bytesConstRef sig_cref(bytes_to_hash_cref.cropped(sizeof(node_id), sizeof(czr::signature)));
+	dev::bytesConstRef rlp_sig_cref(bytes_to_hash_cref.cropped(sizeof(node_id), sizeof(czr::signature)));
 	dev::bytesConstRef rlp_cref(bytes_to_hash_cref.cropped(sizeof(node_id) + sizeof(czr::signature)));
 
 	hash256 echo(blake2b_hash(bytes_to_hash_cref));
@@ -280,12 +298,16 @@ std::unique_ptr<discover_packet> node_table::interpret_packet(bi::udp::endpoint 
 	dev::bytesRef from_node_id_ref(from_node_id.bytes.data(), from_node_id.bytes.size());
 	node_id_cref.copyTo(from_node_id_ref);
 
-	czr::signature sig;
-	dev::bytesRef sig_ref(sig.bytes.data(), sig.bytes.size());
-	sig_cref.copyTo(sig_ref);
+	czr::signature rlp_sig;
+	dev::bytesRef rlp_sig_ref(rlp_sig.bytes.data(), rlp_sig.bytes.size());
+	rlp_sig_cref.copyTo(rlp_sig_ref);
 
-	bool sig_valid(czr::validate_message(from_node_id, blake2b_hash(rlp_cref), sig));
-	if (!sig_valid)
+	hash256 rlp_hash(blake2b_hash(rlp_cref));
+
+	BOOST_LOG_TRIVIAL(debug) << boost::str(boost::format("receive packet sig, node id:%1%, hash:%2%, sig:%3%") % from_node_id.to_string() % rlp_hash.to_string() % rlp_sig.to_string());
+
+	bool is_bad_sig(czr::validate_message(from_node_id, rlp_hash, rlp_sig));
+	if (is_bad_sig)
 	{
 		BOOST_LOG_TRIVIAL(debug) << "Invalid packet (bad signature) from " << from.address().to_string() << ":" << from.port();
 		return packet;
@@ -471,10 +493,15 @@ void node_table::add_node(node_info const & node_a, node_relation relation_a)
 				ne->endpoint = node_a.endpoint;
 			return;
 		}
+		else
+		{
+			auto node = std::make_shared<node_entry>(my_node_info.id, node_a.id, node_a.endpoint);
+			nodes[node_a.id] = node;
+		}
 	}
 
-	BOOST_LOG_TRIVIAL(debug) << "addNode pending for " << node_a.endpoint;
-
+	//todo: node_endpoint operator<<
+	BOOST_LOG_TRIVIAL(debug) << "addNode pending for " << (bi::udp::endpoint)node_a.endpoint;
 	ping(node_a.endpoint);
 }
 

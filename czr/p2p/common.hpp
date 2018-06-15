@@ -20,8 +20,8 @@ namespace czr
 {
 	namespace p2p
 	{
-		using node_id = uint256_union;
-		using hash256 = uint256_union;
+		using node_id = czr::uint256_union;
+		using hash256 = czr::uint256_union;
 
 		static uint16_t const version(0);
 		static uint16_t const default_port = czr::czr_network == czr::czr_networks::czr_live_network ? 7075 : 54000;

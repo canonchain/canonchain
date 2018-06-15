@@ -13,7 +13,8 @@ host::host(p2p_config const & config_a, boost::asio::io_service & io_service_a,
 	acceptor(std::make_unique<bi::tcp::acceptor>(io_service_a)),
 	restore_network_bytes(restore_network_bytes_a.toBytes()),
 	is_run(false),
-	last_ping(std::chrono::steady_clock::time_point::min())
+	last_ping(std::chrono::steady_clock::time_point::min()),
+	last_try_connect(std::chrono::steady_clock::time_point::min())
 {
 	for (auto & cap : capabilities_a)
 	{
@@ -23,7 +24,10 @@ host::host(p2p_config const & config_a, boost::asio::io_service & io_service_a,
 	for (std::string const & bn : config.bootstrap_nodes)
 	{
 		if (!boost::istarts_with(bn, "czrnode://"))
-			BOOST_LOG_TRIVIAL(warning) << "Invald boostrap node :" << bn;
+		{
+			BOOST_LOG_TRIVIAL(warning) << "Invald boostrap node: " << bn;
+			continue;
+		}
 
 		std::string node_str(bn.substr(10));
 
@@ -33,14 +37,20 @@ host::host(p2p_config const & config_a, boost::asio::io_service & io_service_a,
 			BOOST_LOG_TRIVIAL(warning) << "Invald boostrap node :" << bn;
 		node_id node_id;
 		bool error(node_id.decode_hex(node_id_and_addr[0]));
-		if(error)
+		if (error)
+		{
 			BOOST_LOG_TRIVIAL(warning) << "Invald boostrap node :" << bn;
+			continue;
+		}
 
 		std::string addr(node_id_and_addr[1]);
 		bi::tcp::endpoint ep;
 		error = resolve_host(addr, ep);
-		if(error)
+		if (error)
+		{
 			BOOST_LOG_TRIVIAL(warning) << "Invald boostrap node :" << bn;
+			continue;
+		}
 
 		node_endpoint node_ep (ep.address(), ep.port(), ep.port());
 		bootstrap_nodes.push_back(std::make_shared<node_info>(node_id, node_ep));
@@ -64,10 +74,11 @@ void host::start()
 		return;
 	}
 
-	start_listen(listen_ip, config.port);
+	uint16_t port(config.port);
+	start_listen(listen_ip, port);
 	accept_loop();
 
-	m_node_table = std::make_shared<node_table>(io_service, alias, node_endpoint(listen_ip, config.port, config.port));
+	m_node_table = std::make_shared<node_table>(io_service, alias, node_endpoint(listen_ip, port, port));
 	m_node_table->set_event_handler(new host_node_table_event_handler(*this));
 	m_node_table->start();
 
@@ -76,7 +87,7 @@ void host::start()
 
 	restore_network(&restore_network_bytes);
 
-	BOOST_LOG_TRIVIAL(info) << "P2P started, node id: " << alias.pub.to_string();
+	BOOST_LOG_TRIVIAL(info) << "P2P started, czrnode://" << alias.pub.to_string() << "@" << listen_ip << ":" << port;
 
 	run_timer = std::make_unique<ba::deadline_timer>(io_service);
 	run();
@@ -88,9 +99,11 @@ void host::start_listen(bi::address const & listen_ip, uint16_t const & port)
 	{
 		bi::tcp::endpoint endpoint(listen_ip, port);
 		acceptor->open(endpoint.protocol());
-		acceptor->set_option(bi::tcp::acceptor::reuse_address(true));
+		//acceptor->set_option(bi::tcp::acceptor::reuse_address(true));
 		acceptor->bind(endpoint);
 		acceptor->listen();
+
+		BOOST_LOG_TRIVIAL(info) << boost::str(boost::format("P2P start listen on %1%:%2%") % listen_ip % port);
 	}
 	catch (std::exception const & e)
 	{
@@ -98,6 +111,7 @@ void host::start_listen(bi::address const & listen_ip, uint16_t const & port)
 			% listen_ip % port % e.what());
 		throw;
 	}
+
 }
 
 void host::accept_loop()
@@ -108,6 +122,9 @@ void host::accept_loop()
 	auto socket(std::make_shared<bi::tcp::socket>(io_service));
 	auto this_l(shared_from_this());
 	acceptor->async_accept(*socket, [socket, this_l](boost::system::error_code const & ec) {
+
+		BOOST_LOG_TRIVIAL(debug) << "Accept socket:" << socket->remote_endpoint();
+
 		if (ec || !this_l->is_run)
 		{
 			BOOST_LOG_TRIVIAL(warning) << boost::str(boost::format("Error while accepting connections: %1%") % ec.message());
@@ -151,25 +168,7 @@ void host::run()
 
 	size_t avaliable_count = avaliable_peer_count(peer_type::egress);
 	if (avaliable_count > 0)
-	{
-		//random find node in node table
-		auto node_infos(m_node_table->get_random_nodes(avaliable_count));
-		for (auto nf : node_infos)
-		{
-			connect(nf);
-		}
-
-		//connect to bootstrap nodes
-		if (peers.size() == 0 && std::chrono::steady_clock::now() - start_time > node_fallback_interval)
-		{
-			for (auto bn : bootstrap_nodes)
-			{
-				if (!avaliable_peer_count(peer_type::egress))
-					break;
-				connect(bn);
-			}
-		}
-	}
+		try_connect_nodes(avaliable_count);
 
 	run_timer->expires_from_now(run_interval);
 	run_timer->async_wait([this](boost::system::error_code const & error)
@@ -180,7 +179,7 @@ void host::run()
 
 bool host::resolve_host(std::string const & addr, bi::tcp::endpoint & ep)
 {
-	bool error;
+	bool error(false);
 	std::vector<std::string> split;
 	boost::split(split, addr, boost::is_any_of(":"));
 	unsigned port = czr::p2p::default_port;
@@ -211,7 +210,7 @@ bool host::resolve_host(std::string const & addr, bi::tcp::endpoint & ep)
 		if (ec)
 		{
 			BOOST_LOG_TRIVIAL(info) << "Error resolving host address... " << addr << " : " << ec.message();
-			error = false;
+			error = true;
 		}
 		else
 			ep = *it;
@@ -226,9 +225,11 @@ void host::connect(std::shared_ptr<node_info> const & ne)
 
 	{
 		std::lock_guard<std::mutex> lock(peers_mutex);
-		if(peers.count(ne->id))
+		if (peers.count(ne->id))
+		{
 			BOOST_LOG_TRIVIAL(debug) << "Aborted connect, node already connected, node id: " << ne->id.to_string();
-		return;
+			return;
+		}
 	}
 
 	{
@@ -296,6 +297,32 @@ void host::keep_alive_peers()
 	}
 
 	last_ping = std::chrono::steady_clock::now();
+}
+
+void host::try_connect_nodes(size_t const & avaliable_count)
+{
+	if (std::chrono::steady_clock::now() - try_connect_interval < last_try_connect)
+		return;
+
+	//random find node in node table
+	auto node_infos(m_node_table->get_random_nodes(avaliable_count));
+	for (auto nf : node_infos)
+	{
+		connect(nf);
+	}
+
+	//connect to bootstrap nodes
+	if (peers.size() == 0 && std::chrono::steady_clock::now() - start_time > node_fallback_interval)
+	{
+		for (auto bn : bootstrap_nodes)
+		{
+			if (!avaliable_peer_count(peer_type::egress))
+				break;
+			connect(bn);
+		}
+	}
+
+	last_try_connect = std::chrono::steady_clock::now();
 }
 
 void host::do_handshake(std::shared_ptr<bi::tcp::socket> const & socket)
@@ -493,7 +520,8 @@ void host::read_ack(std::shared_ptr<bi::tcp::socket> const & socket, std::shared
 					{
 						dev::RLP r(packet.cropped(1));
 						ack_message ack(r);
-						if (!czr::validate_message(ack.id, my_nonce, ack.nonce_sig))
+						bool is_bad_sig(czr::validate_message(ack.id, my_nonce, ack.nonce_sig));
+						if (is_bad_sig)
 						{
 							BOOST_LOG_TRIVIAL(debug) << "Invalid nonce sig, node id: " << ack.id.to_string() << ", nonce: " << my_nonce.to_string() << ", sig:" << ack.nonce_sig.to_string();
 							return;
@@ -614,6 +642,8 @@ void host::stop()
 	acceptor->cancel();
 	if (acceptor->is_open())
 		acceptor->close();
+
+	run_timer->cancel();
 
 	// disconnect peers
 	for (unsigned n = 0;; n = 0)
