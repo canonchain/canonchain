@@ -93,7 +93,7 @@ void host::start()
 	run();
 }
 
-host::~host()
+void host::stop()
 {
 	is_run = false;
 
