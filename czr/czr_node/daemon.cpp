@@ -3,6 +3,7 @@
 #include <boost/property_tree/json_parser.hpp>
 #include <fstream>
 #include <iostream>
+#include <thread>
 #include <czr/node/working.hpp>
 #include <czr/p2p/host.hpp>
 
@@ -92,8 +93,9 @@ void czr_daemon::daemon::run(boost::filesystem::path const & data_path)
 		try
 		{
 			std::list<std::shared_ptr<czr::p2p::icapability>> caps;
-			dev::bytesConstRef restore_network_bytes;
+			dev::bytesConstRef restore_network_bytes;//todo:get network bytes
 			std::shared_ptr<czr::p2p::host> host(std::make_shared<czr::p2p::host>(config.p2p, io_service, caps, restore_network_bytes));
+
 			//auto node(std::make_shared<czr::node>(init, io_service, data_path, alarm, config.node));
 			if (!init.error)
 			{
@@ -106,7 +108,19 @@ void czr_daemon::daemon::run(boost::filesystem::path const & data_path)
 				//	rpc->start();
 				//}
 				runner = std::make_unique<czr::thread_runner>(io_service, config.node.io_threads);
-				runner->join();
+				//runner->join();
+
+				signal(SIGABRT, &exit_handler::handle);
+				signal(SIGTERM, &exit_handler::handle);
+				signal(SIGINT, &exit_handler::handle);
+				
+				while (!exit_handler::should_exit())
+					std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+
+				dev::bytes network(host->save_network());
+				//todo:save network bytessss
+
+				host->stop();
 			}
 			else
 			{

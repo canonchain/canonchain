@@ -1,6 +1,21 @@
 #include <czr/node/node.hpp>
 #include <czr/node/rpc.hpp>
 
+namespace
+{
+	class exit_handler
+	{
+	public:
+		static void handle(int) { _should_exit = true; }
+		static bool should_exit() { return _should_exit; }
+
+	private:
+		static bool _should_exit;
+	};
+
+	bool exit_handler::_should_exit = false;
+}
+
 namespace czr_daemon
 {
 	class daemon
