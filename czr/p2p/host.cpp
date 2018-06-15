@@ -93,6 +93,41 @@ void host::start()
 	run();
 }
 
+host::~host()
+{
+	is_run = false;
+
+	acceptor->cancel();
+	if (acceptor->is_open())
+		acceptor->close();
+
+	run_timer->cancel();
+
+	// disconnect peers
+	for (unsigned n = 0;; n = 0)
+	{
+		std::lock_guard<std::mutex> lock(peers_mutex);
+		for (auto i : peers)
+			if (auto p = i.second.lock())
+				if (p->is_connected())
+				{
+					p->disconnect(disconnect_reason::client_quit);
+					n++;
+				}
+		if (!n)
+			break;
+
+		// poll so that peers send out disconnect packets
+		io_service.poll();
+	}
+
+	//clear peers
+	{
+		std::lock_guard<std::mutex> lock(peers_mutex);
+		peers.clear();
+	}
+}
+
 void host::start_listen(bi::address const & listen_ip, uint16_t const & port)
 {
 	try
@@ -632,41 +667,6 @@ void host::start_peer(std::shared_ptr<bi::tcp::socket> const & socket, ack_messa
 				socket->close();
 		}
 		catch (...) {}
-	}
-}
-
-void host::stop()
-{
-	is_run = false;
-
-	acceptor->cancel();
-	if (acceptor->is_open())
-		acceptor->close();
-
-	run_timer->cancel();
-
-	// disconnect peers
-	for (unsigned n = 0;; n = 0)
-	{
-		std::lock_guard<std::mutex> lock(peers_mutex);
-		for (auto i : peers)
-			if (auto p = i.second.lock())
-				if (p->is_connected())
-				{
-					p->disconnect(disconnect_reason::client_quit);
-					n++;
-				}
-		if (!n)
-			break;
-
-		// poll so that peers send out disconnect packets
-		io_service.poll();
-	}
-
-	//clear peers
-	{
-		std::lock_guard<std::mutex> lock(peers_mutex);
-		peers.clear();
 	}
 }
 
