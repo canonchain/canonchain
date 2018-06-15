@@ -108,7 +108,7 @@ void czr_daemon::daemon::run(boost::filesystem::path const & data_path)
 				//	rpc->start();
 				//}
 				runner = std::make_unique<czr::thread_runner>(io_service, config.node.io_threads);
-				//runner->join();
+				runner->join();
 
 				signal(SIGABRT, &exit_handler::handle);
 				signal(SIGTERM, &exit_handler::handle);
@@ -117,10 +117,9 @@ void czr_daemon::daemon::run(boost::filesystem::path const & data_path)
 				while (!exit_handler::should_exit())
 					std::this_thread::sleep_for(std::chrono::milliseconds(1000));
 
-				dev::bytes network(host->save_network());
-				//todo:save network bytessss
+				dev::bytes network_bytes(host->save_network());
+				//todo:save network bytes
 
-				host->stop();
 			}
 			else
 			{
