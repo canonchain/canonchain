@@ -5,7 +5,6 @@
 using namespace czr::p2p;
 
 host::host(p2p_config const & config_a, boost::asio::io_service & io_service_a,
-	std::list<std::shared_ptr<icapability>> const & capabilities_a, 
 	dev::bytesConstRef restore_network_bytes_a) :
 	config(config_a),
 	io_service(io_service_a),
@@ -16,11 +15,6 @@ host::host(p2p_config const & config_a, boost::asio::io_service & io_service_a,
 	last_ping(std::chrono::steady_clock::time_point::min()),
 	last_try_connect(std::chrono::steady_clock::time_point::min())
 {
-	for (auto & cap : capabilities_a)
-	{
-		capabilities.insert(std::make_pair(cap->desc, cap));
-	}
-
 	for (std::string const & bn : config.bootstrap_nodes)
 	{
 		if (!boost::istarts_with(bn, "czrnode://"))
@@ -126,6 +120,11 @@ void host::stop()
 		std::lock_guard<std::mutex> lock(peers_mutex);
 		peers.clear();
 	}
+}
+
+void czr::p2p::host::register_capability(std::shared_ptr<icapability> cap)
+{
+	capabilities.insert(std::make_pair(cap->desc, cap));
 }
 
 void host::start_listen(bi::address const & listen_ip, uint16_t const & port)
@@ -724,7 +723,7 @@ void host::restore_network(dev::bytesConstRef const & bytes)
 	}
 }
 
-dev::bytes host::save_network() const
+dev::bytes host::network_bytes() const
 {
 	dev::RLPStream network;
 	int count = 0;
@@ -737,7 +736,6 @@ dev::bytes host::save_network() const
 		network << nf->id;
 		count++;
 	}
-	// else: TODO: use previous configuration if available
 
 	dev::RLPStream ret(3);
 	ret << czr::p2p::version << alias.prv.data;

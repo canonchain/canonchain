@@ -18,11 +18,11 @@ namespace czr
 		{
 		public:
 			host(p2p_config const & config_a, ba::io_service & io_service_a,
-				std::list<std::shared_ptr<icapability>> const & capabilities_a,
 				dev::bytesConstRef restore_network_bytes_a);
 			void start();
-			dev::bytes save_network() const;
 			void stop();
+			void register_capability(std::shared_ptr<icapability> cap);
+			dev::bytes network_bytes() const;
 			void on_node_table_event(node_id const & node_id_a, node_table_event_type const & type_a);
 
 		private:

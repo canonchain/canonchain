@@ -1,7 +1,5 @@
 #include <czr/node/node.hpp>
 #include <czr/node/rpc.hpp>
-#include <czr/node/node_capability.hpp>
-#include <czr/p2p/host.hpp>
 
 namespace
 {
@@ -37,7 +35,6 @@ namespace czr_daemon
 		bool rpc_enable;
 		czr::rpc_config rpc;
 		czr::node_config node;
-		czr::p2p::p2p_config p2p;
 		bool witness_enable;
 	};
 }
