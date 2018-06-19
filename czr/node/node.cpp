@@ -24,265 +24,6 @@ std::chrono::seconds constexpr czr::node::period;
 std::chrono::seconds constexpr czr::node::cutoff;
 std::chrono::minutes constexpr czr::node::backup_interval;
 
-czr::message_statistics::message_statistics() :
-	keepalive(0),
-	publish(0),
-	confirm_req(0),
-	confirm_ack(0)
-{
-}
-
-czr::network::network(czr::node & node_a, uint16_t port) :
-	socket(node_a.service, czr::endpoint(boost::asio::ip::address_v6::any(), port)),
-	resolver(node_a.service),
-	node(node_a),
-	bad_sender_count(0),
-	on(true),
-	error_count(0)
-{
-}
-
-void czr::network::receive()
-{
-	if (node.config.logging.network_packet_logging())
-	{
-		BOOST_LOG(node.log) << "Receiving packet";
-	}
-	std::unique_lock<std::mutex> lock(socket_mutex);
-	socket.async_receive_from(boost::asio::buffer(buffer.data(), buffer.size()), remote, [this](boost::system::error_code const & error, size_t size_a) {
-		receive_action(error, size_a);
-	});
-}
-
-void czr::network::stop()
-{
-	on = false;
-	socket.close();
-	resolver.cancel();
-}
-
-void czr::network::send_keepalive(czr::endpoint const & endpoint_a)
-{
-	assert(endpoint_a.address().is_v6());
-	czr::keepalive message;
-	node.peers.random_fill(message.peers);
-	std::shared_ptr<std::vector<uint8_t>> bytes(new std::vector<uint8_t>);
-	{
-		czr::vectorstream stream(*bytes);
-		message.serialize(stream);
-	}
-	if (node.config.logging.network_keepalive_logging())
-	{
-		BOOST_LOG(node.log) << boost::str(boost::format("Keepalive req sent to %1%") % endpoint_a);
-	}
-	++outgoing.keepalive;
-	std::weak_ptr<czr::node> node_w(node.shared());
-	send_buffer(bytes->data(), bytes->size(), endpoint_a, [bytes, node_w, endpoint_a](boost::system::error_code const & ec, size_t) {
-		if (auto node_l = node_w.lock())
-		{
-			if (ec && node_l->config.logging.network_keepalive_logging())
-			{
-				BOOST_LOG(node_l->log) << boost::str(boost::format("Error sending keepalive to %1% %2%") % endpoint_a % ec.message());
-			}
-		}
-	});
-}
-
-void czr::node::keepalive(std::string const & address_a, uint16_t port_a)
-{
-	auto node_l(shared_from_this());
-	network.resolver.async_resolve(boost::asio::ip::udp::resolver::query(address_a, std::to_string(port_a)), [node_l, address_a, port_a](boost::system::error_code const & ec, boost::asio::ip::udp::resolver::iterator i_a) {
-		if (!ec)
-		{
-			for (auto i(i_a), n(boost::asio::ip::udp::resolver::iterator{}); i != n; ++i)
-			{
-				auto endpoint(i->endpoint());
-				if (endpoint.address().is_v4())
-				{
-					endpoint = czr::endpoint(boost::asio::ip::address_v6::v4_mapped(endpoint.address().to_v4()), endpoint.port());
-				}
-				node_l->send_keepalive(endpoint);
-			}
-		}
-		else
-		{
-			BOOST_LOG(node_l->log) << boost::str(boost::format("Error resolving address: %1%:%2%, %3%") % address_a % port_a % ec.message());
-		}
-	});
-}
-
-void czr::network::publish(MDB_txn * transaction, czr::publish & message)
-{
-	std::shared_ptr<std::vector<uint8_t>> buffer(new std::vector<uint8_t>);
-	{
-		czr::vectorstream stream(*buffer);
-		message.serialize(stream);
-	}
-
-	auto hash(message.block->hash());
-	auto list(node.peers.list_sqrt());
-	for (auto i(list.begin()), n(list.end()); i != n; ++i)
-	{
-		auto endpoint(*i);
-
-		++outgoing.publish;
-		if (node.config.logging.network_publish_logging())
-		{
-			BOOST_LOG(node.log) << boost::str(boost::format("Publishing %1% to %2%") % hash.to_string() % endpoint);
-		}
-		std::weak_ptr<czr::node> node_w(node.shared());
-		send_buffer(buffer->data(), buffer->size(), endpoint, [buffer, node_w, endpoint](boost::system::error_code const & ec, size_t size) {
-			if (auto node_l = node_w.lock())
-			{
-				if (ec && node_l->config.logging.network_logging())
-				{
-					BOOST_LOG(node_l->log) << boost::str(boost::format("Error sending publish: %1% to %2%") % ec.message() % endpoint);
-				}
-			}
-		});
-	}
-	if (node.config.logging.network_logging())
-	{
-		BOOST_LOG(node.log) << boost::str(boost::format("Block %1% was republished to peers") % hash.to_string());
-	}
-}
-
-namespace
-{
-	class network_message_visitor : public czr::message_visitor
-	{
-	public:
-		network_message_visitor(czr::node & node_a, czr::endpoint const & sender_a) :
-			node(node_a),
-			sender(sender_a)
-		{
-		}
-		virtual ~network_message_visitor() = default;
-		void keepalive(czr::keepalive const & message_a) override
-		{
-			if (node.config.logging.network_keepalive_logging())
-			{
-				BOOST_LOG(node.log) << boost::str(boost::format("Received keepalive message from %1%") % sender);
-			}
-			++node.network.incoming.keepalive;
-			node.peers.contacted(sender, message_a.version_using);
-			node.network.merge_peers(message_a.peers);
-		}
-		void publish(czr::publish const & message_a) override
-		{
-			if (node.config.logging.network_message_logging())
-			{
-				BOOST_LOG(node.log) << boost::str(boost::format("Publish message from %1% for %2%") % sender % message_a.block->hash().to_string());
-			}
-			++node.network.incoming.publish;
-			node.peers.contacted(sender, message_a.version_using);
-			node.peers.insert(sender, message_a.version_using);
-			node.process_active(message_a);
-		}
-		czr::node & node;
-		czr::endpoint sender;
-	};
-}
-
-void czr::network::receive_action(boost::system::error_code const & error, size_t size_a)
-{
-	if (!error && on)
-	{
-		if (!czr::reserved_address(remote) && remote != endpoint())
-		{
-			network_message_visitor visitor(node, remote);
-			czr::message_parser parser(visitor);
-			parser.deserialize_buffer(buffer.data(), size_a);
-			if (parser.status != czr::message_parser::parse_status::success)
-			{
-				++error_count;
-
-				if (parser.status == czr::message_parser::parse_status::invalid_message_type)
-				{
-					if (node.config.logging.network_logging())
-					{
-						BOOST_LOG(node.log) << "Invalid message type in message";
-					}
-				}
-				else if (parser.status == czr::message_parser::parse_status::invalid_header)
-				{
-					if (node.config.logging.network_logging())
-					{
-						BOOST_LOG(node.log) << "Invalid header in message";
-					}
-				}
-				else if (parser.status == czr::message_parser::parse_status::invalid_keepalive_message)
-				{
-					if (node.config.logging.network_logging())
-					{
-						BOOST_LOG(node.log) << "Invalid keepalive message";
-					}
-				}
-				else if (parser.status == czr::message_parser::parse_status::invalid_publish_message)
-				{
-					if (node.config.logging.network_logging())
-					{
-						BOOST_LOG(node.log) << "Invalid publish message";
-					}
-				}
-				else if (parser.status == czr::message_parser::parse_status::invalid_confirm_req_message)
-				{
-					if (node.config.logging.network_logging())
-					{
-						BOOST_LOG(node.log) << "Invalid confirm_req message";
-					}
-				}
-				else if (parser.status == czr::message_parser::parse_status::invalid_confirm_ack_message)
-				{
-					if (node.config.logging.network_logging())
-					{
-						BOOST_LOG(node.log) << "Invalid confirm_ack message";
-					}
-				}
-				else
-				{
-					BOOST_LOG(node.log) << "Could not deserialize buffer";
-				}
-			}
-		}
-		else
-		{
-			if (node.config.logging.network_logging())
-			{
-				BOOST_LOG(node.log) << boost::str(boost::format("Reserved sender %1%") % remote.address().to_string());
-			}
-			++bad_sender_count;
-		}
-		receive();
-	}
-	else
-	{
-		if (error)
-		{
-			if (node.config.logging.network_logging())
-			{
-				BOOST_LOG(node.log) << boost::str(boost::format("UDP Receive error: %1%") % error.message());
-			}
-		}
-		if (on)
-		{
-			node.alarm.add(std::chrono::steady_clock::now() + std::chrono::seconds(5), [this]() { receive(); });
-		}
-	}
-}
-
-// Send keepalives to all the peers we've been notified of
-void czr::network::merge_peers(std::array<czr::endpoint, 8> const & peers_a)
-{
-	for (auto i(peers_a.begin()), j(peers_a.end()); i != j; ++i)
-	{
-		if (!node.peers.reachout(*i))
-		{
-			send_keepalive(*i);
-		}
-	}
-}
-
 bool czr::operation::operator> (czr::operation const & other_a) const
 {
 	return wakeup > other_a.wakeup;
@@ -346,7 +87,6 @@ czr::logging::logging() :
 	ledger_duplicate_logging_value(false),
 	network_logging_value(true),
 	network_message_logging_value(false),
-	network_publish_logging_value(false),
 	network_packet_logging_value(false),
 	network_keepalive_logging_value(false),
 	node_lifetime_tracing_value(false),
@@ -379,7 +119,6 @@ void czr::logging::serialize_json(boost::property_tree::ptree & tree_a) const
 	tree_a.put("ledger_duplicate", ledger_duplicate_logging_value);
 	tree_a.put("network", network_logging_value);
 	tree_a.put("network_message", network_message_logging_value);
-	tree_a.put("network_publish", network_publish_logging_value);
 	tree_a.put("network_packet", network_packet_logging_value);
 	tree_a.put("network_keepalive", network_keepalive_logging_value);
 	tree_a.put("node_lifetime_tracing", node_lifetime_tracing_value);
@@ -413,7 +152,6 @@ bool czr::logging::deserialize_json(bool & upgraded_a, boost::property_tree::ptr
 		ledger_duplicate_logging_value = tree_a.get<bool>("ledger_duplicate");
 		network_logging_value = tree_a.get<bool>("network");
 		network_message_logging_value = tree_a.get<bool>("network_message");
-		network_publish_logging_value = tree_a.get<bool>("network_publish");
 		network_packet_logging_value = tree_a.get<bool>("network_packet");
 		network_keepalive_logging_value = tree_a.get<bool>("network_keepalive");
 		node_lifetime_tracing_value = tree_a.get<bool>("node_lifetime_tracing");
@@ -448,11 +186,6 @@ bool czr::logging::network_logging() const
 bool czr::logging::network_message_logging() const
 {
 	return network_logging() && network_message_logging_value;
-}
-
-bool czr::logging::network_publish_logging() const
-{
-	return network_logging() && network_publish_logging_value;
 }
 
 bool czr::logging::network_packet_logging() const
@@ -560,8 +293,8 @@ bool czr::node_config::deserialize_json(bool & upgraded_a, boost::property_tree:
 	return result;
 }
 
-czr::block_processor_item::block_processor_item(czr::publish publish_a) :
-	publish(publish_a)
+czr::block_processor_item::block_processor_item(czr::joint joint_a) :
+	joint(joint_a)
 {
 }
 
@@ -643,10 +376,10 @@ void czr::block_processor::process_receive_many(std::deque<czr::block_processor_
 			while (!blocks_processing.empty() && std::chrono::steady_clock::now() < cutoff)
 			{
 				auto item(blocks_processing.front());
-				auto block = item.publish.block;
+				auto block = item.joint.block;
 				blocks_processing.pop_front();
 				auto hash(block->hash());
-				auto result(process_receive_one(transaction, item.publish));
+				auto result(process_receive_one(transaction, item.joint));
 				switch (result.code)
 				{
 					case czr::validate_result_codes::ok:
@@ -684,7 +417,7 @@ void czr::block_processor::process_receive_many(std::deque<czr::block_processor_
 	}
 }
 
-czr::validate_result czr::block_processor::process_receive_one(MDB_txn * transaction_a, czr::publish const & message)
+czr::validate_result czr::block_processor::process_receive_one(MDB_txn * transaction_a, czr::joint const & message)
 {
 	czr::validate_result result(node.validation->validate(transaction_a, message));
 
@@ -792,8 +525,6 @@ czr::node::node(czr::node_init & init_a, boost::asio::io_service & service_a,
 	gap_cache(*this),
 	ledger(store),
 	wallets(init_a.error, *this),
-	network(*this, czr::p2p::default_port),
-	peers(network.endpoint()),
 	application_path(application_path_a),
 	warmed_up(0),
 	validation(std::make_shared<czr::validation>(*this)),
@@ -803,12 +534,6 @@ czr::node::node(czr::node_init & init_a, boost::asio::io_service & service_a,
 {
 	wallets.observer = [this](bool active) {
 		observers.wallet(active);
-	};
-	peers.peer_observer = [this](czr::endpoint const & endpoint_a) {
-		observers.endpoint(endpoint_a);
-	};
-	peers.disconnect_observer = [this]() {
-		observers.disconnect();
 	};
 	observers.blocks.add([this](std::shared_ptr<czr::block> block_a, czr::validate_result const & result_a) {
 		if (this->block_arrival.recent(block_a->hash()))
@@ -910,9 +635,6 @@ czr::node::node(czr::node_init & init_a, boost::asio::io_service & service_a,
 			});
 		}
 	});
-	observers.endpoint.add([this](czr::endpoint const & endpoint_a) {
-		this->network.send_keepalive(endpoint_a);
-	});
 
 	BOOST_LOG(log) << "Node starting, version: " << CANONCHAIN_VERSION_MAJOR << "." << CANONCHAIN_VERSION_MINOR;
 	if (!init_a.error)
@@ -950,17 +672,6 @@ bool czr::node::copy_with_compaction(boost::filesystem::path const & destination
 		destination_file.string().c_str(), MDB_CP_COMPACT);
 }
 
-void czr::node::send_keepalive(czr::endpoint const & endpoint_a)
-{
-	auto endpoint_l(endpoint_a);
-	if (endpoint_l.address().is_v4())
-	{
-		endpoint_l = czr::endpoint(boost::asio::ip::address_v6::v4_mapped(endpoint_l.address().to_v4()), endpoint_l.port());
-	}
-	assert(endpoint_l.address().is_v6());
-	network.send_keepalive(endpoint_l);
-}
-
 czr::gap_cache::gap_cache(czr::node & node_a) :
 	node(node_a)
 {
@@ -987,11 +698,6 @@ void czr::gap_cache::add(MDB_txn * transaction_a, std::shared_ptr<czr::block> bl
 	}
 }
 
-czr::uint128_t czr::gap_cache::bootstrap_threshold(MDB_txn * transaction_a)
-{
-	return 0;
-}
-
 void czr::gap_cache::purge_old()
 {
 	auto cutoff(std::chrono::steady_clock::now() - std::chrono::seconds(10));
@@ -1011,154 +717,17 @@ void czr::gap_cache::purge_old()
 	}
 }
 
-void czr::node::process_active(czr::publish const & message)
+void czr::node::process_active(czr::joint const & message)
 {
 	block_arrival.add(message.block->hash());
 	block_processor.add(message);
 }
 
-// Simulating with sqrt_broadcast_simulate shows we only need to broadcast to sqrt(total_peers) random peers in order to successfully publish to everyone with high probability
-std::vector<czr::endpoint> czr::peer_container::list_sqrt()
-{
-	auto peers(random_set(2 * size_sqrt()));
-	std::vector<czr::endpoint> result;
-	result.reserve(peers.size());
-	for (auto i(peers.begin()), n(peers.end()); i != n; ++i)
-	{
-		result.push_back(*i);
-	}
-	return result;
-}
-
-std::vector<czr::endpoint> czr::peer_container::list()
-{
-	std::vector<czr::endpoint> result;
-	std::lock_guard<std::mutex> lock(mutex);
-	result.reserve(peers.size());
-	for (auto i(peers.begin()), j(peers.end()); i != j; ++i)
-	{
-		result.push_back(i->endpoint);
-	}
-	std::random_shuffle(result.begin(), result.end());
-	return result;
-}
-
-std::map<czr::endpoint, unsigned> czr::peer_container::list_version()
-{
-	std::map<czr::endpoint, unsigned> result;
-	std::lock_guard<std::mutex> lock(mutex);
-	for (auto i(peers.begin()), j(peers.end()); i != j; ++i)
-	{
-		result.insert(std::pair<czr::endpoint, unsigned>(i->endpoint, i->network_version));
-	}
-	return result;
-}
-
-czr::endpoint czr::peer_container::bootstrap_peer()
-{
-	czr::endpoint result(boost::asio::ip::address_v6::any(), 0);
-	std::lock_guard<std::mutex> lock(mutex);
-	;
-	for (auto i(peers.get<4>().begin()), n(peers.get<4>().end()); i != n;)
-	{
-		if (i->network_version >= 0x5)
-		{
-			result = i->endpoint;
-			peers.get<4>().modify(i, [](czr::peer_information & peer_a) {
-				peer_a.last_bootstrap_attempt = std::chrono::steady_clock::now();
-			});
-			i = n;
-		}
-		else
-		{
-			++i;
-		}
-	}
-	return result;
-}
-
-bool czr::parse_port(std::string const & string_a, uint16_t & port_a)
-{
-	bool result;
-	size_t converted;
-	port_a = std::stoul(string_a, &converted);
-	result = converted != string_a.size() || converted > std::numeric_limits<uint16_t>::max();
-	return result;
-}
-
-bool czr::parse_address_port(std::string const & string, boost::asio::ip::address & address_a, uint16_t & port_a)
-{
-	auto result(false);
-	auto port_position(string.rfind(':'));
-	if (port_position != std::string::npos && port_position > 0)
-	{
-		std::string port_string(string.substr(port_position + 1));
-		try
-		{
-			uint16_t port;
-			result = parse_port(port_string, port);
-			if (!result)
-			{
-				boost::system::error_code ec;
-				auto address(boost::asio::ip::address_v6::from_string(string.substr(0, port_position), ec));
-				if (ec == 0)
-				{
-					address_a = address;
-					port_a = port;
-				}
-				else
-				{
-					result = true;
-				}
-			}
-			else
-			{
-				result = true;
-			}
-		}
-		catch (...)
-		{
-			result = true;
-		}
-	}
-	else
-	{
-		result = true;
-	}
-	return result;
-}
-
-bool czr::parse_endpoint(std::string const & string, czr::endpoint & endpoint_a)
-{
-	boost::asio::ip::address address;
-	uint16_t port;
-	auto result(parse_address_port(string, address, port));
-	if (!result)
-	{
-		endpoint_a = czr::endpoint(address, port);
-	}
-	return result;
-}
-
-bool czr::parse_tcp_endpoint(std::string const & string, czr::tcp_endpoint & endpoint_a)
-{
-	boost::asio::ip::address address;
-	uint16_t port;
-	auto result(parse_address_port(string, address, port));
-	if (!result)
-	{
-		endpoint_a = czr::tcp_endpoint(address, port);
-	}
-	return result;
-}
-
 void czr::node::start()
 {
-	network.receive();
 	ongoing_store_flush();
 	ongoing_retry_late_message();
 	backup_wallet();
-	add_initial_peers();
 	observers.started();
 }
 
@@ -1166,23 +735,10 @@ void czr::node::stop()
 {
 	BOOST_LOG(log) << "Node stopping";
 	block_processor.stop();
-	if (block_processor_thread.joinable())
-	{
-		block_processor_thread.join();
-	}
-	network.stop();
 	wallets.stop();
 	if (block_processor_thread.joinable())
 	{
 		block_processor_thread.join();
-	}
-}
-
-void czr::node::keepalive_preconfigured(std::vector<std::string> const & peers_a)
-{
-	for (auto i(peers_a.begin()), n(peers_a.end()); i != n; ++i)
-	{
-		keepalive(*i, czr::p2p::default_port);
 	}
 }
 
@@ -1249,21 +805,6 @@ void czr::node::backup_wallet()
 	});
 }
 
-void czr::node::add_initial_peers()
-{
-}
-
-czr::endpoint czr::network::endpoint()
-{
-	boost::system::error_code ec;
-	auto port(socket.local_endpoint(ec).port());
-	if (ec)
-	{
-		BOOST_LOG(node.log) << "Unable to retrieve port: " << ec.message();
-	}
-	return czr::endpoint(boost::asio::ip::address_v6::loopback(), port);
-}
-
 void czr::block_arrival::add(czr::block_hash const & hash_a)
 {
 	std::lock_guard<std::mutex> lock(mutex);
@@ -1280,290 +821,6 @@ bool czr::block_arrival::recent(czr::block_hash const & hash_a)
 		arrival.erase(arrival.begin());
 	}
 	return arrival.get<1>().find(hash_a) != arrival.get<1>().end();
-}
-
-std::unordered_set<czr::endpoint> czr::peer_container::random_set(size_t count_a)
-{
-	std::unordered_set<czr::endpoint> result;
-	result.reserve(count_a);
-	std::lock_guard<std::mutex> lock(mutex);
-	// Stop trying to fill result with random samples after this many attempts
-	auto random_cutoff(count_a * 2);
-	auto peers_size(peers.size());
-	// Usually count_a will be much smaller than peers.size()
-	// Otherwise make sure we have a cutoff on attempting to randomly fill
-	if (!peers.empty())
-	{
-		for (auto i(0); i < random_cutoff && result.size() < count_a; ++i)
-		{
-			auto index(random_pool.GenerateWord32(0, peers_size - 1));
-			result.insert(peers.get<3>()[index].endpoint);
-		}
-	}
-	// Fill the remainder with most recent contact
-	for (auto i(peers.get<1>().begin()), n(peers.get<1>().end()); i != n && result.size() < count_a; ++i)
-	{
-		result.insert(i->endpoint);
-	}
-	return result;
-}
-
-void czr::peer_container::random_fill(std::array<czr::endpoint, 8> & target_a)
-{
-	auto peers(random_set(target_a.size()));
-	assert(peers.size() <= target_a.size());
-	auto endpoint(czr::endpoint(boost::asio::ip::address_v6{}, 0));
-	assert(endpoint.address().is_v6());
-	std::fill(target_a.begin(), target_a.end(), endpoint);
-	auto j(target_a.begin());
-	for (auto i(peers.begin()), n(peers.end()); i != n; ++i, ++j)
-	{
-		assert(i->address().is_v6());
-		assert(j < target_a.end());
-		*j = *i;
-	}
-}
-
-std::vector<czr::peer_information> czr::peer_container::purge_list(std::chrono::steady_clock::time_point const & cutoff)
-{
-	std::vector<czr::peer_information> result;
-	{
-		std::lock_guard<std::mutex> lock(mutex);
-		auto pivot(peers.get<1>().lower_bound(cutoff));
-		result.assign(pivot, peers.get<1>().end());
-		// Remove peers that haven't been heard from past the cutoff
-		peers.get<1>().erase(peers.get<1>().begin(), pivot);
-		for (auto i(peers.begin()), n(peers.end()); i != n; ++i)
-		{
-			peers.modify(i, [](czr::peer_information & info) { info.last_attempt = std::chrono::steady_clock::now(); });
-		}
-
-		// Remove keepalive attempt tracking for attempts older than cutoff
-		auto attempts_pivot(attempts.get<1>().lower_bound(cutoff));
-		attempts.get<1>().erase(attempts.get<1>().begin(), attempts_pivot);
-	}
-	if (result.empty())
-	{
-		disconnect_observer();
-	}
-	return result;
-}
-
-size_t czr::peer_container::size()
-{
-	std::lock_guard<std::mutex> lock(mutex);
-	return peers.size();
-}
-
-size_t czr::peer_container::size_sqrt()
-{
-	auto result(std::ceil(std::sqrt(size())));
-	return result;
-}
-
-bool czr::peer_container::empty()
-{
-	return size() == 0;
-}
-
-bool czr::peer_container::not_a_peer(czr::endpoint const & endpoint_a)
-{
-	bool result(false);
-	if (endpoint_a.address().to_v6().is_unspecified())
-	{
-		result = true;
-	}
-	else if (czr::reserved_address(endpoint_a))
-	{
-		result = true;
-	}
-	else if (endpoint_a == self)
-	{
-		result = true;
-	}
-	return result;
-}
-
-bool czr::peer_container::reachout(czr::endpoint const & endpoint_a)
-{
-	// Don't contact invalid IPs
-	bool error = not_a_peer(endpoint_a);
-	if (!error)
-	{
-		// Don't keepalive to nodes that already sent us something
-		error |= known_peer(endpoint_a);
-		std::lock_guard<std::mutex> lock(mutex);
-		auto existing(attempts.find(endpoint_a));
-		error |= existing != attempts.end();
-		attempts.insert({ endpoint_a, std::chrono::steady_clock::now() });
-	}
-	return error;
-}
-
-bool czr::peer_container::insert(czr::endpoint const & endpoint_a, unsigned version_a)
-{
-	auto unknown(false);
-	auto result(not_a_peer(endpoint_a));
-	if (!result)
-	{
-		std::lock_guard<std::mutex> lock(mutex);
-		auto existing(peers.find(endpoint_a));
-		if (existing != peers.end())
-		{
-			peers.modify(existing, [](czr::peer_information & info) {
-				info.last_contact = std::chrono::steady_clock::now();
-			});
-			result = true;
-		}
-		else
-		{
-			peers.insert(czr::peer_information(endpoint_a, version_a));
-			unknown = true;
-		}
-	}
-	if (unknown && !result)
-	{
-		peer_observer(endpoint_a);
-	}
-	return result;
-}
-
-namespace
-{
-	boost::asio::ip::address_v6 mapped_from_v4_bytes(unsigned long address_a)
-	{
-		return boost::asio::ip::address_v6::v4_mapped(boost::asio::ip::address_v4(address_a));
-	}
-}
-
-bool czr::reserved_address(czr::endpoint const & endpoint_a)
-{
-	assert(endpoint_a.address().is_v6());
-	auto bytes(endpoint_a.address().to_v6());
-	auto result(false);
-	static auto const rfc1700_min(mapped_from_v4_bytes(0x00000000ul));
-	static auto const rfc1700_max(mapped_from_v4_bytes(0x00fffffful));
-	static auto const ipv4_loopback_min(mapped_from_v4_bytes(0x7f000000ul));
-	static auto const ipv4_loopback_max(mapped_from_v4_bytes(0x7ffffffful));
-	static auto const rfc5737_1_min(mapped_from_v4_bytes(0xc0000200ul));
-	static auto const rfc5737_1_max(mapped_from_v4_bytes(0xc00002fful));
-	static auto const rfc5737_2_min(mapped_from_v4_bytes(0xc6336400ul));
-	static auto const rfc5737_2_max(mapped_from_v4_bytes(0xc63364fful));
-	static auto const rfc5737_3_min(mapped_from_v4_bytes(0xcb007100ul));
-	static auto const rfc5737_3_max(mapped_from_v4_bytes(0xcb0071fful));
-	static auto const ipv4_multicast_min(mapped_from_v4_bytes(0xe0000000ul));
-	static auto const ipv4_multicast_max(mapped_from_v4_bytes(0xeffffffful));
-	static auto const rfc6890_min(mapped_from_v4_bytes(0xf0000000ul));
-	static auto const rfc6890_max(mapped_from_v4_bytes(0xfffffffful));
-	static auto const rfc6666_min(boost::asio::ip::address_v6::from_string("100::"));
-	static auto const rfc6666_max(boost::asio::ip::address_v6::from_string("100::ffff:ffff:ffff:ffff"));
-	static auto const rfc3849_min(boost::asio::ip::address_v6::from_string("2001:db8::"));
-	static auto const rfc3849_max(boost::asio::ip::address_v6::from_string("2001:db8:ffff:ffff:ffff:ffff:ffff:ffff"));
-	static auto const ipv6_multicast_min(boost::asio::ip::address_v6::from_string("ff00::"));
-	static auto const ipv6_multicast_max(boost::asio::ip::address_v6::from_string("ff00:ffff:ffff:ffff:ffff:ffff:ffff:ffff"));
-	if (bytes >= rfc1700_min && bytes <= rfc1700_max)
-	{
-		result = true;
-	}
-	else if (bytes >= rfc5737_1_min && bytes <= rfc5737_1_max)
-	{
-		result = true;
-	}
-	else if (bytes >= rfc5737_2_min && bytes <= rfc5737_2_max)
-	{
-		result = true;
-	}
-	else if (bytes >= rfc5737_3_min && bytes <= rfc5737_3_max)
-	{
-		result = true;
-	}
-	else if (bytes >= ipv4_multicast_min && bytes <= ipv4_multicast_max)
-	{
-		result = true;
-	}
-	else if (bytes >= rfc6890_min && bytes <= rfc6890_max)
-	{
-		result = true;
-	}
-	else if (bytes >= rfc6666_min && bytes <= rfc6666_max)
-	{
-		result = true;
-	}
-	else if (bytes >= rfc3849_min && bytes <= rfc3849_max)
-	{
-		result = true;
-	}
-	else if (bytes >= ipv6_multicast_min && bytes <= ipv6_multicast_max)
-	{
-		result = true;
-	}
-	else if (bytes.is_loopback() && czr::czr_network != czr::czr_networks::czr_test_network)
-	{
-		result = true;
-	}
-	else if (bytes >= ipv4_loopback_min && bytes <= ipv4_loopback_max && czr::czr_network != czr::czr_networks::czr_test_network)
-	{
-		result = true;
-	}
-	return result;
-}
-
-czr::peer_information::peer_information(czr::endpoint const & endpoint_a, unsigned network_version_a) :
-	endpoint(endpoint_a),
-	last_contact(std::chrono::steady_clock::now()),
-	last_attempt(last_contact),
-	last_bootstrap_attempt(std::chrono::steady_clock::time_point()),
-	network_version(network_version_a)
-{
-}
-
-czr::peer_information::peer_information(czr::endpoint const & endpoint_a, std::chrono::steady_clock::time_point const & last_contact_a, std::chrono::steady_clock::time_point const & last_attempt_a) :
-	endpoint(endpoint_a),
-	last_contact(last_contact_a),
-	last_attempt(last_attempt_a),
-	last_bootstrap_attempt(std::chrono::steady_clock::time_point())
-{
-}
-
-czr::peer_container::peer_container(czr::endpoint const & self_a) :
-	self(self_a),
-	peer_observer([](czr::endpoint const &) {}),
-	disconnect_observer([]() {})
-{
-}
-
-void czr::peer_container::contacted(czr::endpoint const & endpoint_a, unsigned version_a)
-{
-	auto endpoint_l(endpoint_a);
-	if (endpoint_l.address().is_v4())
-	{
-		endpoint_l = czr::endpoint(boost::asio::ip::address_v6::v4_mapped(endpoint_l.address().to_v4()), endpoint_l.port());
-	}
-	assert(endpoint_l.address().is_v6());
-	insert(endpoint_l, version_a);
-}
-
-void czr::network::send_buffer(uint8_t const * data_a, size_t size_a, czr::endpoint const & endpoint_a, std::function<void(boost::system::error_code const &, size_t)> callback_a)
-{
-	std::unique_lock<std::mutex> lock(socket_mutex);
-	if (node.config.logging.network_packet_logging())
-	{
-		BOOST_LOG(node.log) << "Sending packet";
-	}
-	socket.async_send_to(boost::asio::buffer(data_a, size_a), endpoint_a, [this, callback_a](boost::system::error_code const & ec, size_t size_a) {
-		callback_a(ec, size_a);
-		if (this->node.config.logging.network_packet_logging())
-		{
-			BOOST_LOG(this->node.log) << "Packet send complete";
-		}
-	});
-}
-
-bool czr::peer_container::known_peer(czr::endpoint const & endpoint_a)
-{
-	std::lock_guard<std::mutex> lock(mutex);
-	auto existing(peers.find(endpoint_a));
-	return existing != peers.end();
 }
 
 std::shared_ptr<czr::node> czr::node::shared()
@@ -2165,7 +1422,7 @@ czr::inactive_node::~inactive_node()
 	node->stop();
 }
 
-czr::late_message_info::late_message_info(czr::publish const & message_a) :
+czr::late_message_info::late_message_info(czr::joint const & message_a) :
 	message(message_a),
 	timestamp(message_a.block->hashables.exec_timestamp),
 	hash(message_a.block->hash())

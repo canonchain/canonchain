@@ -1,5 +1,7 @@
 #include <czr/node/node.hpp>
 #include <czr/node/rpc.hpp>
+#include <czr/node/node_capability.hpp>
+#include <czr/p2p/host.hpp>
 
 namespace
 {

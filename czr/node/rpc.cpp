@@ -120,7 +120,7 @@ czr::rpc::rpc(boost::asio::io_service & service_a, czr::node & node_a, czr::rpc_
 
 void czr::rpc::start()
 {
-	auto endpoint(czr::tcp_endpoint(config.address, config.port));
+	auto endpoint(bi::tcp::endpoint(config.address, config.port));
 	acceptor.open(endpoint.protocol());
 	acceptor.set_option(boost::asio::ip::tcp::acceptor::reuse_address(true));
 

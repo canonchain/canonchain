@@ -80,23 +80,65 @@ exec_timestamp(exec_timestamp_a)
 	//todo:need fee feild ???
 }
 
-czr::block_hashables::block_hashables (bool & error_a, czr::stream & stream_a)
-{
-	//todo: add new feilds /////////////////
-	error_a = czr::read(stream_a, from);
-	if (!error_a)
-	{
-		error_a = czr::read(stream_a, to);
-		if (!error_a)
-		{
-			error_a = czr::read(stream_a, amount);
-		}
-	}
-}
-
 czr::block_hashables::block_hashables (bool & error_a, boost::property_tree::ptree const & tree_a)
 {
 	deserialize_json(error_a, tree_a);
+}
+
+czr::block_hashables::block_hashables(bool & error_a, dev::RLP const & r)
+{
+	error_a = r.itemCount() != 10;
+	from = (czr::account)r[0];
+	to = (czr::account)r[1];
+	amount = (czr::amount)r[2];
+	previous = (czr::block_hash)r[3];
+
+	dev::RLP const & parents_rlp = r[4];
+	parents.resize(parents_rlp.itemCount());
+	for (dev::RLP const &  parent : parents_rlp)
+	{
+		parents.push_back((czr::block_hash)parent);
+	}
+
+	dev::RLP const & witness_rlp = r[5];
+	if (!witness_rlp.isList())
+	{
+		witness_list_block = (czr::block_hash)witness_rlp;
+	}
+	else
+	{
+		witness_list.resize(witness_rlp.itemCount());
+		for (dev::RLP const & witness : witness_rlp)
+			witness_list.push_back((czr::block_hash)witness);
+	}
+
+	last_summary = (czr::summary_hash)r[6];
+	last_summary_block = (czr::block_hash)r[7];
+	data = r[8].toBytes();
+	exec_timestamp = (uint64_t)r[9];
+}
+
+void czr::block_hashables::stream_RLP(dev::RLPStream & s) const
+{
+	s.appendList(10);
+	s << from << to << amount << previous;
+
+	s.appendList(parents.size());
+	for (czr::block_hash const & parent : parents)
+		s << parent;
+
+	if (!witness_list_block.is_zero())
+	{
+		s << witness_list_block;
+	}
+	else
+	{
+		s.appendList(witness_list.size());
+		for (czr::account witness : witness_list)
+			s << witness;
+	}
+
+	s << last_summary << last_summary_block << data << exec_timestamp;
 }
 
 void czr::block_hashables::serialize_json(boost::property_tree::ptree tree_a) const
@@ -243,17 +285,6 @@ signature(czr::sign_message(prv_a, pub_a, hash()))
 {
 }
 
-czr::block::block (bool & error_a, czr::stream & stream_a) :
-hashables (error_a, stream_a)
-{
-	//todo:deserialize block///////////////
-
-	if (!error_a)
-	{
-		error_a = czr::read (stream_a, signature);
-	}
-}
-
 czr::block::block (bool & error_a, boost::property_tree::ptree const & tree_a) :
 hashables (error_a, tree_a)
 {
@@ -269,6 +300,23 @@ hashables (error_a, tree_a)
 			error_a = true;
 		}
 	}
+}
+
+czr::block::block(bool & error_a, dev::RLP const & r):
+	hashables(error_a, r[0])
+{
+	error_a = r.itemCount() != 3;
+	if (error_a)
+		return;
+
+	signature = (czr::signature)r[1];
+}
+
+void czr::block::stream_RLP(dev::RLPStream & s) const
+{
+	s.appendList(3);
+	hashables.stream_RLP(s);
+	s << signature;
 }
 
 czr::block_hash czr::block::previous () const
@@ -288,34 +336,6 @@ std::vector<czr::block_hash> czr::block::parents_and_previous() const
 		list.push_back(hashables.previous);
 
 	return list;
-}
-
-void czr::block::serialize (czr::stream & stream_a) const
-{
-	//todo:serialize block///////////////
-	write (stream_a, hashables.from);
-	write (stream_a, hashables.to);
-	write (stream_a, hashables.amount);
-	write (stream_a, signature);
-}
-
-bool czr::block::deserialize (czr::stream & stream_a)
-{
-	//todo:deserialize block///////////////
-	auto error = read(stream_a, hashables.from);
-	if (!error)
-	{
-		error = read(stream_a, hashables.to);
-		if (!error)
-		{
-			error = read(stream_a, hashables.amount);
-			if (!error)
-			{
-				error = read(stream_a, signature);
-			}
-		}
-	}
-	return error;
 }
 
 void czr::block::serialize_json(std::string & string_a) const
@@ -395,11 +415,11 @@ std::unique_ptr<czr::block> czr::deserialize_block_json (boost::property_tree::p
 	return result;
 }
 
-std::unique_ptr<czr::block> czr::deserialize_block (czr::stream & stream_a)
+std::unique_ptr<czr::block> czr::interpret_block_RLP (dev::RLP const & r)
 {
 	std::unique_ptr<czr::block> result;
 	bool error;
-	std::unique_ptr<czr::block> obj(new czr::block(error, stream_a));
+	std::unique_ptr<czr::block> obj(new czr::block(error, r));
 	if (!error)
 		result = std::move(obj);
 

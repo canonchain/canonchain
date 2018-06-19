@@ -4,7 +4,7 @@ using namespace czr::p2p;
 
 peer::peer(std::shared_ptr<bi::tcp::socket> const & socket_a, node_id const & node_id_a):
 	socket(socket_a),
-	remote_node_id(node_id_a),
+	m_node_id(node_id_a),
 	is_dropped(false),
 	m_frame_coder(std::make_shared<frame_coder>())
 {
@@ -27,6 +27,10 @@ void peer::register_capability(std::shared_ptr<peer_capability> const & cap)
 
 void peer::start()
 {
+	auto this_l(shared_from_this());
+	for (auto pc : capabilities)
+		pc->cap->on_connect(this_l);
+
 	ping();
 	read_loop();
 }
@@ -38,6 +42,10 @@ bool peer::is_connected()
 
 void peer::disconnect(disconnect_reason const & reason)
 {
+	auto this_l(shared_from_this());
+	for (auto pc : capabilities)
+		pc->cap->on_disconnect(this_l);
+
 	BOOST_LOG_TRIVIAL(info) << "Disconnecting (our reason: " << reason_of(reason) << ")";
 
 	if (socket->is_open())
@@ -52,6 +60,11 @@ void peer::disconnect(disconnect_reason const & reason)
 std::chrono::steady_clock::time_point peer::last_received()
 {
 	return _last_received;
+}
+
+node_id czr::p2p::peer::remote_node_id()
+{
+	return m_node_id;
 }
 
 void peer::ping()

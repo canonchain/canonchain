@@ -276,8 +276,9 @@ std::unique_ptr<czr::block> czr::block_store::block_get(MDB_txn * transaction_a,
 	std::unique_ptr<czr::block> result;
 	if (value.mv_size != 0)
 	{
-		czr::bufferstream stream(reinterpret_cast<uint8_t const *> (value.mv_data), value.mv_size);
-		result = czr::deserialize_block(stream);
+		dev::bytesConstRef data_cref(reinterpret_cast<uint8_t const *> (value.mv_data), value.mv_size - sizeof(czr::block_hash));
+		dev::RLP r(data_cref);
+		result = czr::interpret_block_RLP(r);
 		assert(result != nullptr);
 	}
 	return result;
@@ -329,13 +330,16 @@ void czr::block_store::block_put_raw(MDB_txn * transaction_a, MDB_dbi database_a
 void czr::block_store::block_put(MDB_txn * transaction_a, czr::block_hash const & hash_a, czr::block const & block_a, czr::block_hash const & successor_a)
 {
 	assert(successor_a.is_zero() || block_exists(transaction_a, successor_a));
-	std::vector<uint8_t> vector;
+
+	dev::bytes b;
 	{
-		czr::vectorstream stream(vector);
-		block_a.serialize(stream);
-		czr::write(stream, successor_a.bytes);
+		dev::RLPStream s;
+		block_a.stream_RLP(s);
+		s.swapOut(b);
 	}
-	block_put_raw(transaction_a, blocks, hash_a, { vector.size(), vector.data() });
+	b.insert(b.end(), successor_a.bytes.begin(), successor_a.bytes.end());
+
+	block_put_raw(transaction_a, blocks, hash_a, { b.size(), b.data() });
 	block_predecessor_set(transaction_a, block_a, false);
 	assert(block_a.previous().is_zero() || block_successor(transaction_a, block_a.previous()) == hash_a);
 }
@@ -517,8 +521,9 @@ std::vector<std::shared_ptr<czr::block>> czr::block_store::unchecked_get(MDB_txn
 	}
 	for (auto i(unchecked_begin(transaction_a, hash_a)), n(unchecked_end()); i != n && czr::block_hash(i->first.uint256()) == hash_a; i.next_dup())
 	{
-		czr::bufferstream stream(reinterpret_cast<uint8_t const *> (i->second.data()), i->second.size());
-		result.push_back(czr::deserialize_block(stream));
+		dev::bytesConstRef data_cref(reinterpret_cast<byte const *> (i->second.data()), i->second.size());
+		dev::RLP r(data_cref);
+		result.push_back(czr::interpret_block_RLP(r));
 	}
 	return result;
 }
@@ -539,12 +544,13 @@ void czr::block_store::unchecked_del(MDB_txn * transaction_a, czr::block_hash co
 			}
 		}
 	}
-	std::vector<uint8_t> vector;
+	dev::bytes data;
 	{
-		czr::vectorstream stream(vector);
-		block_a.serialize(stream);
+		dev::RLPStream s;
+		block_a.stream_RLP(s);
+		s.swapOut(data);
 	}
-	auto status(mdb_del(transaction_a, unchecked, czr::mdb_val(hash_a), czr::mdb_val(vector.size(), vector.data())));
+	auto status(mdb_del(transaction_a, unchecked, czr::mdb_val(hash_a), czr::mdb_val(data.size(), data.data())));
 	assert(status == 0 || status == MDB_NOTFOUND);
 }
 
@@ -584,12 +590,13 @@ void czr::block_store::flush(MDB_txn * transaction_a)
 	}
 	for (auto & i : unchecked_cache_l)
 	{
-		std::vector<uint8_t> vector;
+		std::vector<uint8_t> data;
 		{
-			czr::vectorstream stream(vector);
-			i.second->serialize(stream);
+			dev::RLPStream s;
+			i.second->stream_RLP(s);
+			s.swapOut(data);
 		}
-		auto status(mdb_put(transaction_a, unchecked, czr::mdb_val(i.first), czr::mdb_val(vector.size(), vector.data()), 0));
+		auto status(mdb_put(transaction_a, unchecked, czr::mdb_val(i.first), czr::mdb_val(data.size(), data.data()), 0));
 		assert(status == 0);
 	}
 }

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <czr/rlp/RLP.h>
 #include <czr/lib/blocks.hpp>
 #include <czr/node/utility.hpp>
 
@@ -173,6 +174,4 @@ namespace czr
 			bool const & is_fork, bool const & is_error, bool const & is_fail,
 			czr::account_state_hash const & from_state_hash, czr::account_state_hash const & to_state_hash);
 	};
-
-	std::unique_ptr<czr::block> deserialize_block(MDB_val const &);
 }

@@ -44,12 +44,14 @@ namespace czr
 			hash256 add_packet_and_sign(czr::private_key const & prv_a, discover_packet const & packet_a)
 			{
 				assert((byte)packet_a.packet_type());
-
 				//rlp: type || data
-				dev::RLPStream s;
-				s.appendRaw(dev::bytes(1, (byte)packet_a.packet_type()));
-				packet_a.stream_RLP(s);
-				dev::bytes const & rlp(s.out());
+				dev::bytes rlp;
+				{
+					dev::RLPStream s;
+					s.appendRaw(dev::bytes(1, (byte)packet_a.packet_type()));
+					packet_a.stream_RLP(s);
+					s.swapOut(rlp);
+				}
 				dev::bytesConstRef rlp_cref(&rlp);
 
 				//rlp hash : H(type || data)
