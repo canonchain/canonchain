@@ -355,9 +355,3 @@ czr::summary_hash czr::summary::gen_summary_hash(czr::block_hash const & block_h
 
 	return result;
 }
-
-std::unique_ptr<czr::block> czr::deserialize_block(MDB_val const & val_a)
-{
-	czr::bufferstream stream(reinterpret_cast<uint8_t const *> (val_a.mv_data), val_a.mv_size);
-	return deserialize_block(stream);
-}

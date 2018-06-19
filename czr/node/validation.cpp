@@ -13,7 +13,7 @@ czr::validation::~validation()
 {
 }
 
-czr::validate_result czr::validation::validate(MDB_txn * transaction_a, czr::publish const & message)
+czr::validate_result czr::validation::validate(MDB_txn * transaction_a, czr::joint const & message)
 {
 	czr::validate_result result;
 	if (message.block == nullptr)

@@ -5,7 +5,6 @@
 #include <iostream>
 #include <thread>
 #include <czr/node/working.hpp>
-#include <czr/p2p/host.hpp>
 
 czr_daemon::daemon_config::daemon_config(boost::filesystem::path const & application_path_a) :
 	rpc_enable(false)
@@ -131,7 +130,11 @@ void czr_daemon::daemon::run(boost::filesystem::path const & data_path)
 		czr::node_init init;
 		try
 		{
+			auto node(std::make_shared<czr::node>(init, io_service, data_path, alarm, config.node));
+
 			std::list<std::shared_ptr<czr::p2p::icapability>> caps;
+			caps.push_back(std::make_shared<czr::node_capability>(*node));
+
 			dev::bytesConstRef restore_network_bytes;//todo:get network bytes
 			dev::bytes nbytes;
 			config.readfile2bytes(nbytes, data_path);
@@ -139,17 +142,16 @@ void czr_daemon::daemon::run(boost::filesystem::path const & data_path)
 
 			std::shared_ptr<czr::p2p::host> host(std::make_shared<czr::p2p::host>(config.p2p, io_service, caps, restore_network_bytes));
 
-			//auto node(std::make_shared<czr::node>(init, io_service, data_path, alarm, config.node));
 			if (!init.error)
 			{
+				node->start();
 				host->start();
 
-				//node->start();
-				//std::unique_ptr<czr::rpc> rpc = get_rpc(io_service, *node, config.rpc);
-				//if (rpc && config.rpc_enable)
-				//{
-				//	rpc->start();
-				//}
+				std::unique_ptr<czr::rpc> rpc = get_rpc(io_service, *node, config.rpc);
+				if (rpc && config.rpc_enable)
+				{
+					rpc->start();
+				}
 				runner = std::make_unique<czr::thread_runner>(io_service, config.node.io_threads);
 				runner->join();
 

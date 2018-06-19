@@ -46,6 +46,7 @@ namespace czr
 			bool is_connected();
 			void disconnect(disconnect_reason const & reason);
 			std::chrono::steady_clock::time_point last_received();
+			node_id remote_node_id();
 
 		private:
 			void read_loop();
@@ -71,8 +72,8 @@ namespace czr
 				}
 			}
 
+			node_id m_node_id;
 			std::shared_ptr<bi::tcp::socket> socket;
-			node_id remote_node_id;
 			std::list<std::shared_ptr<peer_capability>> capabilities;
 			std::shared_ptr<frame_coder> m_frame_coder;
 			dev::bytes read_buffer;

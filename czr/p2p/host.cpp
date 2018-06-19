@@ -396,12 +396,13 @@ void host::write_handshake(std::shared_ptr<bi::tcp::socket> const & socket, std:
 	czr::random_pool.GenerateBlock(my_nonce.bytes.data(), my_nonce.bytes.size());
 	handshake_message handshake(czr::p2p::version, czr::czr_network, my_nonce);
 
-	dev::RLPStream s;
-	s.append((unsigned)packet_type::handshake);
-	handshake.stream_RLP(s);
-	
 	std::shared_ptr<dev::bytes> write_buffer(std::make_shared<dev::bytes>());
-	s.swapOut(*write_buffer);
+	{
+		dev::RLPStream s;
+		s.append((unsigned)packet_type::handshake);
+		handshake.stream_RLP(s);
+		s.swapOut(*write_buffer);
+	}
 
 	frame_coder frame_coder;
 	frame_coder.write_frame(write_buffer.get(), *write_buffer);
@@ -492,12 +493,13 @@ void host::write_ack(std::shared_ptr<bi::tcp::socket> const & socket, std::share
 	czr::signature nonce_sig(czr::sign_message(alias.prv, alias.pub, handshake.nonce));
 	ack_message ack(alias.pub, nonce_sig, cap_descs);
 
-	dev::RLPStream s;
-	s.append((unsigned)packet_type::ack);
-	ack.stream_RLP(s);
-
 	std::shared_ptr<dev::bytes> write_buffer(std::make_shared<dev::bytes>());
-	s.swapOut(*write_buffer);
+	{
+		dev::RLPStream s;
+		s.append((unsigned)packet_type::ack);
+		ack.stream_RLP(s);
+		s.swapOut(*write_buffer);
+	}
 
 	frame_coder frame_coder;
 	frame_coder.write_frame(write_buffer.get(), *write_buffer);

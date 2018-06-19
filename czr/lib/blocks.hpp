@@ -1,6 +1,7 @@
 #pragma once
 
 #include <czr/lib/numbers.hpp>
+#include <czr/rlp/RLP.h>
 
 #include <assert.h>
 #include <blake2/blake2.h>
@@ -38,8 +39,9 @@ public:
 		czr::block_hash const & witness_list_block_a, std::vector<czr::account> const & witness_list_a,
 		czr::summary_hash const & last_summary_a, czr::block_hash const & last_summary_block_a,
 		std::vector<uint8_t> const & data_a, uint64_t const & exec_timestamp_a);
-	block_hashables (bool &, czr::stream &);
 	block_hashables (bool &, boost::property_tree::ptree const &);
+	block_hashables(bool & error_a, dev::RLP const & r);
+	void stream_RLP(dev::RLPStream & s) const;
 	void serialize_json(boost::property_tree::ptree tree_a) const;
 	void deserialize_json(bool & error_a, boost::property_tree::ptree const & tree_a);
 	void hash (blake2b_state &) const;
@@ -53,7 +55,7 @@ public:
 	std::vector<czr::account> witness_list;
 	czr::summary_hash last_summary;
 	czr::block_hash last_summary_block;
-	std::vector<uint8_t> data;
+	dev::bytes data;
 	uint64_t exec_timestamp;
 };
 
@@ -66,24 +68,26 @@ public:
 		czr::summary_hash const & last_summary_a,	czr::block_hash const & last_summary_block_a,
 		std::vector<uint8_t> const & data_a, uint64_t const & exec_timestamp_a,
 		czr::raw_key const & prv_a, czr::public_key const & pub_a);
-	block(bool &, czr::stream &);
 	block(bool &, boost::property_tree::ptree const &);
+	block(bool & error_a, dev::RLP const & r);
+	void stream_RLP(dev::RLPStream & s) const;
 	virtual ~block() = default;
+
 	czr::block_hash hash() const;
 	std::string to_json();
 	czr::block_hash previous() const;
 	std::vector<czr::block_hash> parents() const;
 	std::vector<czr::block_hash> parents_and_previous() const;
 	czr::block_hash root() const;
-	void serialize(czr::stream &) const;
 	void serialize_json(std::string &) const;
-	bool deserialize(czr::stream &);
 	void deserialize_json(bool & error_a, boost::property_tree::ptree const & tree_a);
 
-	void visit(czr::block_visitor &) const;
+	void visit(czr::block_visitor & visitor_a) const;
+
 	czr::signature block_signature() const;
 	void signature_set(czr::uint512_union const &);
 	bool operator== (czr::block const &) const;
+
 	czr::block_hashables hashables;
 	czr::signature signature;
 };
@@ -95,6 +99,6 @@ public:
 	virtual ~block_visitor () = default;
 };
 
-std::unique_ptr<czr::block> deserialize_block (czr::stream &);
 std::unique_ptr<czr::block> deserialize_block_json (boost::property_tree::ptree const &);
+std::unique_ptr<czr::block> interpret_block_RLP(dev::RLP const & r);
 }

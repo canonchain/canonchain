@@ -14,8 +14,18 @@ int main(int argc, char * const * argv)
 		("daemon", "Start node daemon");
 
 	boost::program_options::variables_map vm;
-	boost::program_options::store(boost::program_options::parse_command_line(argc, argv, description), vm);
-	boost::program_options::notify(vm);
+
+	try
+	{
+		boost::program_options::store(boost::program_options::parse_command_line(argc, argv, description), vm);
+		boost::program_options::notify(vm);
+	}
+	catch (std::exception const & e)
+	{
+		std::cerr << e.what();
+		return -1;
+	}
+
 	int result(0);
 	boost::filesystem::path data_path = vm.count("data_path") ? boost::filesystem::path(vm["data_path"].as<std::string>()) : czr::working_path();
 	if (!czr::handle_node_options(vm))

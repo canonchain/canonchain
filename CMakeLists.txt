@@ -223,6 +223,8 @@ endif ()
 
 add_library (secure
 	${PLATFORM_SECURE_SOURCE}
+	czr/lib/blocks.hpp
+	czr/lib/blocks.cpp
 	czr/config.hpp
 	czr/common.cpp
 	czr/common.hpp
@@ -239,8 +241,6 @@ add_library (secure
 
 SET (CZR_LIB_SOURCES
 	${PLATFORM_LIB_SOURCE}
-	czr/lib/blocks.cpp
-	czr/lib/blocks.hpp
 	czr/lib/interface.cpp
 	czr/lib/numbers.cpp
 	czr/lib/numbers.hpp
@@ -260,6 +260,8 @@ add_library (node
 	czr/node/composer.cpp
 	czr/node/node.hpp
 	czr/node/node.cpp
+	czr/node/node_capability.hpp
+	czr/node/node_capability.cpp
 	czr/node/witness.hpp
 	czr/node/witness.cpp
 	czr/node/rpc.hpp
