@@ -75,6 +75,45 @@ bool czr_daemon::daemon_config::upgrade_json(unsigned version_a, boost::property
 	return result;
 }
 
+
+int czr_daemon::daemon_config::readfile2bytes(dev::bytes &ret, boost::filesystem::path const&filepath)
+{
+	//read2bytes
+	auto toopenfile((filepath / "node.rlp"));
+	std::ifstream  in;
+	std::string str;
+	in.open(toopenfile.string(), std::ios_base::in | std::ios_base::binary);
+	if (in.is_open())
+	{ 
+
+		size_t const c_elementSize = sizeof(typename dev::bytes::value_type);
+		in.seekg(0, in.end);
+		size_t length = in.tellg();
+		if(length)
+		{
+			in.seekg(0, in.beg);
+			ret.resize((length + c_elementSize - 1) / c_elementSize);
+			in.read(const_cast<char*>(reinterpret_cast<char const*>(ret.data())), length);
+		}
+		in.close();
+	}
+	return 0;
+}
+
+int czr_daemon::daemon_config::writebytes2file(dev::bytes & bytes,boost::filesystem::path const&filepath)
+{
+	
+	auto toopenfile((filepath / "node.rlp"));
+	std::ofstream out;
+	out.open(toopenfile.string(), std::ios_base::out | std::ios_base::binary);
+	if(out.is_open())
+	{
+		out.write(reinterpret_cast<char const*>(bytes.data()), bytes.size());
+		out.close();	   
+	}	
+	return 0;
+}
+
 void czr_daemon::daemon::run(boost::filesystem::path const & data_path)
 {
 	boost::filesystem::create_directories(data_path);
@@ -94,6 +133,10 @@ void czr_daemon::daemon::run(boost::filesystem::path const & data_path)
 		{
 			std::list<std::shared_ptr<czr::p2p::icapability>> caps;
 			dev::bytesConstRef restore_network_bytes;//todo:get network bytes
+			dev::bytes nbytes;
+			config.readfile2bytes(nbytes, data_path);
+			restore_network_bytes = &(nbytes);
+
 			std::shared_ptr<czr::p2p::host> host(std::make_shared<czr::p2p::host>(config.p2p, io_service, caps, restore_network_bytes));
 
 			//auto node(std::make_shared<czr::node>(init, io_service, data_path, alarm, config.node));
@@ -108,6 +151,7 @@ void czr_daemon::daemon::run(boost::filesystem::path const & data_path)
 				//	rpc->start();
 				//}
 				runner = std::make_unique<czr::thread_runner>(io_service, config.node.io_threads);
+				runner->join();
 
 				signal(SIGABRT, &exit_handler::handle);
 				signal(SIGTERM, &exit_handler::handle);
@@ -115,15 +159,10 @@ void czr_daemon::daemon::run(boost::filesystem::path const & data_path)
 				
 				while (!exit_handler::should_exit())
 					std::this_thread::sleep_for(std::chrono::milliseconds(1000));
-
-				dev::bytes network_bytes(host->save_network());
 				//todo:save network bytes
-				host->stop();
+				dev::bytes network_bytes(host->save_network());
+				config.writebytes2file(network_bytes, data_path);
 
-				io_service.stop();
-
-				runner->join();
-				BOOST_LOG_TRIVIAL(info) << "Stopped";
 			}
 			else
 			{
@@ -140,3 +179,6 @@ void czr_daemon::daemon::run(boost::filesystem::path const & data_path)
 		std::cerr << "Error deserializing config, path:" << config_path << "\n";
 	}
 }
+
+
+
