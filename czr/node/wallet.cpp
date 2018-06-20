@@ -765,7 +765,7 @@ void czr::wallet::send_async(czr::account const & from_a, czr::account const & t
 czr::send_result czr::wallet::send_action(czr::account const & from_a, czr::account const & to_a,
 	czr::amount const & amount_a, std::vector<uint8_t> data_a, boost::optional<std::string> id_a)
 {
-	std::shared_ptr<czr::joint> message;
+	std::shared_ptr<czr::joint_message> message;
 	boost::optional<czr::mdb_val> id_mdb_val;
 	if (id_a)
 	{
@@ -785,7 +785,7 @@ czr::send_result czr::wallet::send_action(czr::account const & from_a, czr::acco
 				auto block = node.store.block_get(transaction, hash);
 				if (block != nullptr)
 				{
-					message = std::make_shared<czr::joint>(std::shared_ptr<czr::block>(block.release()));
+					message = std::make_shared<czr::joint_message>(std::shared_ptr<czr::block>(block.release()));
 					cached_block = true;
 				}
 			}

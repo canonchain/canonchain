@@ -299,7 +299,7 @@ bool czr::node_config::deserialize_json(bool & upgraded_a, boost::property_tree:
 	return result;
 }
 
-czr::block_processor_item::block_processor_item(czr::joint joint_a) :
+czr::block_processor_item::block_processor_item(czr::joint_message joint_a) :
 	joint(joint_a)
 {
 }
@@ -423,7 +423,7 @@ void czr::block_processor::process_receive_many(std::deque<czr::block_processor_
 	}
 }
 
-czr::validate_result czr::block_processor::process_receive_one(MDB_txn * transaction_a, czr::joint const & message)
+czr::validate_result czr::block_processor::process_receive_one(MDB_txn * transaction_a, czr::joint_message const & message)
 {
 	czr::validate_result result(node.validation->validate(transaction_a, message));
 
@@ -433,7 +433,8 @@ czr::validate_result czr::block_processor::process_receive_one(MDB_txn * transac
 		{
 			node.chain->save_block(transaction_a, *message.block);
 
-			//todo:send block;
+			//send block
+			node.capability->send_block(message);
 
 			if (node.config.logging.ledger_logging())
 			{
@@ -531,6 +532,7 @@ czr::node::node(czr::node_init & init_a, boost::asio::io_service & service_a,
 	io_service(service_a),
 	config(config_a),
 	alarm(alarm_a),
+	capability(std::make_shared<czr::node_capability>(*this)),
 	host(std::make_shared<p2p::host>(config.p2p, io_service, restore_network_bytes_a)),
 	store(init_a.error, application_path_a / "data.ldb", config_a.lmdb_max_dbs),
 	gap_cache(*this),
@@ -544,7 +546,7 @@ czr::node::node(czr::node_init & init_a, boost::asio::io_service & service_a,
 	block_processor_thread([this]() { this->block_processor.process_blocks(); })
 {
 
-	host->register_capability(std::make_shared<czr::node_capability>(*this));
+	host->register_capability(capability);
 
 	wallets.observer = [this](bool active) {
 		observers.wallet(active);
@@ -731,7 +733,7 @@ void czr::gap_cache::purge_old()
 	}
 }
 
-void czr::node::process_active(czr::joint const & message)
+void czr::node::process_active(czr::joint_message const & message)
 {
 	block_arrival.add(message.block->hash());
 	block_processor.add(message);
@@ -748,8 +750,9 @@ void czr::node::start()
 
 void czr::node::stop()
 {
-	host->stop();
 	BOOST_LOG(log) << "Node stopping";
+
+	host->stop();
 	block_processor.stop();
 	wallets.stop();
 	if (block_processor_thread.joinable())
@@ -1443,7 +1446,7 @@ czr::inactive_node::~inactive_node()
 	node->stop();
 }
 
-czr::late_message_info::late_message_info(czr::joint const & message_a) :
+czr::late_message_info::late_message_info(czr::joint_message const & message_a) :
 	message(message_a),
 	timestamp(message_a.block->hashables.exec_timestamp),
 	hash(message_a.block->hash())

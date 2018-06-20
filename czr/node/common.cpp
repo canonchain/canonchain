@@ -2,12 +2,12 @@
 #include <czr/node/common.hpp>
 #include <czr/node/wallet.hpp>
 
-czr::joint::joint (std::shared_ptr<czr::block> block_a) :
+czr::joint_message::joint_message (std::shared_ptr<czr::block> block_a) :
 block (block_a)
 {
 }
 
-czr::joint::joint(bool & error_a, dev::RLP const & r)
+czr::joint_message::joint_message(bool & error_a, dev::RLP const & r)
 {
 	error_a = r.itemCount() != 1 && r.itemCount() != 8;
 	if (error_a)
@@ -32,7 +32,7 @@ czr::joint::joint(bool & error_a, dev::RLP const & r)
 	}
 }
 
-void czr::joint::stream_RLP(dev::RLPStream & s) const
+void czr::joint_message::stream_RLP(dev::RLPStream & s) const
 {
 	s.appendList(8);
 	block->stream_RLP(s);

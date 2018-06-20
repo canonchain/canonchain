@@ -20,7 +20,7 @@ namespace czr
 		validation(czr::node & node_a);
 		~validation();
 
-		czr::validate_result validate(MDB_txn * transaction_a, czr::joint const & message);
+		czr::validate_result validate(MDB_txn * transaction_a, czr::joint_message const & message);
 
 		czr::node & node;
 		czr::ledger & ledger;

@@ -78,11 +78,11 @@ struct hash<czr::endpoint>
 namespace czr
 {
 
-class joint
+class joint_message
 {
 public:
-	joint(std::shared_ptr<czr::block>);
-	joint (bool & error_a, dev::RLP const & r);
+	joint_message(std::shared_ptr<czr::block>);
+	joint_message (bool & error_a, dev::RLP const & r);
 	void stream_RLP(dev::RLPStream & s) const;
 
 	std::shared_ptr<czr::block> block;

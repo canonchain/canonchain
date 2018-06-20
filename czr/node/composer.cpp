@@ -2,7 +2,7 @@
 
 #include <unordered_set>
 
-czr::compose_result::compose_result(czr::compose_result_codes const & code_a, std::shared_ptr<czr::joint> message_a):
+czr::compose_result::compose_result(czr::compose_result_codes const & code_a, std::shared_ptr<czr::joint_message> message_a):
 	code(code_a),
 	message(message_a)
 {
@@ -89,7 +89,7 @@ czr::compose_result czr::composer::compose(MDB_txn * transaction_a, czr::account
 	std::shared_ptr<czr::block> block(new czr::block(from_a, to_a, amount_a, previous, parents, 
 		witness_list_block, witness_list, last_summary, last_summary_block, data_a, exec_timestamp, prv_a, pub_a));
 
-	std::shared_ptr<czr::joint> message(new czr::joint(block));
+	std::shared_ptr<czr::joint_message> message(new czr::joint_message(block));
 
 	czr::validate_result result(node.validation->validate(transaction_a, *message));
 	if (result.code != validate_result_codes::ok)

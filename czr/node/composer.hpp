@@ -21,9 +21,9 @@ namespace czr
 	class compose_result
 	{
 	public:
-		compose_result(czr::compose_result_codes const & code_a, std::shared_ptr<czr::joint> message);
+		compose_result(czr::compose_result_codes const & code_a, std::shared_ptr<czr::joint_message> message);
 		czr::compose_result_codes code;
-		std::shared_ptr<czr::joint> message;
+		std::shared_ptr<czr::joint_message> message;
 	};
 
 	class composer

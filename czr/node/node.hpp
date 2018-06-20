@@ -178,8 +178,8 @@ namespace czr
 	class block_processor_item
 	{
 	public:
-		block_processor_item(czr::joint);
-		czr::joint joint;
+		block_processor_item(czr::joint_message);
+		czr::joint_message joint;
 	};
 	// Processing blocks is a potentially long IO operation
 	// This class isolates block insertion from other operations like servicing network operations
@@ -193,7 +193,7 @@ namespace czr
 		void add(czr::block_processor_item const &);
 		void process_receive_many(czr::block_processor_item const &);
 		void process_receive_many(std::deque<czr::block_processor_item> &);
-		czr::validate_result process_receive_one(MDB_txn *, czr::joint const &);
+		czr::validate_result process_receive_one(MDB_txn *, czr::joint_message const &);
 		void process_blocks();
 		czr::node & node;
 
@@ -208,10 +208,10 @@ namespace czr
 	class late_message_info
 	{
 	public:
-		late_message_info(czr::joint const & message_a);
+		late_message_info(czr::joint_message const & message_a);
 		uint64_t timestamp;
 		czr::block_hash hash;
-		czr::joint const & message;
+		czr::joint_message const & message;
 	};
 
 	class late_message_cache
@@ -252,6 +252,7 @@ namespace czr
 
 	class chain;
 	class validation;
+	class node_capability;
 
 	class node : public std::enable_shared_from_this<czr::node>
 	{
@@ -271,7 +272,7 @@ namespace czr
 		void stop();
 		std::shared_ptr<czr::node> shared();
 		int store_version();
-		void process_active(czr::joint const &);
+		void process_active(czr::joint_message const &);
 		czr::block_hash latest(czr::account const &);
 		czr::uint128_t balance(czr::account const &);
 		std::unique_ptr<czr::block> block(czr::block_hash const &);
@@ -284,6 +285,7 @@ namespace czr
 		czr::node_config config;
 		czr::alarm & alarm;
 		boost::log::sources::logger_mt log;
+		std::shared_ptr<czr::node_capability> capability;
 		std::shared_ptr<p2p::host> host;
 		czr::block_store store;
 		czr::gap_cache gap_cache;
