@@ -66,13 +66,14 @@ namespace czr
 	{
 	public:
 		witness_list_info();
-		witness_list_info(MDB_val const &);
+		witness_list_info(dev::RLP const & r);
 		witness_list_info(std::vector<czr::account> const &);
-		czr::mdb_val val() const;
+	    void stream_RLP(dev::RLPStream & s) const;
 		czr::witness_list_hash hash() const;
 		bool is_compatible(witness_list_info const &) const;
 		bool contains(czr::account const &) const;
 		std::string to_string() const;
+
 		std::vector<czr::account> witness_list;
 	};
 	class free_key
@@ -160,8 +161,9 @@ namespace czr
 	{
 	public:
 		skiplist_info(std::vector<czr::block_hash> const &);
-		skiplist_info(MDB_val const &);
-		czr::mdb_val val() const;
+		skiplist_info(dev::RLP const & r);
+		void stream_RLP(dev::RLPStream & s) const;
+
 		std::vector<czr::block_hash> list;
 	};
 

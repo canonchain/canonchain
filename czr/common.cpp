@@ -93,11 +93,13 @@ czr::witness_list_info::witness_list_info()
 {
 }
 
-czr::witness_list_info::witness_list_info(MDB_val const & val_a)
+czr::witness_list_info::witness_list_info(dev::RLP const & r)
 {
-	assert(false);
-	//todo:serialize///////////////
-	//std::copy(reinterpret_cast<uint8_t const *> (val_a.mv_data), reinterpret_cast<uint8_t const *> (val_a.mv_data) + val_a.mv_size, reinterpret_cast<uint8_t *> (this));
+	assert(r.isList());
+	for (auto w : r)
+	{
+		witness_list.push_back((czr::account)w);
+	}
 }
 
 czr::witness_list_info::witness_list_info(std::vector<czr::account> const & list_a) :
@@ -105,11 +107,11 @@ czr::witness_list_info::witness_list_info(std::vector<czr::account> const & list
 {
 }
 
-czr::mdb_val czr::witness_list_info::val() const
+void czr::witness_list_info::stream_RLP(dev::RLPStream & s) const
 {
-	assert(false);
-	//todo:serialize///////////////
-	return czr::mdb_val(sizeof(*this), const_cast<czr::witness_list_info *> (this));
+	s.appendList(witness_list.size());
+	for (czr::account witness : witness_list)
+		s << witness;
 }
 
 czr::witness_list_hash czr::witness_list_info::hash() const
@@ -169,18 +171,20 @@ czr::witness_list_key::witness_list_key(czr::witness_list_hash const & hash_a, u
 {
 }
 
-czr::witness_list_key::witness_list_key(MDB_val const &)
+czr::witness_list_key::witness_list_key(MDB_val const & val_a)
 {
+	assert(val_a.mv_size == sizeof(*this));
+	std::copy(reinterpret_cast<uint8_t const *> (val_a.mv_data), reinterpret_cast<uint8_t const *> (val_a.mv_data) + sizeof(*this), reinterpret_cast<uint8_t *> (this));
 }
 
-bool czr::witness_list_key::operator==(czr::witness_list_key const &) const
+bool czr::witness_list_key::operator==(czr::witness_list_key const & other) const
 {
-	return false;
+	return hash == other.hash && mci == other.mci;
 }
 
 czr::mdb_val czr::witness_list_key::val() const
 {
-	return czr::mdb_val();
+	return czr::mdb_val(sizeof(*this), const_cast<czr::witness_list_key *> (this));
 }
 
 czr::block_state::block_state()
@@ -295,17 +299,18 @@ czr::skiplist_info::skiplist_info(std::vector<czr::block_hash> const & list_a) :
 {
 }
 
-czr::skiplist_info::skiplist_info(MDB_val const &)
+czr::skiplist_info::skiplist_info(dev::RLP const & r)
 {
-	assert(false);
-	//todo:serialize///////////////
+	assert(r.isList());
+	for (auto sk : r)
+		list.push_back((czr::block_hash) sk);
 }
 
-czr::mdb_val czr::skiplist_info::val() const
+void czr::skiplist_info::stream_RLP(dev::RLPStream & s) const
 {
-	assert(false);
-	//todo:serialize///////////////
-	return czr::mdb_val(sizeof(*this), const_cast<czr::skiplist_info *> (this));
+	s.appendList(list.size());
+	for (czr::block_hash sk : list)
+		s << sk;
 }
 
 czr::mci_block_key::mci_block_key(uint64_t const & mci_a, czr::block_hash const & hash_a):

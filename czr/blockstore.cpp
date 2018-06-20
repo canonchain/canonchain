@@ -691,7 +691,7 @@ void czr::block_store::witness_list_hash_block_put(MDB_txn * transaction_a, czr:
 
 bool czr::block_store::block_witness_list_get(MDB_txn * transaction_a, czr::block_hash const & hash_a, czr::witness_list_info & info_a)
 {
-	czr::mdb_val value;
+	czr:mdb_val value;
 	auto status(mdb_get(transaction_a, block_witness_list, czr::mdb_val(hash_a), value));
 	assert(status == 0 || status == MDB_NOTFOUND);
 	bool result;
@@ -701,7 +701,8 @@ bool czr::block_store::block_witness_list_get(MDB_txn * transaction_a, czr::bloc
 	}
 	else
 	{
-		info_a = czr::witness_list_info(value);
+		dev::RLP r(reinterpret_cast<byte *>(value.data()), value.size());
+		info_a = czr::witness_list_info(r);
 		assert(!result);
 	}
 	return result;
@@ -709,7 +710,13 @@ bool czr::block_store::block_witness_list_get(MDB_txn * transaction_a, czr::bloc
 
 void czr::block_store::block_witness_list_put(MDB_txn * transaction_a, czr::block_hash const & hash_a, czr::witness_list_info const & info_a)
 {
-	auto status(mdb_put(transaction_a, block_witness_list, czr::mdb_val(hash_a), info_a.val(), 0));
+	dev::bytes b;
+	{
+		dev::RLPStream s;
+		info_a.stream_RLP(s);
+		s.swapOut(b);
+	}
+	auto status(mdb_put(transaction_a, block_witness_list, czr::mdb_val(hash_a), czr::mdb_val(b.size(), b.data()), 0));
 	assert(status == 0);
 }
 
@@ -884,7 +891,8 @@ bool czr::block_store::skiplist_get(MDB_txn * transaction_a, czr::block_hash con
 	}
 	else
 	{
-		skiplist_a = czr::skiplist_info(value);
+		dev::RLP r(reinterpret_cast<byte *>(value.data()), value.size());
+		skiplist_a = czr::skiplist_info(r);
 		assert(!result);
 	}
 	return result;
@@ -892,7 +900,13 @@ bool czr::block_store::skiplist_get(MDB_txn * transaction_a, czr::block_hash con
 
 void czr::block_store::skiplist_put(MDB_txn * transaction_a, czr::block_hash const & hash_a, czr::skiplist_info const & skiplist_a)
 {
-	auto status(mdb_put(transaction_a, skiplist, czr::mdb_val(hash_a), skiplist_a.val(), 0));
+	dev::bytes b;
+	{
+		dev::RLPStream s;
+		skiplist_a.stream_RLP(s);
+		s.swapOut(b);
+	}
+	auto status(mdb_put(transaction_a, skiplist, czr::mdb_val(hash_a), czr::mdb_val(b.size(), b.data()), 0));
 	assert(status == 0);
 }
 
@@ -962,7 +976,8 @@ bool czr::block_store::my_witness_list_get(MDB_txn * transaction_a, czr::witness
 	}
 	else
 	{
-		my_wl_info = czr::witness_list_info(value);
+		dev::RLP r(reinterpret_cast<byte *>(value.data()), value.size());
+		my_wl_info = czr::witness_list_info(r);
 		assert(!result);
 	}
 	return result;
@@ -970,7 +985,13 @@ bool czr::block_store::my_witness_list_get(MDB_txn * transaction_a, czr::witness
 
 void czr::block_store::my_witness_list_put(MDB_txn * transaction_a, czr::witness_list_info my_wl_info)
 {
-	auto status(mdb_put(transaction_a, prop, czr::mdb_val(my_witness_list_key), my_wl_info.val(), 0));
+	dev::bytes b;
+	{
+		dev::RLPStream s;
+		my_wl_info.stream_RLP(s);
+		s.swapOut(b);
+	}
+	auto status(mdb_put(transaction_a, prop, czr::mdb_val(my_witness_list_key), czr::mdb_val(b.size(), b.data()), 0));
 	assert(status == 0);
 }
 

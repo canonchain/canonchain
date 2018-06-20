@@ -519,6 +519,51 @@ czr::validate_result czr::block_processor::process_receive_one(MDB_txn * transac
 	return result;
 }
 
+czr::gap_cache::gap_cache(czr::node & node_a) :
+	node(node_a)
+{
+}
+
+void czr::gap_cache::add(MDB_txn * transaction_a, std::shared_ptr<czr::block> block_a)
+{
+	auto hash(block_a->hash());
+	std::lock_guard<std::mutex> lock(mutex);
+	auto existing(blocks.get<1>().find(hash));
+	if (existing != blocks.get<1>().end())
+	{
+		blocks.get<1>().modify(existing, [](czr::gap_information & info) {
+			info.arrival = std::chrono::steady_clock::now();
+		});
+	}
+	else
+	{
+		blocks.insert({ std::chrono::steady_clock::now(), hash });
+		if (blocks.size() > max)
+		{
+			blocks.get<0>().erase(blocks.get<0>().begin());
+		}
+	}
+}
+
+void czr::gap_cache::purge_old()
+{
+	auto cutoff(std::chrono::steady_clock::now() - std::chrono::seconds(10));
+	std::lock_guard<std::mutex> lock(mutex);
+	auto done(false);
+	while (!done && !blocks.empty())
+	{
+		auto first(blocks.get<1>().begin());
+		if (first->arrival < cutoff)
+		{
+			blocks.get<1>().erase(first);
+		}
+		else
+		{
+			done = true;
+		}
+	}
+}
+
 czr::node::node(czr::node_init & init_a, boost::asio::io_service & service_a, uint16_t peering_port_a, 
 	boost::filesystem::path const & application_path_a, czr::alarm & alarm_a, czr::logging const & logging_a,
 	dev::bytesConstRef restore_network_bytes_a) :
@@ -686,51 +731,6 @@ bool czr::node::copy_with_compaction(boost::filesystem::path const & destination
 {
 	return !mdb_env_copy2(store.environment.environment,
 		destination_file.string().c_str(), MDB_CP_COMPACT);
-}
-
-czr::gap_cache::gap_cache(czr::node & node_a) :
-	node(node_a)
-{
-}
-
-void czr::gap_cache::add(MDB_txn * transaction_a, std::shared_ptr<czr::block> block_a)
-{
-	auto hash(block_a->hash());
-	std::lock_guard<std::mutex> lock(mutex);
-	auto existing(blocks.get<1>().find(hash));
-	if (existing != blocks.get<1>().end())
-	{
-		blocks.get<1>().modify(existing, [](czr::gap_information & info) {
-			info.arrival = std::chrono::steady_clock::now();
-		});
-	}
-	else
-	{
-		blocks.insert({ std::chrono::steady_clock::now(), hash });
-		if (blocks.size() > max)
-		{
-			blocks.get<0>().erase(blocks.get<0>().begin());
-		}
-	}
-}
-
-void czr::gap_cache::purge_old()
-{
-	auto cutoff(std::chrono::steady_clock::now() - std::chrono::seconds(10));
-	std::lock_guard<std::mutex> lock(mutex);
-	auto done(false);
-	while (!done && !blocks.empty())
-	{
-		auto first(blocks.get<1>().begin());
-		if (first->arrival < cutoff)
-		{
-			blocks.get<1>().erase(first);
-		}
-		else
-		{
-			done = true;
-		}
-	}
 }
 
 void czr::node::process_active(czr::joint_message const & message)
