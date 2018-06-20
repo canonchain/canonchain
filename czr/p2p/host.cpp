@@ -91,11 +91,14 @@ void host::stop()
 {
 	is_run = false;
 
-	acceptor->cancel();
 	if (acceptor->is_open())
+	{
+		acceptor->cancel();
 		acceptor->close();
+	}
 
-	run_timer->cancel();
+	if (run_timer)
+		run_timer->cancel();
 
 	// disconnect peers
 	for (unsigned n = 0;; n = 0)

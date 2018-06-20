@@ -332,7 +332,7 @@ hashables (error_a, tree_a)
 czr::block::block(bool & error_a, dev::RLP const & r):
 	hashables(error_a, r[0])
 {
-	error_a = r.itemCount() != 3;
+	error_a = r.itemCount() != 2;
 	if (error_a)
 		return;
 
@@ -341,7 +341,7 @@ czr::block::block(bool & error_a, dev::RLP const & r):
 
 void czr::block::stream_RLP(dev::RLPStream & s) const
 {
-	s.appendList(3);
+	s.appendList(2);
 	hashables.stream_RLP(s);
 	s << signature;
 }

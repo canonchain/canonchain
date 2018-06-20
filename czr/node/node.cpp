@@ -89,7 +89,7 @@ czr::logging::logging() :
 	network_keepalive_logging_value(false),
 	node_lifetime_tracing_value(false),
 	log_rpc_value(true),
-	log_to_cerr_value(false),
+	log_to_cerr_value(true),
 	max_size(16 * 1024 * 1024),
 	rotation_size(4 * 1024 * 1024),
 	flush(true)
@@ -704,15 +704,16 @@ czr::node::node(czr::node_init & init_a, boost::asio::io_service & service_a,
 		{
 			BOOST_LOG(log) << "Constructing node";
 		}
-
+		
+		czr::transaction transaction(store.environment, nullptr, true);
 		try
 		{
-			czr::transaction transaction(store.environment, nullptr, true);
 			czr::genesis::try_initialize(transaction, store);
 		}
-		catch (const std::runtime_error & e)
+		catch (const std::exception & e)
 		{
 			BOOST_LOG(log) << boost::str(boost::format("Init genesis error: %1%") % e.what());
+			transaction.abort();
 			init_a.error = true;
 		}
 	}

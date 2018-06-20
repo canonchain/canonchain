@@ -1,3 +1,4 @@
+#include "utility.hpp"
 #include <czr/node/utility.hpp>
 #include <czr/node/working.hpp>
 
@@ -143,7 +144,8 @@ czr::mdb_val::operator MDB_val const & () const
 }
 
 czr::transaction::transaction(czr::mdb_env & environment_a, MDB_txn * parent_a, bool write) :
-	environment(environment_a)
+	environment(environment_a),
+	is_abort(false)
 {
 	auto status(mdb_txn_begin(environment_a, parent_a, write ? 0 : MDB_RDONLY, &handle));
 	assert(status == 0);
@@ -151,8 +153,17 @@ czr::transaction::transaction(czr::mdb_env & environment_a, MDB_txn * parent_a, 
 
 czr::transaction::~transaction()
 {
-	auto status(mdb_txn_commit(handle));
-	assert(status == 0);
+	if (!is_abort)
+	{
+		auto status(mdb_txn_commit(handle));
+		assert(status == 0);
+	}
+}
+
+void czr::transaction::abort()
+{
+	is_abort = true;
+	mdb_txn_abort(handle);
 }
 
 czr::transaction::operator MDB_txn * () const

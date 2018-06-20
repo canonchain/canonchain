@@ -139,8 +139,11 @@ namespace czr
 	public:
 		transaction(czr::mdb_env &, MDB_txn *, bool);
 		~transaction();
+		void abort();
 		operator MDB_txn * () const;
+
 		MDB_txn * handle;
 		czr::mdb_env & environment;
+		bool is_abort;
 	};
 }

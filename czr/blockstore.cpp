@@ -191,13 +191,17 @@ czr::block_store::block_store(bool & error_a, boost::filesystem::path const & pa
 	accounts(0),
 	account_state(0),
 	latest_account_state(0),
+	blocks(0),
 	unchecked(0),
+	meta(0),
 	block_witness_list(0),
 	witness_list_hash_block(0),
 	block_state(0),
+	block_child(0),
 	free(0),
 	unstable(0),
 	main_chain(0),
+	mci_block(0),
 	block_summary(0),
 	summary_block(0),
 	skiplist(0),
@@ -216,9 +220,11 @@ czr::block_store::block_store(bool & error_a, boost::filesystem::path const & pa
 		error_a |= mdb_dbi_open(transaction, "block_witness_list", MDB_CREATE, &block_witness_list) != 0;
 		error_a |= mdb_dbi_open(transaction, "witness_list_hash_block", MDB_CREATE, &witness_list_hash_block) != 0;
 		error_a |= mdb_dbi_open(transaction, "block_state", MDB_CREATE, &block_state) != 0;
+		error_a |= mdb_dbi_open(transaction, "block_child", MDB_CREATE, &block_child) != 0;
 		error_a |= mdb_dbi_open(transaction, "free", MDB_CREATE, &free) != 0;
 		error_a |= mdb_dbi_open(transaction, "unstable", MDB_CREATE, &unstable) != 0;
 		error_a |= mdb_dbi_open(transaction, "main_chain", MDB_CREATE, &main_chain) != 0;
+		error_a |= mdb_dbi_open(transaction, "mci_block", MDB_CREATE, &mci_block) != 0;
 		error_a |= mdb_dbi_open(transaction, "block_summary", MDB_CREATE, &block_summary) != 0;
 		error_a |= mdb_dbi_open(transaction, "summary_block", MDB_CREATE, &summary_block) != 0;
 		error_a |= mdb_dbi_open(transaction, "skiplist", MDB_CREATE, &skiplist) != 0;
@@ -945,17 +951,17 @@ bool czr::block_store::genesis_hash_get(MDB_txn * transaction_a, czr::block_hash
 {
 	czr::mdb_val value;
 	auto status(mdb_get(transaction_a, prop, czr::mdb_val(genesis_hash_key), value));
-	bool result;
+	bool error(false);
 	if (status == MDB_NOTFOUND)
 	{
-		result = true;
+		error = true;
 	}
 	else
 	{
 		genesis_hash = value.uint256();
-		assert(!result);
+		assert(!error);
 	}
-	return result;
+	return error;
 }
 
 void czr::block_store::genesis_hash_put(MDB_txn * transaction_a, czr::block_hash const & genesis_hash)
