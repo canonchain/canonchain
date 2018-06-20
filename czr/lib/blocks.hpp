@@ -10,8 +10,11 @@
 
 namespace czr
 {
-std::string to_string_hex (uint64_t);
-bool from_string_hex (std::string const &, uint64_t &);
+std::string uint64_to_hex(uint64_t);
+bool hex_to_uint64(std::string const &, uint64_t &);
+std::string bytes_to_hex(dev::bytes const & b);
+int from_hex_char(char c) noexcept;
+bool hex_to_bytes(std::string const & s, dev::bytes & out);
 // We operate on streams of uint8_t by convention
 using stream = std::basic_streambuf<uint8_t>;
 // Read a raw byte stream the size of `T' and fill value.
@@ -85,7 +88,6 @@ public:
 	void visit(czr::block_visitor & visitor_a) const;
 
 	czr::signature block_signature() const;
-	void signature_set(czr::uint512_union const &);
 	bool operator== (czr::block const &) const;
 
 	czr::block_hashables hashables;
@@ -99,6 +101,5 @@ public:
 	virtual ~block_visitor () = default;
 };
 
-std::unique_ptr<czr::block> deserialize_block_json (boost::property_tree::ptree const &);
 std::unique_ptr<czr::block> interpret_block_RLP(dev::RLP const & r);
 }

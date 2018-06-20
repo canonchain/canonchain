@@ -1,8 +1,7 @@
 #include <czr/lib/blocks.hpp>
 
-#include <boost/endian/conversion.hpp>
 
-std::string czr::to_string_hex (uint64_t value_a)
+std::string czr::uint64_to_hex (uint64_t value_a)
 {
 	std::stringstream stream;
 	stream << std::hex << std::noshowbase << std::setw (16) << std::setfill ('0');
@@ -10,22 +9,22 @@ std::string czr::to_string_hex (uint64_t value_a)
 	return stream.str ();
 }
 
-bool czr::from_string_hex (std::string const & value_a, uint64_t & target_a)
+bool czr::hex_to_uint64(std::string const & value_a, uint64_t & target_a)
 {
-	auto error (value_a.empty ());
+	auto error(value_a.empty());
 	if (!error)
 	{
-		error = value_a.size () > 16;
+		error = value_a.size() > 16;
 		if (!error)
 		{
-			std::stringstream stream (value_a);
+			std::stringstream stream(value_a);
 			stream << std::hex << std::noshowbase;
 			try
 			{
 				uint64_t number_l;
 				stream >> number_l;
 				target_a = number_l;
-				if (!stream.eof ())
+				if (!stream.eof())
 				{
 					error = true;
 				}
@@ -39,25 +38,52 @@ bool czr::from_string_hex (std::string const & value_a, uint64_t & target_a)
 	return error;
 }
 
-std::string czr::block::to_json ()
+std::string czr::bytes_to_hex(dev::bytes const & b)
 {
-	std::string result;
-	serialize_json (result);
-	return result;
+	static char const* hexdigits = "0123456789abcdef";
+	std::string hex(b.size() * 2, '0');
+	int off = 0;
+	for (auto it(b.begin()); it != b.end(); it++)
+	{
+		hex[off++] = hexdigits[(*it >> 4) & 0x0f];
+		hex[off++] = hexdigits[*it & 0x0f];
+	}
+	return hex;
 }
 
-czr::block_hash czr::block::hash () const
+int czr::from_hex_char(char c) noexcept
 {
-	czr::uint256_union result;
-	blake2b_state hash_l;
-	auto status (blake2b_init (&hash_l, sizeof (result.bytes)));
-	assert (status == 0);
+	if (c >= '0' && c <= '9')
+		return c - '0';
+	else if (c >= 'a' && c <= 'f')
+		return c - 'a' + 10;
+	else if (c >= 'A' && c <= 'F')
+		return c - 'A' + 10;
+	else
+		return -1;
+}
 
-	hashables.hash(hash_l);
+bool czr::hex_to_bytes(std::string const & str , dev::bytes & out)
+{
+	bool error(str.size() % 2 != 0);
+	if (error)
+		return error;
 
-	status = blake2b_final (&hash_l, result.bytes.data (), sizeof (result.bytes));
-	assert (status == 0);
-	return result;
+	unsigned s = (str.size() >= 2 && str[0] == '0' && str[1] == 'x') ? 2 : 0;
+	out.reserve((str.size() - s + 1) / 2);
+	for (unsigned i = s; i < str.size(); i += 2)
+	{
+		int h = from_hex_char(str[i]);
+		int l = from_hex_char(str[i + 1]);
+		if (h != -1 && l != -1)
+			out.push_back((byte)(h * 16 + l));
+		else
+		{
+			error = true;
+			break;
+		}
+	}
+	return error;
 }
 
 czr::block_hashables::block_hashables(czr::account const & from_a, czr::account const & to_a, czr::amount const & amount_a, 
@@ -163,7 +189,7 @@ void czr::block_hashables::serialize_json(boost::property_tree::ptree tree_a) co
 	tree_a.put("last_summary", last_summary.to_string());
 	tree_a.put("last_summary_block", last_summary_block.to_string());
 
-	std::string data_str;	//todo:serialize data to string
+	std::string data_str(czr::bytes_to_hex(data));
 	tree_a.put("data", data_str);
 
 	tree_a.put("exec_timestamp", exec_timestamp);
@@ -233,10 +259,11 @@ void czr::block_hashables::deserialize_json(bool & error_a, boost::property_tree
 		if (error_a)
 			return;
 
-		//todo:deserialize dat from string to bytes;
 		auto data_l(tree_a.get<std::string>("data"));
-		//error_a = data.deserialize(data_l) 
-		
+		error_a = czr::hex_to_bytes(data_l, data);
+		if (error_a)
+			return;
+
 		auto exec_timestamp_l(tree_a.get<std::string>("exec_timestamp"));
 		std::stringstream exec_timestamp_ss(exec_timestamp_l);
 		error_a = (exec_timestamp_ss >> exec_timestamp).bad();
@@ -371,6 +398,27 @@ void czr::block::deserialize_json (bool & error_a, boost::property_tree::ptree c
 	}
 }
 
+std::string czr::block::to_json()
+{
+	std::string result;
+	serialize_json(result);
+	return result;
+}
+
+czr::block_hash czr::block::hash() const
+{
+	czr::uint256_union result;
+	blake2b_state hash_l;
+	auto status(blake2b_init(&hash_l, sizeof(result.bytes)));
+	assert(status == 0);
+
+	hashables.hash(hash_l);
+
+	status = blake2b_final(&hash_l, result.bytes.data(), sizeof(result.bytes));
+	assert(status == 0);
+	return result;
+}
+
 void czr::block::visit (czr::block_visitor & visitor_a) const
 {
 	visitor_a.block (*this);
@@ -390,29 +438,6 @@ czr::block_hash czr::block::root () const
 czr::signature czr::block::block_signature () const
 {
 	return signature;
-}
-
-void czr::block::signature_set (czr::uint512_union const & signature_a)
-{
-	signature = signature_a;
-}
-
-std::unique_ptr<czr::block> czr::deserialize_block_json (boost::property_tree::ptree const & tree_a)
-{
-	std::unique_ptr<czr::block> result;
-	try
-	{
-		bool error;
-		std::unique_ptr<czr::block> obj(new czr::block(error, tree_a));
-		if (!error)
-		{
-			result = std::move(obj);
-		}
-	}
-	catch (std::runtime_error const &)
-	{
-	}
-	return result;
 }
 
 std::unique_ptr<czr::block> czr::interpret_block_RLP (dev::RLP const & r)
