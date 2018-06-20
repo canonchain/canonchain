@@ -379,15 +379,17 @@ void czr::block_processor::process_receive_many(std::deque<czr::block_processor_
 		{
 			czr::transaction transaction(node.store.environment, nullptr, true);
 			auto cutoff(std::chrono::steady_clock::now() + czr::transaction_timeout);
-			while (!blocks_processing.empty() && std::chrono::steady_clock::now() < cutoff)
+			try
 			{
-				auto item(blocks_processing.front());
-				auto block = item.joint.block;
-				blocks_processing.pop_front();
-				auto hash(block->hash());
-				auto result(process_receive_one(transaction, item.joint));
-				switch (result.code)
+				while (!blocks_processing.empty() && std::chrono::steady_clock::now() < cutoff)
 				{
+					auto item(blocks_processing.front());
+					auto block = item.joint.block;
+					blocks_processing.pop_front();
+					auto hash(block->hash());
+					auto result(process_receive_one(transaction, item.joint));
+					switch (result.code)
+					{
 					case czr::validate_result_codes::ok:
 					{
 						progress.push_back(std::make_pair(block, result));
@@ -408,7 +410,14 @@ void czr::block_processor::process_receive_many(std::deque<czr::block_processor_
 					}
 					default:
 						break;
+					}
 				}
+			}
+			catch (std::exception const & e)
+			{
+				BOOST_LOG(node.log) << "Block process error: " << e.what();
+				transaction.abort();
+				throw;
 			}
 		}
 
@@ -446,6 +455,10 @@ czr::validate_result czr::block_processor::process_receive_one(MDB_txn * transac
 		}
 		case czr::validate_result_codes::old:
 		{
+			//send block
+			node.capability->send_block(message);
+
+
 			if (node.config.logging.ledger_duplicate_logging())
 			{
 				BOOST_LOG(node.log) << boost::str(boost::format("Old for: %1%") % message.block->hash().to_string());
