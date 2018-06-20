@@ -1,14 +1,13 @@
 #pragma once
 
-//#include <czr/config.hpp>
-//#include <czr/lib/numbers.hpp>
 #include <czr/lib/utility.hpp>
 
 #include <czr/node/validation.hpp>
 #include <czr/node/chain.hpp>
 #include <czr/ledger.hpp>
 #include <czr/node/wallet.hpp>
-#include <czr/p2p/common.hpp>
+#include <czr/p2p/host.hpp>
+#include <czr/node/node_capability.hpp>
 
 #include <condition_variable>
 #include <memory>
@@ -156,15 +155,13 @@ namespace czr
 		void serialize_json(boost::property_tree::ptree &) const;
 		bool deserialize_json(bool &, boost::property_tree::ptree &);
 		czr::logging logging;
+		p2p::p2p_config p2p;
 		unsigned password_fanout;
 		unsigned io_threads;
 		std::string callback_address;
 		uint16_t callback_port;
 		std::string callback_target;
 		int lmdb_max_dbs;
-		static std::chrono::seconds constexpr keepalive_period = std::chrono::seconds(60);
-		static std::chrono::seconds constexpr keepalive_cutoff = keepalive_period * 5;
-		static std::chrono::minutes constexpr wallet_backup_interval = std::chrono::minutes(5);
 	};
 
 	class node_observers
@@ -259,8 +256,10 @@ namespace czr
 	class node : public std::enable_shared_from_this<czr::node>
 	{
 	public:
-		node(czr::node_init & init_a, boost::asio::io_service & service_a, uint16_t peering_port_a, boost::filesystem::path const & application_path_a, czr::alarm & alarm_a, czr::logging const & logging_a);
-		node(czr::node_init & init_a, boost::asio::io_service & service_a, boost::filesystem::path const & application_path_a, czr::alarm & alarm_a, czr::node_config const & config_a);
+		node(czr::node_init & init_a, boost::asio::io_service & service_a, uint16_t peering_port_a, boost::filesystem::path const & application_path_a, 
+			czr::alarm & alarm_a, czr::logging const & logging_a, dev::bytesConstRef restore_network_bytes);
+		node(czr::node_init & init_a, boost::asio::io_service & service_a, boost::filesystem::path const & application_path_a, 
+			czr::alarm & alarm_a, czr::node_config const & config_a, dev::bytesConstRef restore_network_bytes);
 		~node();
 		template <typename T>
 		void background(T action_a)
@@ -279,10 +278,13 @@ namespace czr
 		void ongoing_store_flush();
 		void ongoing_retry_late_message();
 		void backup_wallet();
-		boost::asio::io_service & service;
+		dev::bytes network_bytes();
+
+		boost::asio::io_service & io_service;
 		czr::node_config config;
 		czr::alarm & alarm;
 		boost::log::sources::logger_mt log;
+		std::shared_ptr<p2p::host> host;
 		czr::block_store store;
 		czr::gap_cache gap_cache;
 		czr::ledger ledger;
@@ -297,8 +299,6 @@ namespace czr
 		czr::block_arrival block_arrival;
 		czr::late_message_cache late_message_cache;
 		czr::invalid_block_cache invalid_block_cache;
-		static std::chrono::seconds constexpr period = std::chrono::seconds(60);
-		static std::chrono::seconds constexpr cutoff = period * 5;
 		static std::chrono::minutes constexpr backup_interval = std::chrono::minutes(5);
 	};
 

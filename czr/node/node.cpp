@@ -20,8 +20,6 @@
 
 #include <ed25519-donna/ed25519.h>
 
-std::chrono::seconds constexpr czr::node::period;
-std::chrono::seconds constexpr czr::node::cutoff;
 std::chrono::minutes constexpr czr::node::backup_interval;
 
 bool czr::operation::operator> (czr::operation const & other_a) const
@@ -240,9 +238,15 @@ czr::node_config::node_config(czr::logging const & logging_a) :
 void czr::node_config::serialize_json(boost::property_tree::ptree & tree_a) const
 {
 	tree_a.put("version", "1");
+
 	boost::property_tree::ptree logging_l;
 	logging.serialize_json(logging_l);
 	tree_a.add_child("logging", logging_l);
+
+	boost::property_tree::ptree p2p_l;
+	p2p.serialize_json(p2p_l);
+	tree_a.add_child("p2p", p2p_l);
+
 	tree_a.put("password_fanout", std::to_string(password_fanout));
 	tree_a.put("io_threads", std::to_string(io_threads));
 	tree_a.put("callback_address", callback_address);
@@ -264,6 +268,7 @@ bool czr::node_config::deserialize_json(bool & upgraded_a, boost::property_tree:
 			upgraded_a = true;
 		}
 		auto & logging_l(tree_a.get_child("logging"));
+		auto & p2p_l(tree_a.get_child("p2p"));
 		auto password_fanout_l(tree_a.get<std::string>("password_fanout"));
 		auto io_threads_l(tree_a.get<std::string>("io_threads"));
 		callback_address = tree_a.get<std::string>("callback_address");
@@ -277,6 +282,7 @@ bool czr::node_config::deserialize_json(bool & upgraded_a, boost::property_tree:
 			io_threads = std::stoul(io_threads_l);
 			lmdb_max_dbs = std::stoi(lmdb_max_dbs_l);
 			result |= logging.deserialize_json(upgraded_a, logging_l);
+			result |= p2p.deserialize_json(upgraded_a, p2p_l);
 			result |= password_fanout < 16;
 			result |= password_fanout > 1024 * 1024;
 			result |= io_threads == 0;
@@ -427,6 +433,8 @@ czr::validate_result czr::block_processor::process_receive_one(MDB_txn * transac
 		{
 			node.chain->save_block(transaction_a, *message.block);
 
+			//todo:send block;
+
 			if (node.config.logging.ledger_logging())
 			{
 				std::string block;
@@ -511,16 +519,19 @@ czr::validate_result czr::block_processor::process_receive_one(MDB_txn * transac
 }
 
 czr::node::node(czr::node_init & init_a, boost::asio::io_service & service_a, uint16_t peering_port_a, 
-	boost::filesystem::path const & application_path_a, czr::alarm & alarm_a, czr::logging const & logging_a) :
-	node(init_a, service_a, application_path_a, alarm_a, czr::node_config(logging_a))
+	boost::filesystem::path const & application_path_a, czr::alarm & alarm_a, czr::logging const & logging_a,
+	dev::bytesConstRef restore_network_bytes_a) :
+	node(init_a, service_a, application_path_a, alarm_a, czr::node_config(logging_a), restore_network_bytes_a)
 {
 }
 
 czr::node::node(czr::node_init & init_a, boost::asio::io_service & service_a, 
-	boost::filesystem::path const & application_path_a, czr::alarm & alarm_a, czr::node_config const & config_a) :
-	service(service_a),
+	boost::filesystem::path const & application_path_a, czr::alarm & alarm_a, czr::node_config const & config_a, 
+	dev::bytesConstRef restore_network_bytes_a) :
+	io_service(service_a),
 	config(config_a),
 	alarm(alarm_a),
+	host(std::make_shared<p2p::host>(config.p2p, io_service, restore_network_bytes_a)),
 	store(init_a.error, application_path_a / "data.ldb", config_a.lmdb_max_dbs),
 	gap_cache(*this),
 	ledger(store),
@@ -532,6 +543,9 @@ czr::node::node(czr::node_init & init_a, boost::asio::io_service & service_a,
 	block_processor(*this),
 	block_processor_thread([this]() { this->block_processor.process_blocks(); })
 {
+
+	host->register_capability(std::make_shared<czr::node_capability>(*this));
+
 	wallets.observer = [this](bool active) {
 		observers.wallet(active);
 	};
@@ -556,13 +570,13 @@ czr::node::node(czr::node_init & init_a, boost::asio::io_service & service_a,
 					auto address(node_l->config.callback_address);
 					auto port(node_l->config.callback_port);
 					auto target(std::make_shared<std::string>(node_l->config.callback_target));
-					auto resolver(std::make_shared<boost::asio::ip::tcp::resolver>(node_l->service));
+					auto resolver(std::make_shared<boost::asio::ip::tcp::resolver>(node_l->io_service));
 					resolver->async_resolve(boost::asio::ip::tcp::resolver::query(address, std::to_string(port)), [node_l, address, port, target, body, resolver](boost::system::error_code const & ec, boost::asio::ip::tcp::resolver::iterator i_a) {
 						if (!ec)
 						{
 							for (auto i(i_a), n(boost::asio::ip::tcp::resolver::iterator{}); i != n; ++i)
 							{
-								auto sock(std::make_shared<boost::asio::ip::tcp::socket>(node_l->service));
+								auto sock(std::make_shared<boost::asio::ip::tcp::socket>(node_l->io_service));
 								sock->async_connect(i->endpoint(), [node_l, target, body, sock, address, port](boost::system::error_code const & ec) {
 									if (!ec)
 									{
@@ -725,6 +739,7 @@ void czr::node::process_active(czr::joint const & message)
 
 void czr::node::start()
 {
+	host->start();
 	ongoing_store_flush();
 	ongoing_retry_late_message();
 	backup_wallet();
@@ -733,6 +748,7 @@ void czr::node::start()
 
 void czr::node::stop()
 {
+	host->stop();
 	BOOST_LOG(log) << "Node stopping";
 	block_processor.stop();
 	wallets.stop();
@@ -805,6 +821,11 @@ void czr::node::backup_wallet()
 	});
 }
 
+dev::bytes czr::node::network_bytes()
+{
+	return host->network_bytes();
+}
+
 void czr::block_arrival::add(czr::block_hash const & hash_a)
 {
 	std::lock_guard<std::mutex> lock(mutex);
@@ -849,7 +870,7 @@ czr::thread_runner::thread_runner(boost::asio::io_service & service_a, unsigned 
 			}
 			catch (...)
 			{
-				assert(false && "Unhandled service exception");
+				assert(false && "Unhandled io_service exception");
 			}
 		}));
 	}
@@ -1414,7 +1435,7 @@ czr::inactive_node::inactive_node(boost::filesystem::path const & path) :
 {
 	boost::filesystem::create_directories(path);
 	logging.init(path);
-	node = std::make_shared<czr::node>(init, *service, 24000, path, alarm, logging);
+	node = std::make_shared<czr::node>(init, *service, 24000, path, alarm, logging, dev::bytesConstRef());
 }
 
 czr::inactive_node::~inactive_node()

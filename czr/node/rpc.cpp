@@ -1296,7 +1296,7 @@ void czr::rpc_handler::wallet_lock()
 czr::rpc_connection::rpc_connection(czr::node & node_a, czr::rpc & rpc_a) :
 	node(node_a.shared()),
 	rpc(rpc_a),
-	socket(node_a.service)
+	socket(node_a.io_service)
 {
 	responded.clear();
 }
