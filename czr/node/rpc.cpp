@@ -851,8 +851,8 @@ void czr::rpc_handler::send()
 	}
 
 	std::string data_text(request.get<std::string>("data"));
-	std::vector<uint8_t> data; //todo:serialize data_text to data
-							   //error =
+	dev::bytes data;
+	error = czr::hex_to_bytes(data_text, data);
 	if (error)
 	{
 		error_response(response, "Bad data");
