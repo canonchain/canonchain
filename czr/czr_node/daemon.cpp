@@ -75,7 +75,7 @@ bool czr_daemon::daemon_config::upgrade_json(unsigned version_a, boost::property
 }
 
 
-int czr_daemon::daemon_config::readfile2bytes(dev::bytes &ret, boost::filesystem::path const&filepath)
+void czr_daemon::daemon_config::readfile2bytes(dev::bytes &ret, boost::filesystem::path const&filepath)
 {
 	//read2bytes
 	auto toopenfile((filepath / "node.rlp"));
@@ -96,10 +96,10 @@ int czr_daemon::daemon_config::readfile2bytes(dev::bytes &ret, boost::filesystem
 		}
 		in.close();
 	}
-	return 0;
+	return ;
 }
 
-int czr_daemon::daemon_config::writebytes2file(dev::bytes & bytes,boost::filesystem::path const&filepath)
+void czr_daemon::daemon_config::writebytes2file(dev::bytes & bytes,boost::filesystem::path const&filepath)
 {
 	
 	auto toopenfile((filepath / "node.rlp"));
@@ -110,7 +110,7 @@ int czr_daemon::daemon_config::writebytes2file(dev::bytes & bytes,boost::filesys
 		out.write(reinterpret_cast<char const*>(bytes.data()), bytes.size());
 		out.close();	   
 	}	
-	return 0;
+	return ;
 }
 
 void czr_daemon::daemon::run(boost::filesystem::path const & data_path)
