@@ -3,9 +3,6 @@
 #include <boost/lexical_cast.hpp>
 #include <boost/program_options.hpp>
 
-#include <boost/algorithm/hex.hpp>
-#include <string>
-
 int main(int argc, char * const * argv)
 {
 	boost::program_options::options_description description("Command line options");
