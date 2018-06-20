@@ -721,11 +721,6 @@ czr::node::node(czr::node_init & init_a, boost::asio::io_service & service_a,
 
 czr::node::~node()
 {
-	if (config.logging.node_lifetime_tracing())
-	{
-		BOOST_LOG(log) << "Destructing node";
-	}
-	stop();
 }
 
 bool czr::node::copy_with_compaction(boost::filesystem::path const & destination_file)
