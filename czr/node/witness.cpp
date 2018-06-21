@@ -141,6 +141,7 @@ void czr::witness::do_witness()
 			BOOST_LOG(this_l->node.log) << "Witness error: Data size to large";
 			break;
 		case czr::send_result_codes::validate_error:
+		{
 			BOOST_LOG(this_l->node.log) << "Witness error: Validate error";
 
 			//wait some seconds and retry
@@ -150,6 +151,7 @@ void czr::witness::do_witness()
 			});
 
 			break;
+		}
 		case czr::send_result_codes::error:
 			BOOST_LOG(this_l->node.log) << "Witness error: Generate block error";
 			break;

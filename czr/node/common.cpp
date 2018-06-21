@@ -20,7 +20,7 @@ czr::joint_message::joint_message(bool & error_a, dev::RLP const & r)
 	if (r.itemCount() > 1)
 	{
 		summary_hash = (czr::summary_hash)r[1];
-		dev::RLP & sk_list_rlp = r[2];
+		dev::RLP const & sk_list_rlp = r[2];
 		block_skiplist.resize(sk_list_rlp.itemCount());
 		for (dev::RLP const & sk : sk_list_rlp)
 			block_skiplist.push_back((czr::block_hash)sk);
