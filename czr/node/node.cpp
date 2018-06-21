@@ -89,7 +89,7 @@ czr::logging::logging() :
 	network_keepalive_logging_value(false),
 	node_lifetime_tracing_value(false),
 	log_rpc_value(true),
-	log_to_cerr_value(true),
+	log_to_cerr_value(false),
 	max_size(16 * 1024 * 1024),
 	rotation_size(4 * 1024 * 1024),
 	flush(true)
@@ -455,9 +455,6 @@ czr::validate_result czr::block_processor::process_receive_one(MDB_txn * transac
 		}
 		case czr::validate_result_codes::old:
 		{
-			//send block
-			node.capability->send_block(message);
-
 			if (node.config.logging.ledger_duplicate_logging())
 			{
 				BOOST_LOG(node.log) << boost::str(boost::format("Old for: %1%") % message.block->hash().to_string());
