@@ -45,7 +45,7 @@ namespace czr
 		bool operator!= (czr::store_iterator const &) const;
 		MDB_cursor * cursor;
 		czr::store_entry current;
-		czr::store_iterator_direction direction;
+		czr::store_iterator_direction direction = czr::store_iterator_direction::forward;
 	};
 
 	/**

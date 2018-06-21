@@ -74,8 +74,7 @@ czr::store_entry & czr::store_iterator::operator-> ()
 }
 
 czr::store_iterator::store_iterator(MDB_txn *, MDB_dbi):
-	cursor(nullptr),
-	direction(czr::store_iterator_direction::forward)
+	cursor(nullptr)
 {
 }
 
@@ -127,6 +126,7 @@ czr::store_iterator::store_iterator(czr::store_iterator && other_a)
 	cursor = other_a.cursor;
 	other_a.cursor = nullptr;
 	current = other_a.current;
+	direction = other_a.direction;
 }
 
 czr::store_iterator::~store_iterator()
