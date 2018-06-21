@@ -44,20 +44,21 @@ namespace czr
 			hash256 add_packet_and_sign(czr::private_key const & prv_a, discover_packet const & packet_a)
 			{
 				assert((byte)packet_a.packet_type());
-				//rlp: type || data
+				//rlp: network type || packet type || packet
 				dev::bytes rlp;
 				{
 					dev::RLPStream s;
+					s.appendRaw(dev::bytes(1, (byte)czr::czr_network));
 					s.appendRaw(dev::bytes(1, (byte)packet_a.packet_type()));
 					packet_a.stream_RLP(s);
 					s.swapOut(rlp);
 				}
 				dev::bytesConstRef rlp_cref(&rlp);
 
-				//rlp hash : H(type || data)
+				//rlp hash : H(packet type || packet)
 				hash256 rlp_hash(blake2b_hash(rlp_cref));
 
-				//rlp sig : S(H(type||data))
+				//rlp sig : S(H(packet type || packet))
 				czr::signature rlp_sig(czr::sign_message(prv_a, packet_a.source_id, rlp_hash));
 
 				BOOST_LOG_TRIVIAL(debug) << boost::str(boost::format("send packet sig, node id:%1%, hash:%2%, sig:%3%") 

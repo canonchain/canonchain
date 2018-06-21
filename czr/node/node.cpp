@@ -458,7 +458,6 @@ czr::validate_result czr::block_processor::process_receive_one(MDB_txn * transac
 			//send block
 			node.capability->send_block(message);
 
-
 			if (node.config.logging.ledger_duplicate_logging())
 			{
 				BOOST_LOG(node.log) << boost::str(boost::format("Old for: %1%") % message.block->hash().to_string());

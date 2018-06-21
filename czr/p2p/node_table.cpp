@@ -223,7 +223,7 @@ void node_table::handle_receive(bi::udp::endpoint const & from, dev::bytesConstR
 		{
 			auto in = dynamic_cast<find_node_packet const&>(*packet);
 			std::vector<std::shared_ptr<node_entry>> nearest = nearest_node_entries(in.target);
-			static unsigned const nlimit = (max_udp_packet_size - 129) / neighbour::max_size;
+			static unsigned const nlimit = (max_udp_packet_size - 130) / neighbour::max_size;
 			for (unsigned offset = 0; offset < nearest.size(); offset += nlimit)
 			{
 				neighbours_packet p(my_node_info.id, nearest, offset, nlimit);
@@ -274,8 +274,8 @@ void node_table::handle_receive(bi::udp::endpoint const & from, dev::bytesConstR
 std::unique_ptr<discover_packet> node_table::interpret_packet(bi::udp::endpoint const & from, dev::bytesConstRef data)
 {
 	std::unique_ptr<discover_packet> packet = std::unique_ptr<discover_packet>();
-	// hash + node id + sig + packet type + packet (smallest possible packet is empty neighbours packet which is 3 bytes)
-	if (data.size() < sizeof(hash256) + sizeof(node_id) + sizeof(czr::signature) + 1 + 3)
+	// hash + node id + sig + network + packet type + packet (smallest possible packet is ping packet which is 5 bytes)
+	if (data.size() < sizeof(hash256) + sizeof(node_id) + sizeof(czr::signature) + 1 + 1 + 5)
 	{
 		BOOST_LOG_TRIVIAL(debug) << "Invalid packet (too small) from " << from.address().to_string() << ":" << from.port();
 		return packet;
@@ -313,10 +313,18 @@ std::unique_ptr<discover_packet> node_table::interpret_packet(bi::udp::endpoint 
 		return packet;
 	}
 
+	czr::czr_networks network_type((czr::czr_networks)rlp_cref[0]);
+	if(network_type != czr::czr_network)
+	{
+		BOOST_LOG_TRIVIAL(debug) << "Invalid network type " << (unsigned)network_type << " from " << from.address().to_string() << ":" << from.port();
+		return packet;
+	}
+
 	try
 	{
-		dev::bytesConstRef packet_cref(rlp_cref.cropped(1));
-		switch ((discover_packet_type)rlp_cref[0])
+		discover_packet_type p_type((discover_packet_type)rlp_cref[1]);
+		dev::bytesConstRef packet_cref(rlp_cref.cropped(2));
+		switch (p_type)
 		{
 		case discover_packet_type::ping:
 		{
