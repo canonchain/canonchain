@@ -96,7 +96,7 @@ bool czr::rpc_config::deserialize_json(boost::property_tree::ptree const & tree_
 				result = true;
 			}
 			boost::system::error_code ec;
-			address = boost::asio::ip::address_v6::from_string(address_l, ec);
+			address = boost::asio::ip::address::from_string(address_l, ec);
 			if (ec)
 			{
 				result = true;
