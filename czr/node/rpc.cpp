@@ -50,14 +50,14 @@ bool czr::rpc_secure_config::deserialize_json(boost::property_tree::ptree const 
 
 
 czr::rpc_config::rpc_config() :
-	address(boost::asio::ip::address_v6::loopback()),
+	address(boost::asio::ip::address_v4::loopback()),
 	port(czr::rpc::rpc_port),
 	enable_control(false)
 {
 }
 
 czr::rpc_config::rpc_config(bool enable_control_a) :
-	address(boost::asio::ip::address_v6::loopback()),
+	address(boost::asio::ip::address_v4::loopback()),
 	port(czr::rpc::rpc_port),
 	enable_control(enable_control_a)
 {

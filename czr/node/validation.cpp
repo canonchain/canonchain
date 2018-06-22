@@ -494,6 +494,8 @@ czr::validate_result czr::validation::validate(MDB_txn * transaction_a, czr::joi
 	result.code = czr::validate_result_codes::ok;
 	result.account = block->hashables.from;
 	result.amount = block->hashables.amount.number();
+
+	return result;
 }
 
 
