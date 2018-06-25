@@ -375,7 +375,6 @@ void czr::block_processor::process_receive_many(std::deque<czr::block_processor_
 {
 	while (!blocks_processing.empty())
 	{
-		std::deque<std::pair<std::shared_ptr<czr::block>, czr::validate_result>> progress;
 		{
 			czr::transaction transaction(node.store.environment, nullptr, true);
 			auto cutoff(std::chrono::steady_clock::now() + czr::transaction_timeout);
@@ -391,9 +390,6 @@ void czr::block_processor::process_receive_many(std::deque<czr::block_processor_
 					switch (result.code)
 					{
 					case czr::validate_result_codes::ok:
-					{
-						progress.push_back(std::make_pair(block, result));
-					}
 					case czr::validate_result_codes::old:
 					{
 						//todo:check unhandle_message db if any unhandle message can be process again;
@@ -418,15 +414,6 @@ void czr::block_processor::process_receive_many(std::deque<czr::block_processor_
 				BOOST_LOG(node.log) << "Block process error: " << e.what();
 				transaction.abort();
 				throw;
-			}
-		}
-
-		for (auto & i : progress)
-		{
-			node.observers.blocks(i.first, i.second);
-			if (i.second.amount > 0)
-			{
-				node.observers.account_balance(i.second.account, false);
 			}
 		}
 	}
@@ -599,114 +586,6 @@ czr::node::node(czr::node_init & init_a, boost::asio::io_service & service_a,
 	block_processor(*this),
 	block_processor_thread([this]() { this->block_processor.process_blocks(); })
 {
-
-	host->register_capability(capability);
-
-	wallets.observer = [this](bool active) {
-		observers.wallet(active);
-	};
-	observers.blocks.add([this](std::shared_ptr<czr::block> block_a, czr::validate_result const & result_a) {
-		if (this->block_arrival.recent(block_a->hash()))
-		{
-			auto node_l(shared_from_this());
-			background([node_l, block_a, result_a]() {
-				if (!node_l->config.callback_address.empty())
-				{
-					boost::property_tree::ptree event;
-					event.add("account", result_a.account.to_account());
-					event.add("hash", block_a->hash().to_string());
-					std::string block_text;
-					block_a->serialize_json(block_text);
-					event.add("block", block_text);
-					event.add("amount", result_a.amount.to_string_dec());
-					std::stringstream ostream;
-					boost::property_tree::write_json(ostream, event);
-					ostream.flush();
-					auto body(std::make_shared<std::string>(ostream.str()));
-					auto address(node_l->config.callback_address);
-					auto port(node_l->config.callback_port);
-					auto target(std::make_shared<std::string>(node_l->config.callback_target));
-					auto resolver(std::make_shared<boost::asio::ip::tcp::resolver>(node_l->io_service));
-					resolver->async_resolve(boost::asio::ip::tcp::resolver::query(address, std::to_string(port)), [node_l, address, port, target, body, resolver](boost::system::error_code const & ec, boost::asio::ip::tcp::resolver::iterator i_a) {
-						if (!ec)
-						{
-							for (auto i(i_a), n(boost::asio::ip::tcp::resolver::iterator{}); i != n; ++i)
-							{
-								auto sock(std::make_shared<boost::asio::ip::tcp::socket>(node_l->io_service));
-								sock->async_connect(i->endpoint(), [node_l, target, body, sock, address, port](boost::system::error_code const & ec) {
-									if (!ec)
-									{
-										auto req(std::make_shared<boost::beast::http::request<boost::beast::http::string_body>>());
-										req->method(boost::beast::http::verb::post);
-										req->target(*target);
-										req->version(11);
-										req->insert(boost::beast::http::field::host, address);
-										req->insert(boost::beast::http::field::content_type, "application/json");
-										req->body() = *body;
-										//req->prepare (*req);
-										//boost::beast::http::prepare(req);
-										req->prepare_payload();
-										boost::beast::http::async_write(*sock, *req, [node_l, sock, address, port, req](boost::system::error_code const & ec, size_t bytes_transferred) {
-											if (!ec)
-											{
-												auto sb(std::make_shared<boost::beast::flat_buffer>());
-												auto resp(std::make_shared<boost::beast::http::response<boost::beast::http::string_body>>());
-												boost::beast::http::async_read(*sock, *sb, *resp, [node_l, sb, resp, sock, address, port](boost::system::error_code const & ec, size_t bytes_transferred) {
-													if (!ec)
-													{
-														if (resp->result() == boost::beast::http::status::ok)
-														{
-														}
-														else
-														{
-															if (node_l->config.logging.callback_logging())
-															{
-																BOOST_LOG(node_l->log) << boost::str(boost::format("Callback to %1%:%2% failed with status: %3%") % address % port % resp->result());
-															}
-														}
-													}
-													else
-													{
-														if (node_l->config.logging.callback_logging())
-														{
-															BOOST_LOG(node_l->log) << boost::str(boost::format("Unable complete callback: %1%:%2% %3%") % address % port % ec.message());
-														}
-													};
-												});
-											}
-											else
-											{
-												if (node_l->config.logging.callback_logging())
-												{
-													BOOST_LOG(node_l->log) << boost::str(boost::format("Unable to send callback: %1%:%2% %3%") % address % port % ec.message());
-												}
-											}
-										});
-									}
-									else
-									{
-										if (node_l->config.logging.callback_logging())
-										{
-											BOOST_LOG(node_l->log) << boost::str(boost::format("Unable to connect to callback address: %1%:%2%, %3%") % address % port % ec.message());
-										}
-									}
-								});
-							}
-						}
-						else
-						{
-							if (node_l->config.logging.callback_logging())
-							{
-								BOOST_LOG(node_l->log) << boost::str(boost::format("Error resolving callback: %1%:%2%, %3%") % address % port % ec.message());
-							}
-						}
-					});
-				}
-			});
-		}
-	});
-
-	BOOST_LOG(log) << "Node starting, version: " << CANONCHAIN_VERSION_MAJOR << "." << CANONCHAIN_VERSION_MINOR;
 	if (!init_a.error)
 	{
 		if (config.logging.node_lifetime_tracing())
@@ -746,11 +625,13 @@ void czr::node::process_active(czr::joint_message const & message)
 
 void czr::node::start()
 {
+	BOOST_LOG(log) << "Node starting, version: " << CANONCHAIN_VERSION_MAJOR << "." << CANONCHAIN_VERSION_MINOR;
+
+	host->register_capability(capability);
 	host->start();
 	ongoing_store_flush();
 	ongoing_retry_late_message();
 	backup_wallet();
-	observers.started();
 }
 
 void czr::node::stop()

@@ -37,17 +37,17 @@ void czr::wallet_store::wallet_key(czr::raw_key & prv_a, MDB_txn * transaction_a
 void czr::wallet_store::seed(czr::raw_key & prv_a, MDB_txn * transaction_a)
 {
 	czr::wallet_value value(entry_get_raw(transaction_a, czr::wallet_store::seed_special));
-	czr::raw_key password_l;
-	wallet_key(password_l, transaction_a);
-	prv_a.decrypt(value.key, password_l, salt(transaction_a).owords[0]);
+	czr::raw_key wallet_key_l;
+	wallet_key(wallet_key_l, transaction_a);
+	prv_a.decrypt(value.key, wallet_key_l, salt(transaction_a).owords[0]);
 }
 
 void czr::wallet_store::seed_set(MDB_txn * transaction_a, czr::raw_key const & prv_a)
 {
-	czr::raw_key password_l;
-	wallet_key(password_l, transaction_a);
+	czr::raw_key wallet_key_l;
+	wallet_key(wallet_key_l, transaction_a);
 	czr::uint256_union ciphertext;
-	ciphertext.encrypt(prv_a, password_l, salt(transaction_a).owords[0]);
+	ciphertext.encrypt(prv_a, wallet_key_l, salt(transaction_a).owords[0]);
 	entry_put_raw(transaction_a, czr::wallet_store::seed_special, czr::wallet_value(ciphertext));
 	deterministic_clear(transaction_a);
 }
@@ -375,17 +375,12 @@ czr::public_key czr::wallet_store::insert_adhoc(MDB_txn * transaction_a, czr::ra
 	assert(valid_password(transaction_a));
 	czr::public_key pub;
 	ed25519_publickey(prv.data.bytes.data(), pub.bytes.data());
-	czr::raw_key password_l;
-	wallet_key(password_l, transaction_a);
+	czr::raw_key wallet_key_l;
+	wallet_key(wallet_key_l, transaction_a);
 	czr::uint256_union ciphertext;
-	ciphertext.encrypt(prv, password_l, salt(transaction_a).owords[0]);
+	ciphertext.encrypt(prv, wallet_key_l, salt(transaction_a).owords[0]);
 	entry_put_raw(transaction_a, pub, czr::wallet_value(ciphertext));
 	return pub;
-}
-
-void czr::wallet_store::insert_watch(MDB_txn * transaction_a, czr::public_key const & pub)
-{
-	entry_put_raw(transaction_a, pub, czr::wallet_value(czr::uint256_union(0)));
 }
 
 void czr::wallet_store::erase(MDB_txn * transaction_a, czr::public_key const & pub)
@@ -666,11 +661,6 @@ czr::public_key czr::wallet::insert_adhoc(czr::raw_key const & account_a)
 	return result;
 }
 
-void czr::wallet::insert_watch(MDB_txn * transaction_a, czr::public_key const & pub_a)
-{
-	store.insert_watch(transaction_a, pub_a);
-}
-
 bool czr::wallet::exists(czr::public_key const & account_a)
 {
 	czr::transaction transaction(store.environment, nullptr, false);
@@ -713,15 +703,6 @@ void czr::wallet_store::destroy(MDB_txn * transaction_a)
 	assert(status == 0);
 }
 
-void czr::wallet::init_free_accounts(MDB_txn * transaction_a)
-{
-	free_accounts.clear();
-	for (auto i(store.begin(transaction_a)), n(store.end()); i != n; ++i)
-	{
-		free_accounts.insert(i->first.uint256());
-	}
-}
-
 czr::public_key czr::wallet::change_seed(MDB_txn * transaction_a, czr::raw_key const & prv_a)
 {
 	store.seed_set(transaction_a, prv_a);
@@ -755,7 +736,7 @@ void czr::wallet::send_async(czr::account const & from_a, czr::account const & t
 	boost::optional<std::string> id_a)
 {
 	node.background([this, from_a, to_a, amount_a, data_a, action_a, id_a]() {
-		this->node.wallets.queue_wallet_action(czr::wallets::high_priority, [this, from_a, to_a, amount_a, data_a, action_a, id_a]() {
+		this->node.wallets.queue_wallet_action([this, from_a, to_a, amount_a, data_a, action_a, id_a]() {
 			auto result(send_action(from_a, to_a, amount_a, data_a, id_a));
 			action_a(result);
 		});
@@ -865,7 +846,6 @@ czr::send_result czr::wallet::send_action(czr::account const & from_a, czr::acco
 
 
 czr::wallets::wallets(bool & error_a, czr::node & node_a) :
-	observer([](bool) {}),
 	node(node_a),
 	stopped(false),
 	thread([this]() { do_wallet_actions(); })
@@ -954,13 +934,11 @@ void czr::wallets::do_wallet_actions()
 	{
 		if (!actions.empty())
 		{
-			auto first(actions.begin());
-			auto current(std::move(first->second));
-			actions.erase(first);
+			auto first(actions.front());
+			auto current(std::move(first));
+			actions.pop_front();
 			lock.unlock();
-			observer(true);
 			current();
-			observer(false);
 			lock.lock();
 		}
 		else
@@ -970,10 +948,10 @@ void czr::wallets::do_wallet_actions()
 	}
 }
 
-void czr::wallets::queue_wallet_action(czr::uint128_t const & amount_a, std::function<void()> const & action_a)
+void czr::wallets::queue_wallet_action(std::function<void()> const & action_a)
 {
 	std::lock_guard<std::mutex> lock(mutex);
-	actions.insert(std::make_pair(amount_a, std::move(action_a)));
+	actions.push_back(std::move(action_a));
 	condition.notify_all();
 }
 
@@ -993,10 +971,6 @@ void czr::wallets::stop()
 	stopped = true;
 	condition.notify_all();
 }
-
-czr::uint128_t const czr::wallets::generate_priority = std::numeric_limits<czr::uint128_t>::max();
-czr::uint128_t const czr::wallets::high_priority = std::numeric_limits<czr::uint128_t>::max() - 1;
-
 
 czr::store_iterator czr::wallet_store::begin(MDB_txn * transaction_a)
 {

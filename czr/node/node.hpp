@@ -164,17 +164,6 @@ namespace czr
 		int lmdb_max_dbs;
 	};
 
-	class node_observers
-	{
-	public:
-		czr::observer_set<std::shared_ptr<czr::block>, czr::validate_result const &> blocks;
-		czr::observer_set<bool> wallet;
-		czr::observer_set<czr::account const &, bool> account_balance;
-		czr::observer_set<czr::endpoint const &> endpoint;
-		czr::observer_set<> disconnect;
-		czr::observer_set<> started;
-	};
-
 	class block_processor_item
 	{
 	public:
@@ -291,7 +280,6 @@ namespace czr
 		czr::gap_cache gap_cache;
 		czr::ledger ledger;
 		boost::filesystem::path application_path;
-		czr::node_observers observers;
 		czr::wallets wallets;
 		unsigned warmed_up;
 		std::shared_ptr<czr::validation> validation;

@@ -69,7 +69,6 @@ public:
 	void deterministic_clear (MDB_txn *);
 	czr::uint256_union salt (MDB_txn *);
 	czr::public_key insert_adhoc (MDB_txn *, czr::raw_key const &);
-	void insert_watch (MDB_txn *, czr::public_key const &);
 	void erase (MDB_txn *, czr::public_key const &);
 	czr::wallet_value entry_get_raw (MDB_txn *, czr::public_key const &);
 	void entry_put_raw (MDB_txn *, czr::public_key const &, czr::wallet_value const &);
@@ -137,7 +136,6 @@ public:
 	void enter_initial_password ();
 	bool valid_password ();
 	bool enter_password (std::string const &);
-	void insert_watch (MDB_txn *, czr::public_key const &);
 	czr::public_key deterministic_insert(MDB_txn * transaction_a);
 	czr::public_key deterministic_insert();
 	czr::public_key insert_adhoc(MDB_txn * transaction_a, czr::raw_key const & key_a);
@@ -147,11 +145,9 @@ public:
 	void serialize (std::string &);
 	void send_async(czr::account const & from_a, czr::account const & to_a, czr::amount const & amount_a, std::vector<uint8_t> const & data_a, std::function<void(czr::send_result)> const & action_a, boost::optional<std::string> id_a);
 	czr::send_result send_action(czr::account const & from_a, czr::account const & to_a, czr::amount const & amount_a, std::vector<uint8_t> data_a, boost::optional<std::string> id_a);
-	void init_free_accounts (MDB_txn *);
 	/** Changes the wallet seed and returns the first account */
 	czr::public_key change_seed (MDB_txn * transaction_a, czr::raw_key const & prv_a);
 
-	std::unordered_set<czr::account> free_accounts;
 	std::function<void(bool, bool)> lock_observer;
 	czr::wallet_store store;
 	czr::node & node;
@@ -167,12 +163,11 @@ public:
 	std::shared_ptr<czr::wallet> create (czr::uint256_union const &);
 	void destroy (czr::uint256_union const &);
 	void do_wallet_actions ();
-	void queue_wallet_action (czr::uint128_t const &, std::function<void()> const &);
+	void queue_wallet_action(std::function<void()> const & action_a);
 	bool exists (MDB_txn *, czr::public_key const &);
 	void stop ();
-	std::function<void(bool)> observer;
 	std::unordered_map<czr::uint256_union, std::shared_ptr<czr::wallet>> items;
-	std::multimap<czr::uint128_t, std::function<void()>, std::greater<czr::uint128_t>> actions;
+	std::deque<std::function<void()>> actions;
 	std::mutex mutex;
 	std::condition_variable condition;
 	czr::kdf kdf;
@@ -181,7 +176,5 @@ public:
 	czr::node & node;
 	bool stopped;
 	std::thread thread;
-	static czr::uint128_t const generate_priority;
-	static czr::uint128_t const high_priority;
 };
 }
