@@ -29,8 +29,7 @@ namespace czr
 	class store_iterator
 	{
 	public:
-		store_iterator(MDB_txn *, MDB_dbi);
-		store_iterator(MDB_txn *, MDB_dbi, czr::store_iterator_direction);
+		store_iterator(MDB_txn *, MDB_dbi, czr::store_iterator_direction = czr::store_iterator_direction::forward);
 		store_iterator(std::nullptr_t);
 		store_iterator(MDB_txn *, MDB_dbi, MDB_val const &);
 		store_iterator(czr::store_iterator &&);
