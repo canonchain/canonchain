@@ -148,8 +148,8 @@ void czr_daemon::daemon::run(boost::filesystem::path const & data_path)
 				//timer.async_wait([node]() {
 				//	czr::uint256_union wallet;
 				//	wallet.decode_hex("");
-				//	auto existing(node->wallets.items.find(wallet));
-				//	if (existing == node->wallets.items.end())
+				//	auto existing(node->wallet.items.find(wallet));
+				//	if (existing == node->wallet.items.end())
 				//	{
 				//		std::cerr << "Wallet not exists";
 				//		return;
@@ -162,13 +162,19 @@ void czr_daemon::daemon::run(boost::filesystem::path const & data_path)
 				//	to.decode_account("");
 				//	czr::amount amount = 1000;
 				//	dev::bytes data;
-				//	existing->second->send_async(from, to, amount.number(), data, [](czr::send_result result) {
+				//	existing->second->send_async(from, to, amount.number(), data, [from](czr::send_result result) {
 				//		switch (result.code)
 				//		{
 				//		case czr::send_result_codes::ok:
 				//			break;
+				//		case czr::send_result_codes::from_not_exists:
+				//			error_response(response_a, "Account not exists, " + from.to_account());
+				//			break;
 				//		case czr::send_result_codes::account_locked:
-				//			std::cerr << "Account locked";
+				//			error_response(response_a, "Account locked");
+				//			break;
+				//		case czr::send_result_codes::wrong_password:
+				//			error_response(response_a, "Wrong password");
 				//			break;
 				//		case czr::send_result_codes::insufficient_balance:
 				//			std::cerr << "Insufficient balance";

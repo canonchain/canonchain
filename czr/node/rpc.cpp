@@ -198,6 +198,257 @@ namespace
 	}
 }
 
+void czr::rpc_handler::account_list()
+{
+	boost::property_tree::ptree response_l;
+	boost::property_tree::ptree accounts;
+
+	std::list<czr::account> account_list(node.key_manager.list());
+	for (auto account : account_list)
+	{
+		boost::property_tree::ptree entry;
+		entry.put("", account.to_account());
+		accounts.push_back(std::make_pair("", entry));
+	}
+	response_l.add_child("accounts", accounts);
+	response(response_l);
+}
+
+void czr::rpc_handler::account_validate()
+{
+	std::string account_text(request.get<std::string>("account"));
+	czr::uint256_union account;
+	auto error(account.decode_account(account_text));
+	boost::property_tree::ptree response_l;
+	response_l.put("valid", error ? "0" : "1");
+	response(response_l);
+}
+
+void czr::rpc_handler::account_create()
+{
+	if (rpc.config.enable_control)
+	{
+		std::string password(request.get<std::string>("password"));
+		if (!password.empty())
+		{
+			czr::transaction transaction(node.store.environment, nullptr, true);
+			czr::account new_account(node.key_manager.create(transaction, password));
+			boost::property_tree::ptree response_l;
+			response_l.put("account", new_account.to_account());
+			response(response_l);
+		}
+		else
+		{
+			error_response(response, "Password can not be empty");
+		}
+	}
+	else
+	{
+		error_response(response, "RPC control is disabled");
+	}
+}
+
+void czr::rpc_handler::account_remove()
+{
+	if (rpc.config.enable_control)
+	{
+		std::string account_text(request.get<std::string>("account"));
+		czr::account account;
+		auto error(account.decode_account(account_text));
+		if (!error)
+		{
+			bool exists(node.key_manager.exists(account));
+			if (exists)
+			{
+				std::string password_text(request.get<std::string>("password"));
+				czr::transaction transaction(node.store.environment, nullptr, true);
+				bool error(node.key_manager.remove(transaction, account, password_text));
+				if (!error)
+				{
+					boost::property_tree::ptree response_l;
+					response_l.put("success", "1");
+					response(response_l);
+				}
+				else
+				{
+					error_response(response, "Wrong password");
+				}
+			}
+			else
+			{
+				error_response(response, "Account not found");
+			}
+		}
+		else
+		{
+			error_response(response, "Invalid account");
+		}
+	}
+	else
+	{
+		error_response(response, "RPC control is disabled");
+	}
+}
+
+void czr::rpc_handler::account_password_change()
+{
+	if (rpc.config.enable_control)
+	{
+		std::string account_text(request.get<std::string>("account"));
+		czr::account account;
+		auto error(account.decode_account(account_text));
+		if (!error)
+		{
+			auto exists(node.key_manager.exists(account));
+			if (exists)
+			{
+				czr::transaction transaction(node.store.environment, nullptr, true);
+				std::string old_password_text(request.get<std::string>("old_password"));
+				std::string new_password_text(request.get<std::string>("new_password"));
+				auto error(node.key_manager.change_password(transaction, account, old_password_text, new_password_text));
+
+				boost::property_tree::ptree response_l;
+				response_l.put("success", error ? "0" : "1");
+				response(response_l);
+			}
+			else
+			{
+				error_response(response, "Account not found");
+			}
+		}
+		else
+		{
+			error_response(response, "Invalid account");
+		}
+	}
+	else
+	{
+		error_response(response, "RPC control is disabled");
+	}
+}
+
+void czr::rpc_handler::account_unlock()
+{
+	if (rpc.config.enable_control)
+	{
+		std::string account_text(request.get<std::string>("account"));
+		czr::account account;
+		auto error(account.decode_account(account_text));
+		if (!error)
+		{
+			auto exists(node.key_manager.exists(account));
+			if (exists)
+			{
+				std::string password_text(request.get<std::string>("password"));
+				auto error(node.key_manager.unlock(account, password_text));
+				if (!error)
+				{
+					boost::property_tree::ptree response_l;
+					response_l.put("success", "1");
+					response(response_l);
+				}
+				else
+				{
+					error_response(response, "Wrong password");
+				}
+			}
+			else
+			{
+				error_response(response, "Account not found");
+			}
+		}
+		else
+		{
+			error_response(response, "Invalid account");
+		}
+	}
+	else
+	{
+		error_response(response, "RPC control is disabled");
+	}
+}
+
+void czr::rpc_handler::account_lock()
+{
+	if (rpc.config.enable_control)
+	{
+		std::string account_text(request.get<std::string>("account"));
+		czr::account account;
+		auto error(account.decode_account(account_text));
+		if (!error)
+		{
+			auto exists(node.key_manager.exists(account));
+			if (exists)
+			{
+				node.key_manager.lock(account);
+				boost::property_tree::ptree response_l;
+				response_l.put("success", "1");
+				response(response_l);
+			}
+			else
+			{
+				error_response(response, "Account not found");
+			}
+		}
+		else
+		{
+			error_response(response, "Invalid account");
+		}
+	}
+	else
+	{
+		error_response(response, "RPC control is disabled");
+	}
+}
+
+void czr::rpc_handler::account_export()
+{
+	std::string account_text(request.get<std::string>("account"));
+	czr::account account;
+	auto error(account.decode_account(account_text));
+	if (!error)
+	{
+		czr::key_content kc;
+		auto exists(node.key_manager.find(account, kc));
+		if (exists)
+		{
+			boost::property_tree::ptree response_l;
+			response_l.put("json", kc.to_json());
+			response(response_l);
+		}
+		else
+		{
+			error_response(response, "Account not found");
+		}
+	}
+	else
+	{
+		error_response(response, "Invalid account");
+	}
+}
+
+void czr::rpc_handler::account_import()
+{
+	if (rpc.config.enable_control)
+	{
+		std::string json_text(request.get<std::string>("json"));
+
+		czr::key_content kc;
+		czr::transaction transaction(node.store.environment, nullptr, true);
+		auto error(node.key_manager.import(transaction, json_text, kc));
+
+		boost::property_tree::ptree response_l;
+		response_l.put("success", error ? "0" : "1");
+		response_l.put("account", error ? "" : kc.account.to_account());
+		response(response_l);
+	}
+	else
+	{
+		error_response(response, "RPC control is disabled");
+	}
+}
+
+
 void czr::rpc_handler::account_balance()
 {
 	std::string account_text(request.get<std::string>("account"));
@@ -213,8 +464,34 @@ void czr::rpc_handler::account_balance()
 	}
 	else
 	{
-		error_response(response, "Bad account number");
+		error_response(response, "Invalid account");
 	}
+}
+
+void czr::rpc_handler::accounts_balances()
+{
+	boost::property_tree::ptree response_l;
+	boost::property_tree::ptree balances;
+	for (auto & accounts : request.get_child("accounts"))
+	{
+		std::string account_text = accounts.second.data();
+		czr::uint256_union account;
+		auto error(account.decode_account(account_text));
+		if (!error)
+		{
+			boost::property_tree::ptree entry;
+			czr::transaction transaction(node.store.environment, nullptr, false);;
+			auto balance(node.ledger.account_balance(transaction, account));
+			entry.put("balance", balance.convert_to<std::string>());
+			balances.push_back(std::make_pair(account.to_account(), entry));
+		}
+		else
+		{
+			error_response(response, "Invalid account");
+		}
+	}
+	response_l.add_child("balances", balances);
+	response(response_l);
 }
 
 void czr::rpc_handler::account_block_count()
@@ -239,315 +516,7 @@ void czr::rpc_handler::account_block_count()
 	}
 	else
 	{
-		error_response(response, "Bad account number");
-	}
-}
-
-void czr::rpc_handler::account_create()
-{
-	if (rpc.config.enable_control)
-	{
-		std::string wallet_text(request.get<std::string>("wallet"));
-		czr::uint256_union wallet;
-		auto error(wallet.decode_hex(wallet_text));
-		if (!error)
-		{
-			auto existing(node.wallets.items.find(wallet));
-			if (existing != node.wallets.items.end())
-			{
-				czr::account new_key(existing->second->deterministic_insert());
-				if (!new_key.is_zero())
-				{
-					boost::property_tree::ptree response_l;
-					response_l.put("account", new_key.to_account());
-					response(response_l);
-				}
-				else
-				{
-					error_response(response, "Wallet is locked");
-				}
-			}
-			else
-			{
-				error_response(response, "Wallet not found");
-			}
-		}
-		else
-		{
-			error_response(response, "Bad wallet number");
-		}
-	}
-	else
-	{
-		error_response(response, "RPC control is disabled");
-	}
-}
-
-void czr::rpc_handler::account_get()
-{
-	std::string key_text(request.get<std::string>("key"));
-	czr::uint256_union pub;
-	auto error(pub.decode_hex(key_text));
-	if (!error)
-	{
-		boost::property_tree::ptree response_l;
-		response_l.put("account", pub.to_account());
-		response(response_l);
-	}
-	else
-	{
-		error_response(response, "Bad public key");
-	}
-}
-
-void czr::rpc_handler::account_key()
-{
-	std::string account_text(request.get<std::string>("account"));
-	czr::account account;
-	auto error(account.decode_account(account_text));
-	if (!error)
-	{
-		boost::property_tree::ptree response_l;
-		response_l.put("key", account.to_string());
-		response(response_l);
-	}
-	else
-	{
-		error_response(response, "Bad account number");
-	}
-}
-
-void czr::rpc_handler::account_list()
-{
-	std::string wallet_text(request.get<std::string>("wallet"));
-	czr::uint256_union wallet;
-	auto error(wallet.decode_hex(wallet_text));
-	if (!error)
-	{
-		auto existing(node.wallets.items.find(wallet));
-		if (existing != node.wallets.items.end())
-		{
-			boost::property_tree::ptree response_l;
-			boost::property_tree::ptree accounts;
-			czr::transaction transaction(node.store.environment, nullptr, false);
-			for (auto i(existing->second->store.begin(transaction)), j(existing->second->store.end()); i != j; ++i)
-			{
-				boost::property_tree::ptree entry;
-				entry.put("", czr::uint256_union(i->first.uint256()).to_account());
-				accounts.push_back(std::make_pair("", entry));
-			}
-			response_l.add_child("accounts", accounts);
-			response(response_l);
-		}
-		else
-		{
-			error_response(response, "Wallet not found");
-		}
-	}
-	else
-	{
-		error_response(response, "Bad wallet number");
-	}
-}
-
-void czr::rpc_handler::account_move()
-{
-	if (rpc.config.enable_control)
-	{
-		std::string wallet_text(request.get<std::string>("wallet"));
-		std::string source_text(request.get<std::string>("source"));
-		auto accounts_text(request.get_child("accounts"));
-		czr::uint256_union wallet;
-		auto error(wallet.decode_hex(wallet_text));
-		if (!error)
-		{
-			auto existing(node.wallets.items.find(wallet));
-			if (existing != node.wallets.items.end())
-			{
-				auto wallet(existing->second);
-				czr::uint256_union source;
-				auto error(source.decode_hex(source_text));
-				if (!error)
-				{
-					auto existing(node.wallets.items.find(source));
-					if (existing != node.wallets.items.end())
-					{
-						auto source(existing->second);
-						std::vector<czr::public_key> accounts;
-						for (auto i(accounts_text.begin()), n(accounts_text.end()); i != n; ++i)
-						{
-							czr::public_key account;
-							account.decode_hex(i->second.get<std::string>(""));
-							accounts.push_back(account);
-						}
-						czr::transaction transaction(node.store.environment, nullptr, true);
-						auto error(wallet->store.move(transaction, source->store, accounts));
-						boost::property_tree::ptree response_l;
-						response_l.put("moved", error ? "0" : "1");
-						response(response_l);
-					}
-					else
-					{
-						error_response(response, "Source not found");
-					}
-				}
-				else
-				{
-					error_response(response, "Bad source number");
-				}
-			}
-			else
-			{
-				error_response(response, "Wallet not found");
-			}
-		}
-		else
-		{
-			error_response(response, "Bad wallet number");
-		}
-	}
-	else
-	{
-		error_response(response, "RPC control is disabled");
-	}
-}
-
-void czr::rpc_handler::account_remove()
-{
-	if (rpc.config.enable_control)
-	{
-		std::string wallet_text(request.get<std::string>("wallet"));
-		std::string account_text(request.get<std::string>("account"));
-		czr::uint256_union wallet;
-		auto error(wallet.decode_hex(wallet_text));
-		if (!error)
-		{
-			auto existing(node.wallets.items.find(wallet));
-			if (existing != node.wallets.items.end())
-			{
-				auto wallet(existing->second);
-				czr::transaction transaction(node.store.environment, nullptr, true);
-				if (existing->second->store.valid_password(transaction))
-				{
-					czr::account account_id;
-					auto error(account_id.decode_account(account_text));
-					if (!error)
-					{
-						auto account(wallet->store.find(transaction, account_id));
-						if (account != wallet->store.end())
-						{
-							wallet->store.erase(transaction, account_id);
-							boost::property_tree::ptree response_l;
-							response_l.put("removed", "1");
-							response(response_l);
-						}
-						else
-						{
-							error_response(response, "Account not found in wallet");
-						}
-					}
-					else
-					{
-						error_response(response, "Bad account number");
-					}
-				}
-				else
-				{
-					error_response(response, "Wallet locked");
-				}
-			}
-			else
-			{
-				error_response(response, "Wallet not found");
-			}
-		}
-		else
-		{
-			error_response(response, "Bad wallet number");
-		}
-	}
-	else
-	{
-		error_response(response, "RPC control is disabled");
-	}
-}
-
-void czr::rpc_handler::accounts_balances()
-{
-	boost::property_tree::ptree response_l;
-	boost::property_tree::ptree balances;
-	for (auto & accounts : request.get_child("accounts"))
-	{
-		std::string account_text = accounts.second.data();
-		czr::uint256_union account;
-		auto error(account.decode_account(account_text));
-		if (!error)
-		{
-			boost::property_tree::ptree entry;
-			czr::transaction transaction(node.store.environment, nullptr, false);;
-			auto balance(node.ledger.account_balance(transaction, account));
-			entry.put("balance", balance.convert_to<std::string>());
-			balances.push_back(std::make_pair(account.to_account(), entry));
-		}
-		else
-		{
-			error_response(response, "Bad account number");
-		}
-	}
-	response_l.add_child("balances", balances);
-	response(response_l);
-}
-
-void czr::rpc_handler::accounts_create()
-{
-	if (rpc.config.enable_control)
-	{
-		std::string wallet_text(request.get<std::string>("wallet"));
-		czr::uint256_union wallet;
-		auto error(wallet.decode_hex(wallet_text));
-		if (!error)
-		{
-			uint64_t count;
-			std::string count_text(request.get<std::string>("count"));
-			auto count_error(decode_unsigned(count_text, count));
-			if (!count_error && count != 0)
-			{
-				auto existing(node.wallets.items.find(wallet));
-				if (existing != node.wallets.items.end())
-				{
-					boost::property_tree::ptree response_l;
-					boost::property_tree::ptree accounts;
-					for (auto i(0); accounts.size() < count; ++i)
-					{
-						czr::account new_key(existing->second->deterministic_insert());
-						if (!new_key.is_zero())
-						{
-							boost::property_tree::ptree entry;
-							entry.put("", new_key.to_account());
-							accounts.push_back(std::make_pair("", entry));
-						}
-					}
-					response_l.add_child("accounts", accounts);
-					response(response_l);
-				}
-				else
-				{
-					error_response(response, "Wallet not found");
-				}
-			}
-			else
-			{
-				error_response(response, "Invalid count limit");
-			}
-		}
-		else
-		{
-			error_response(response, "Bad wallet number");
-		}
-	}
-	else
-	{
-		error_response(response, "RPC control is disabled");
+		error_response(response, "Invalid account");
 	}
 }
 
@@ -571,22 +540,13 @@ void czr::rpc_handler::accounts_frontiers()
 		}
 		else
 		{
-			error_response(response, "Bad account number");
+			error_response(response, "Invalid account");
 		}
 	}
 	response_l.add_child("frontiers", frontiers);
 	response(response_l);
 }
 
-void czr::rpc_handler::account_validate()
-{
-	std::string account_text(request.get<std::string>("account"));
-	czr::uint256_union account;
-	auto error(account.decode_account(account_text));
-	boost::property_tree::ptree response_l;
-	response_l.put("valid", error ? "0" : "1");
-	response(response_l);
-}
 
 void czr::rpc_handler::block()
 {
@@ -612,7 +572,7 @@ void czr::rpc_handler::block()
 	}
 	else
 	{
-		error_response(response, "Bad hash number");
+		error_response(response, "Invalid hash");
 	}
 }
 
@@ -643,7 +603,7 @@ void czr::rpc_handler::blocks()
 		}
 		else
 		{
-			error_response(response, "Bad hash number");
+			error_response(response, "Invalid hash");
 		}
 	}
 	response_l.add_child("blocks", blocks);
@@ -659,176 +619,23 @@ void czr::rpc_handler::block_count()
 	response(response_l);
 }
 
-void czr::rpc_handler::deterministic_key()
-{
-	std::string seed_text(request.get<std::string>("seed"));
-	std::string index_text(request.get<std::string>("index"));
-	czr::raw_key seed;
-	auto error(seed.data.decode_hex(seed_text));
-	if (!error)
-	{
-		uint64_t index_a;
-		if (!decode_unsigned(index_text, index_a))
-		{
-			czr::uint256_union index(index_a);
-			czr::uint256_union prv;
-			blake2b_state hash;
-			blake2b_init(&hash, prv.bytes.size());
-			blake2b_update(&hash, seed.data.bytes.data(), seed.data.bytes.size());
-			blake2b_update(&hash, reinterpret_cast<uint8_t *> (&index.dwords[7]), sizeof(uint32_t));
-			blake2b_final(&hash, prv.bytes.data(), prv.bytes.size());
-			boost::property_tree::ptree response_l;
-			czr::uint256_union pub;
-			ed25519_publickey(prv.bytes.data(), pub.bytes.data());
-			response_l.put("private", prv.to_string());
-			response_l.put("public", pub.to_string());
-			response_l.put("account", pub.to_account());
-			response(response_l);
-		}
-		else
-		{
-			error_response(response, "Invalid index");
-		}
-	}
-	else
-	{
-		error_response(response, "Bad seed");
-	}
-}
-
-void czr::rpc_handler::key_create()
-{
-	boost::property_tree::ptree response_l;
-	czr::keypair pair;
-	response_l.put("private", pair.prv.data.to_string());
-	response_l.put("public", pair.pub.to_string());
-	response_l.put("account", pair.pub.to_account());
-	response(response_l);
-}
-
-void czr::rpc_handler::password_change()
-{
-	if (rpc.config.enable_control)
-	{
-		std::string wallet_text(request.get<std::string>("wallet"));
-		czr::uint256_union wallet;
-		auto error(wallet.decode_hex(wallet_text));
-		if (!error)
-		{
-			auto existing(node.wallets.items.find(wallet));
-			if (existing != node.wallets.items.end())
-			{
-				czr::transaction transaction(node.store.environment, nullptr, true);
-				boost::property_tree::ptree response_l;
-				std::string password_text(request.get<std::string>("password"));
-				auto error(existing->second->store.rekey(transaction, password_text));
-				response_l.put("changed", error ? "0" : "1");
-				response(response_l);
-			}
-			else
-			{
-				error_response(response, "Wallet not found");
-			}
-		}
-		else
-		{
-			error_response(response, "Bad wallet number");
-		}
-	}
-	else
-	{
-		error_response(response, "RPC control is disabled");
-	}
-}
-
-void czr::rpc_handler::password_enter()
-{
-	std::string wallet_text(request.get<std::string>("wallet"));
-	czr::uint256_union wallet;
-	auto error(wallet.decode_hex(wallet_text));
-	if (!error)
-	{
-		auto existing(node.wallets.items.find(wallet));
-		if (existing != node.wallets.items.end())
-		{
-			boost::property_tree::ptree response_l;
-			std::string password_text(request.get<std::string>("password"));
-			auto error(existing->second->enter_password(password_text));
-			response_l.put("valid", error ? "0" : "1");
-			response(response_l);
-		}
-		else
-		{
-			error_response(response, "Wallet not found");
-		}
-	}
-	else
-	{
-		error_response(response, "Bad wallet number");
-	}
-}
-
-void czr::rpc_handler::password_valid(bool wallet_locked = false)
-{
-	std::string wallet_text(request.get<std::string>("wallet"));
-	czr::uint256_union wallet;
-	auto error(wallet.decode_hex(wallet_text));
-	if (!error)
-	{
-		auto existing(node.wallets.items.find(wallet));
-		if (existing != node.wallets.items.end())
-		{
-			czr::transaction transaction(node.store.environment, nullptr, false);
-			boost::property_tree::ptree response_l;
-			auto valid(existing->second->store.valid_password(transaction));
-			if (!wallet_locked)
-			{
-				response_l.put("valid", valid ? "1" : "0");
-			}
-			else
-			{
-				response_l.put("locked", valid ? "0" : "1");
-			}
-			response(response_l);
-		}
-		else
-		{
-			error_response(response, "Wallet not found");
-		}
-	}
-	else
-	{
-		error_response(response, "Bad wallet number");
-	}
-}
-
 void czr::rpc_handler::send()
 {
 	if (!rpc.config.enable_control)
 		error_response(response, "RPC control is disabled");
 
-	std::string wallet_text(request.get<std::string>("wallet"));
-	czr::uint256_union wallet;
-	auto error(wallet.decode_hex(wallet_text));
-	if (error)
-	{
-		error_response(response, "Bad wallet number");
-		return;
-	}
-
-	auto existing(node.wallets.items.find(wallet));
-	if (existing == node.wallets.items.end())
-	{
-		error_response(response, "Wallet not found");
-		return;
-	}
-
 	std::string from_text(request.get<std::string>("from"));
 	czr::account from;
-	error = from.decode_account(from_text);
+	auto error(from.decode_account(from_text));
 	if (error)
 	{
-		error_response(response, "Bad from account");
+		error_response(response, "Invalid from account");
+		return;
+	}
+
+	if(!node.key_manager.exists(from))
+	{
+		error_response(response, "From account not found");
 		return;
 	}
 
@@ -837,7 +644,7 @@ void czr::rpc_handler::send()
 	error = to.decode_account(to_text);
 	if (error)
 	{
-		error_response(response, "Bad to account");
+		error_response(response, "Invalid to account");
 		return;
 	}
 
@@ -846,7 +653,7 @@ void czr::rpc_handler::send()
 	error = amount.decode_dec(amount_text);
 	if (error)
 	{
-		error_response(response, "Bad amount format");
+		error_response(response, "Invalid amount format");
 		return;
 	}
 
@@ -855,7 +662,7 @@ void czr::rpc_handler::send()
 	error = czr::hex_to_bytes(data_text, data);
 	if (error)
 	{
-		error_response(response, "Bad data");
+		error_response(response, "Invalid data");
 		return;
 	}
 	if (data.size() > czr::max_data_size)
@@ -864,10 +671,12 @@ void czr::rpc_handler::send()
 		return;
 	}
 
+	std::string password_text(request.get<std::string>("password"));
+
 	boost::optional<std::string> send_id(request.get_optional<std::string>("id"));
 	auto rpc_l(shared_from_this());
 	auto response_a(response);
-	existing->second->send_async(from, to, amount.number(), data, [response_a](czr::send_result result) {
+	node.wallet.send_async(from, to, amount.number(), data, password_text, [from, response_a](czr::send_result result) {
 		switch (result.code)
 		{
 		case czr::send_result_codes::ok:
@@ -878,8 +687,14 @@ void czr::rpc_handler::send()
 			response_a(response_l);
 			break;
 		}
+		case czr::send_result_codes::from_not_exists:
+			error_response(response_a, "Account not exists, " + from.to_account());
+			break;
 		case czr::send_result_codes::account_locked:
 			error_response(response_a, "Account locked");
+			break;
+		case czr::send_result_codes::wrong_password:
+			error_response(response_a, "Wrong password");
 			break;
 		case czr::send_result_codes::insufficient_balance:
 			error_response(response_a, "Insufficient balance");
@@ -898,6 +713,7 @@ void czr::rpc_handler::send()
 		}
 	}, send_id);
 }
+
 
 void czr::rpc_handler::stop()
 {
@@ -922,321 +738,6 @@ void czr::rpc_handler::version()
 	response_l.put("store_version", std::to_string(node.store_version()));
 	response_l.put("node_vendor", boost::str(boost::format("Canonchain %1%.%2%") % CANONCHAIN_VERSION_MAJOR % CANONCHAIN_VERSION_MINOR));
 	response(response_l);
-}
-
-void czr::rpc_handler::wallet_add()
-{
-	if (rpc.config.enable_control)
-	{
-		std::string key_text(request.get<std::string>("key"));
-		std::string wallet_text(request.get<std::string>("wallet"));
-		czr::raw_key key;
-		auto error(key.data.decode_hex(key_text));
-		if (!error)
-		{
-			czr::uint256_union wallet;
-			auto error(wallet.decode_hex(wallet_text));
-			if (!error)
-			{
-				auto existing(node.wallets.items.find(wallet));
-				if (existing != node.wallets.items.end())
-				{
-					auto pub(existing->second->insert_adhoc(key));
-					if (!pub.is_zero())
-					{
-						boost::property_tree::ptree response_l;
-						response_l.put("account", pub.to_account());
-						response(response_l);
-					}
-					else
-					{
-						error_response(response, "Wallet locked");
-					}
-				}
-				else
-				{
-					error_response(response, "Wallet not found");
-				}
-			}
-			else
-			{
-				error_response(response, "Bad wallet number");
-			}
-		}
-		else
-		{
-			error_response(response, "Bad private key");
-		}
-	}
-	else
-	{
-		error_response(response, "RPC control is disabled");
-	}
-}
-
-void czr::rpc_handler::wallet_balances()
-{
-	std::string wallet_text(request.get<std::string>("wallet"));
-	czr::uint256_union wallet;
-	auto error(wallet.decode_hex(wallet_text));
-	if (!error)
-	{
-		czr::uint128_union threshold(0);
-		boost::optional<std::string> threshold_text(request.get_optional<std::string>("threshold"));
-		if (threshold_text.is_initialized())
-		{
-			auto error_threshold(threshold.decode_dec(threshold_text.get()));
-			if (error_threshold)
-			{
-				error_response(response, "Bad threshold number");
-			}
-		}
-		auto existing(node.wallets.items.find(wallet));
-		if (existing != node.wallets.items.end())
-		{
-			boost::property_tree::ptree response_l;
-			boost::property_tree::ptree balances;
-			czr::transaction transaction(node.store.environment, nullptr, false);
-			for (auto i(existing->second->store.begin(transaction)), n(existing->second->store.end()); i != n; ++i)
-			{
-				czr::account account(i->first.uint256());
-				czr::uint128_t balance = node.ledger.account_balance(transaction, account);
-				if (threshold.is_zero())
-				{
-					boost::property_tree::ptree entry;
-					entry.put("balance", balance.convert_to<std::string>());
-					balances.push_back(std::make_pair(account.to_account(), entry));
-				}
-				else
-				{
-					if (balance >= threshold.number())
-					{
-						boost::property_tree::ptree entry;
-						entry.put("balance", balance.convert_to<std::string>());
-						balances.push_back(std::make_pair(account.to_account(), entry));
-					}
-				}
-			}
-			response_l.add_child("balances", balances);
-			response(response_l);
-		}
-		else
-		{
-			error_response(response, "Wallet not found");
-		}
-	}
-	else
-	{
-		error_response(response, "Bad wallet number");
-	}
-}
-
-void czr::rpc_handler::wallet_change_seed()
-{
-	if (rpc.config.enable_control)
-	{
-		std::string seed_text(request.get<std::string>("seed"));
-		std::string wallet_text(request.get<std::string>("wallet"));
-		czr::raw_key seed;
-		auto error(seed.data.decode_hex(seed_text));
-		if (!error)
-		{
-			czr::uint256_union wallet;
-			auto error(wallet.decode_hex(wallet_text));
-			if (!error)
-			{
-				auto existing(node.wallets.items.find(wallet));
-				if (existing != node.wallets.items.end())
-				{
-					czr::transaction transaction(node.store.environment, nullptr, true);
-					if (existing->second->store.valid_password(transaction))
-					{
-						existing->second->store.seed_set(transaction, seed);
-						boost::property_tree::ptree response_l;
-						response_l.put("success", "");
-						response(response_l);
-					}
-					else
-					{
-						error_response(response, "Wallet locked");
-					}
-				}
-				else
-				{
-					error_response(response, "Wallet not found");
-				}
-			}
-			else
-			{
-				error_response(response, "Bad wallet number");
-			}
-		}
-		else
-		{
-			error_response(response, "Bad seed");
-		}
-	}
-	else
-	{
-		error_response(response, "RPC control is disabled");
-	}
-}
-
-void czr::rpc_handler::wallet_contains()
-{
-	std::string account_text(request.get<std::string>("account"));
-	std::string wallet_text(request.get<std::string>("wallet"));
-	czr::uint256_union account;
-	auto error(account.decode_account(account_text));
-	if (!error)
-	{
-		czr::uint256_union wallet;
-		auto error(wallet.decode_hex(wallet_text));
-		if (!error)
-		{
-			auto existing(node.wallets.items.find(wallet));
-			if (existing != node.wallets.items.end())
-			{
-				czr::transaction transaction(node.store.environment, nullptr, false);
-				auto exists(existing->second->store.find(transaction, account) != existing->second->store.end());
-				boost::property_tree::ptree response_l;
-				response_l.put("exists", exists ? "1" : "0");
-				response(response_l);
-			}
-			else
-			{
-				error_response(response, "Wallet not found");
-			}
-		}
-		else
-		{
-			error_response(response, "Bad wallet number");
-		}
-	}
-	else
-	{
-		error_response(response, "Bad account number");
-	}
-}
-
-void czr::rpc_handler::wallet_create()
-{
-	if (rpc.config.enable_control)
-	{
-		czr::keypair wallet_id;
-		node.wallets.create(wallet_id.pub);
-		czr::transaction transaction(node.store.environment, nullptr, false);
-		auto existing(node.wallets.items.find(wallet_id.pub));
-		if (existing != node.wallets.items.end())
-		{
-			boost::property_tree::ptree response_l;
-			response_l.put("wallet", wallet_id.pub.to_string());
-			response(response_l);
-		}
-		else
-		{
-			error_response(response, "Failed to create wallet. Increase lmdb_max_dbs in node config.");
-		}
-	}
-	else
-	{
-		error_response(response, "RPC control is disabled");
-	}
-}
-
-void czr::rpc_handler::wallet_destroy()
-{
-	if (rpc.config.enable_control)
-	{
-		std::string wallet_text(request.get<std::string>("wallet"));
-		czr::uint256_union wallet;
-		auto error(wallet.decode_hex(wallet_text));
-		if (!error)
-		{
-			auto existing(node.wallets.items.find(wallet));
-			if (existing != node.wallets.items.end())
-			{
-				node.wallets.destroy(wallet);
-				boost::property_tree::ptree response_l;
-				response(response_l);
-			}
-			else
-			{
-				error_response(response, "Wallet not found");
-			}
-		}
-		else
-		{
-			error_response(response, "Bad wallet number");
-		}
-	}
-	else
-	{
-		error_response(response, "RPC control is disabled");
-	}
-}
-
-void czr::rpc_handler::wallet_export()
-{
-	std::string wallet_text(request.get<std::string>("wallet"));
-	czr::uint256_union wallet;
-	auto error(wallet.decode_hex(wallet_text));
-	if (!error)
-	{
-		auto existing(node.wallets.items.find(wallet));
-		if (existing != node.wallets.items.end())
-		{
-			czr::transaction transaction(node.store.environment, nullptr, false);
-			std::string json;
-			existing->second->store.serialize_json(transaction, json);
-			boost::property_tree::ptree response_l;
-			response_l.put("json", json);
-			response(response_l);
-		}
-		else
-		{
-			error_response(response, "Wallet not found");
-		}
-	}
-	else
-	{
-		error_response(response, "Bad account number");
-	}
-}
-
-void czr::rpc_handler::wallet_lock()
-{
-	if (rpc.config.enable_control)
-	{
-		std::string wallet_text(request.get<std::string>("wallet"));
-		czr::uint256_union wallet;
-		auto error(wallet.decode_hex(wallet_text));
-		if (!error)
-		{
-			auto existing(node.wallets.items.find(wallet));
-			if (existing != node.wallets.items.end())
-			{
-				boost::property_tree::ptree response_l;
-				czr::raw_key empty;
-				empty.data.clear();
-				existing->second->store.password.value_set(empty);
-				response_l.put("locked", "1");
-				response(response_l);
-			}
-			else
-			{
-				error_response(response, "Wallet not found");
-			}
-		}
-		else
-		{
-			error_response(response, "Bad wallet number");
-		}
-	}
-	else
-	{
-		error_response(response, "RPC control is disabled");
-	}
 }
 
 czr::rpc_connection::rpc_connection(czr::node & node_a, czr::rpc & rpc_a) :
@@ -1331,21 +832,34 @@ void czr::rpc_handler::process_request()
 		std::stringstream istream(body);
 		boost::property_tree::read_json(istream, request);
 		std::string action(request.get<std::string>("action"));
-		if (action == "password_enter")
+		if (action == "account_create")
 		{
-			password_enter();
+			account_create();
 			request.erase("password");
 			reprocess_body(body, request);
 		}
-		else if (action == "password_change")
+		else if (action == "account_remove")
 		{
-			password_change();
+			account_remove();
 			request.erase("password");
 			reprocess_body(body, request);
 		}
-		else if (action == "wallet_unlock")
+		else if (action == "account_unlock")
 		{
-			password_enter();
+			account_unlock();
+			request.erase("password");
+			reprocess_body(body, request);
+		}
+		else if (action == "account_password_change")
+		{
+			account_unlock();
+			request.erase("old_password");
+			request.erase("new_password");
+			reprocess_body(body, request);
+		}
+		else if (action == "send")
+		{
+			send();
 			request.erase("password");
 			reprocess_body(body, request);
 		}
@@ -1354,53 +868,41 @@ void czr::rpc_handler::process_request()
 			BOOST_LOG(node.log) << body;
 		}
 
-		if (action == "account_balance")
-		{
-			account_balance();
-		}
-		else if (action == "account_block_count")
-		{
-			account_block_count();
-		}
-		else if (action == "account_create")
-		{
-			account_create();
-		}
-		else if (action == "account_get")
-		{
-			account_get();
-		}
-		else if (action == "account_key")
-		{
-			account_key();
-		}
-		else if (action == "account_list")
+		if (action == "account_list")
 		{
 			account_list();
 		}
-		else if (action == "account_move")
+		else if (action == "account_validate")
 		{
-			account_move();
+			account_validate();
 		}
-		else if (action == "account_remove")
+		else if (action == "account_lock")
 		{
-			account_remove();
+			account_lock();
+		}
+		else if (action == "account_export")
+		{
+			account_export();
+		}
+		else if (action == "account_import")
+		{
+			account_import();
+		}
+		else if (action == "account_balance")
+		{
+			account_balance();
 		}
 		else if (action == "accounts_balances")
 		{
 			accounts_balances();
 		}
-		else if (action == "accounts_create")
+		else if (action == "account_block_count")
 		{
-			accounts_create();
+			account_block_count();
 		}
 		else if (action == "accounts_frontiers")
 		{
 			accounts_frontiers();
-		}
-		else if (action == "account_validate")
-		{
-			account_validate();
 		}
 		else if (action == "block")
 		{
@@ -1414,22 +916,6 @@ void czr::rpc_handler::process_request()
 		{
 			block_count();
 		}
-		else if (action == "deterministic_key")
-		{
-			deterministic_key();
-		}
-		else if (action == "key_create")
-		{
-			key_create();
-		}
-		else if (action == "password_valid")
-		{
-			password_valid();
-		}
-		else if (action == "send")
-		{
-			send();
-		}
 		else if (action == "stop")
 		{
 			stop();
@@ -1437,42 +923,6 @@ void czr::rpc_handler::process_request()
 		else if (action == "version")
 		{
 			version();
-		}
-		else if (action == "wallet_add")
-		{
-			wallet_add();
-		}
-		else if (action == "wallet_balances")
-		{
-			wallet_balances();
-		}
-		else if (action == "wallet_change_seed")
-		{
-			wallet_change_seed();
-		}
-		else if (action == "wallet_contains")
-		{
-			wallet_contains();
-		}
-		else if (action == "wallet_create")
-		{
-			wallet_create();
-		}
-		else if (action == "wallet_destroy")
-		{
-			wallet_destroy();
-		}
-		else if (action == "wallet_export")
-		{
-			wallet_export();
-		}
-		else if (action == "wallet_lock")
-		{
-			wallet_lock();
-		}
-		else if (action == "wallet_locked")
-		{
-			password_valid(true);
 		}
 		else
 		{

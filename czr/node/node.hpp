@@ -280,7 +280,8 @@ namespace czr
 		czr::gap_cache gap_cache;
 		czr::ledger ledger;
 		boost::filesystem::path application_path;
-		czr::wallets wallets;
+		czr::key_manager key_manager;
+		czr::wallet wallet;
 		unsigned warmed_up;
 		std::shared_ptr<czr::validation> validation;
 		std::shared_ptr<czr::chain> chain;

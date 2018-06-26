@@ -11,99 +11,15 @@
 
 namespace czr
 {
-// The fan spreads a key out over the heap to decrease the likelihood of it being recovered by memory inspection
-class fan
-{
-public:
-	fan (czr::uint256_union const &, size_t);
-	void value (czr::raw_key &);
-	void value_set (czr::raw_key const &);
-	std::vector<std::unique_ptr<czr::uint256_union>> values;
-
-private:
-	std::mutex mutex;
-	void value_get (czr::raw_key &);
-};
-class wallet_value
-{
-public:
-	wallet_value () = default;
-	wallet_value (czr::mdb_val const &);
-	wallet_value(czr::uint256_union const & key_a);
-	czr::mdb_val val () const;
-	czr::private_key key;
-};
-class node_config;
 class kdf
 {
 public:
 	void phs (czr::raw_key &, std::string const &, czr::uint256_union const &);
 	std::mutex mutex;
-};
-enum class key_type
-{
-	not_a_type,
-	unknown,
-	adhoc,
-	deterministic
-};
-class wallet_store
-{
-public:
-	wallet_store (bool &, czr::kdf &, czr::transaction &, unsigned, std::string const &);
-	wallet_store (bool &, czr::kdf &, czr::transaction &, unsigned, std::string const &, std::string const &);
-	std::vector<czr::account> accounts (MDB_txn *);
-	void initialize (MDB_txn *, bool &, std::string const &);
-	czr::uint256_union check (MDB_txn *);
-	bool rekey (MDB_txn *, std::string const &);
-	bool valid_password (MDB_txn *);
-	bool attempt_password (MDB_txn *, std::string const &);
-	void wallet_key (czr::raw_key &, MDB_txn *);
-	void seed (czr::raw_key &, MDB_txn *);
-	void seed_set (MDB_txn *, czr::raw_key const &);
-	czr::key_type key_type (czr::wallet_value const &);
-	czr::public_key deterministic_insert (MDB_txn *);
-	void deterministic_key (czr::raw_key &, MDB_txn *, uint32_t);
-	uint32_t deterministic_index_get (MDB_txn *);
-	void deterministic_index_set (MDB_txn *, uint32_t);
-	void deterministic_clear (MDB_txn *);
-	czr::uint256_union salt (MDB_txn *);
-	czr::public_key insert_adhoc (MDB_txn *, czr::raw_key const &);
-	void erase (MDB_txn *, czr::public_key const &);
-	czr::wallet_value entry_get_raw (MDB_txn *, czr::public_key const &);
-	void entry_put_raw (MDB_txn *, czr::public_key const &, czr::wallet_value const &);
-	bool fetch (MDB_txn *, czr::public_key const &, czr::raw_key &);
-	bool exists (MDB_txn *, czr::public_key const &);
-	void destroy (MDB_txn *);
-	czr::store_iterator find (MDB_txn *, czr::uint256_union const &);
-	czr::store_iterator begin (MDB_txn *, czr::uint256_union const &);
-	czr::store_iterator begin (MDB_txn *);
-	czr::store_iterator end ();
-	void derive_key (czr::raw_key &, MDB_txn *, std::string const &);
-	void serialize_json (MDB_txn *, std::string &);
-	void write_backup (MDB_txn *, boost::filesystem::path const &);
-	bool move (MDB_txn *, czr::wallet_store &, std::vector<czr::public_key> const &);
-	bool import (MDB_txn *, czr::wallet_store &);
-	unsigned version (MDB_txn *);
-	void version_put (MDB_txn *, unsigned);
-	czr::fan password;
-	czr::fan wallet_key_mem;
-	static unsigned const version_1;
-	static unsigned const version_current;
-	static czr::uint256_union const version_special;
-	static czr::uint256_union const wallet_key_special;
-	static czr::uint256_union const salt_special;
-	static czr::uint256_union const check_special;
-	static czr::uint256_union const seed_special;
-	static czr::uint256_union const deterministic_index_special;
-	static int const special_count;
+
 	static unsigned const kdf_full_work = 64 * 1024;
 	static unsigned const kdf_test_work = 8;
 	static unsigned const kdf_work = czr::czr_network == czr::czr_networks::czr_test_network ? kdf_test_work : kdf_full_work;
-	czr::kdf & kdf;
-	czr::mdb_env & environment;
-	MDB_dbi handle;
-	std::recursive_mutex mutex;
 };
 class node;
 
@@ -111,6 +27,8 @@ enum class send_result_codes
 {
 	ok,
 	account_locked,
+	from_not_exists,
+	wrong_password,
 	insufficient_balance,
 	data_size_too_large,
 	validate_error,
@@ -127,53 +45,23 @@ public:
 
 class composer;
 
-// A wallet is a set of account keys encrypted by a common encryption key
-class wallet : public std::enable_shared_from_this<czr::wallet>
+class wallet
 {
 public:
-	wallet (bool &, czr::transaction &, czr::node &, std::string const &);
-	wallet (bool &, czr::transaction &, czr::node &, std::string const &, std::string const &);
-	void enter_initial_password ();
-	bool valid_password ();
-	bool enter_password (std::string const &);
-	czr::public_key deterministic_insert(MDB_txn * transaction_a);
-	czr::public_key deterministic_insert();
-	czr::public_key insert_adhoc(MDB_txn * transaction_a, czr::raw_key const & key_a);
-	czr::public_key insert_adhoc(czr::raw_key const & account_a);
-	bool exists (czr::public_key const &);
-	bool import (std::string const &, std::string const &);
-	void serialize (std::string &);
-	void send_async(czr::account const & from_a, czr::account const & to_a, czr::amount const & amount_a, std::vector<uint8_t> const & data_a, std::function<void(czr::send_result)> const & action_a, boost::optional<std::string> id_a);
-	czr::send_result send_action(czr::account const & from_a, czr::account const & to_a, czr::amount const & amount_a, std::vector<uint8_t> data_a, boost::optional<std::string> id_a);
-	/** Changes the wallet seed and returns the first account */
-	czr::public_key change_seed (MDB_txn * transaction_a, czr::raw_key const & prv_a);
-
-	std::function<void(bool, bool)> lock_observer;
-	czr::wallet_store store;
-	czr::node & node;
-	std::shared_ptr<czr::composer> composer;
-};
-// The wallets set is all the wallets a node controls.  A node may contain multiple wallets independently encrypted and operated.
-class wallets
-{
-public:
-	wallets (bool &, czr::node &);
-	~wallets ();
-	std::shared_ptr<czr::wallet> open (czr::uint256_union const &);
-	std::shared_ptr<czr::wallet> create (czr::uint256_union const &);
-	void destroy (czr::uint256_union const &);
-	void do_wallet_actions ();
+	wallet (bool & error_a, czr::node & node_a);
+	~wallet ();
+	void send_async(czr::account const & from_a, czr::account const & to_a, czr::amount const & amount_a, std::vector<uint8_t> const & data_a, std::string const & password_a, std::function<void(czr::send_result)> const & action_a, boost::optional<std::string> id_a);
+	czr::send_result send_action(czr::account const & from_a, czr::account const & to_a, czr::amount const & amount_a, std::vector<uint8_t> data_a, std::string const & password_a, boost::optional<std::string> id_a);
+	void do_wallet_actions();
 	void queue_wallet_action(std::function<void()> const & action_a);
-	bool exists (MDB_txn *, czr::public_key const &);
-	void stop ();
-	std::unordered_map<czr::uint256_union, std::shared_ptr<czr::wallet>> items;
+	void stop();
+
 	std::deque<std::function<void()>> actions;
 	std::mutex mutex;
 	std::condition_variable condition;
-	czr::kdf kdf;
-	MDB_dbi handle;
 	MDB_dbi send_action_ids;
 	czr::node & node;
+	std::shared_ptr<czr::composer> composer;
 	bool stopped;
 	std::thread thread;
 };
@@ -181,6 +69,7 @@ public:
 class key_content
 {
 public:
+	key_content();
 	key_content(MDB_val const & val_a);
 	key_content(bool & error_a, std::string const & json_a);
 	key_content(czr::account const & account_a, czr::uint256_union const & kdf_salt_a, czr::uint128_union const & iv_a, czr::secret_key const & ciphertext_a);
@@ -196,16 +85,25 @@ public:
 class key_manager
 {
 public:
-	key_manager(bool & init_a, MDB_txn * transaction_a);
-	bool get(czr::public_key const & pub_a, czr::key_content & kc_a);
+	key_manager(bool & error_a, czr::mdb_env & environment);
+	bool exists(czr::public_key const & pub_a);
+	bool find(czr::public_key const & pub_a, czr::key_content & kc_a);
 	std::list<czr::public_key> list();
 	czr::public_key create(MDB_txn * transaction_a, std::string const & password_a);
-	bool remove(MDB_txn * transaction_a, czr::public_key const & pub_a);
-	bool import(MDB_txn * transaction_a, std::string const & json_a);
-	czr::raw_key decrypt_prv(MDB_txn * transaction_a, czr::key_content const & kc_a, std::string const & password_a);
+	bool change_password(MDB_txn * transaction_a, czr::public_key const & pub_a, std::string const & old_password_a, std::string const & new_password_a);
+	bool remove(MDB_txn * transaction_a, czr::public_key const & pub_a, std::string const & password_a);
+	bool import(MDB_txn * transaction_a, std::string const & json_a, key_content & kc_a);
+	bool decrypt_prv(czr::public_key const & pub_a, std::string const & password_a, czr::raw_key & prv);
+	bool decrypt_prv(czr::key_content const & kc, std::string const & password_a, czr::raw_key & prv);
+	bool is_locked(czr::public_key const & pub_a);
+	bool find_unlocked_prv(czr::public_key const & pub_a, czr::raw_key & prv);
+	bool unlock(czr::public_key const & pub_a, std::string const & password_a);
+	void write_backup(boost::filesystem::path const & path_a);
+	void lock(czr::public_key const & pub_a);
 
 private:
-	void add_key(MDB_txn * transaction_a, czr::key_content const & kc);
+	czr::key_content gen_key_content(czr::raw_key const & prv, std::string const & password_a);
+	void add_or_update_key(MDB_txn * transaction_a, czr::key_content const & kc);
 	bool key_get(MDB_txn * transaction_a, czr::public_key const & pub_a, czr::key_content & value_a);
 	void key_put(MDB_txn * transaction_a, czr::public_key const & pub_a, czr::key_content const & content_a);
 	void key_del(MDB_txn * transaction_a, czr::public_key const & pub_a);
@@ -214,5 +112,9 @@ private:
 	MDB_dbi keys;
 	std::unordered_map<czr::public_key, czr::key_content> key_contents;
 	std::mutex key_contents_mutex;
+
+	//todo: to use fan
+	std::unordered_map<czr::public_key, czr::private_key> unlocked;
+	std::mutex unlocked_mutex;
 };
 }

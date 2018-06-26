@@ -578,7 +578,8 @@ czr::node::node(czr::node_init & init_a, boost::asio::io_service & service_a,
 	store(init_a.error, application_path_a / "data.ldb", config_a.lmdb_max_dbs),
 	gap_cache(*this),
 	ledger(store),
-	wallets(init_a.error, *this),
+	key_manager(init_a.error, store.environment),
+	wallet(init_a.error, *this),
 	application_path(application_path_a),
 	warmed_up(0),
 	validation(std::make_shared<czr::validation>(*this)),
@@ -640,7 +641,7 @@ void czr::node::stop()
 
 	host->stop();
 	block_processor.stop();
-	wallets.stop();
+	wallet.stop();
 	if (block_processor_thread.joinable())
 	{
 		block_processor_thread.join();
@@ -697,13 +698,10 @@ void czr::node::ongoing_retry_late_message()
 
 void czr::node::backup_wallet()
 {
-	czr::transaction transaction(store.environment, nullptr, false);
-	for (auto i(wallets.items.begin()), n(wallets.items.end()); i != n; ++i)
-	{
-		auto backup_path(application_path / "backup");
-		boost::filesystem::create_directories(backup_path);
-		i->second->store.write_backup(transaction, backup_path / (i->first.to_string() + ".json"));
-	}
+	auto backup_path(application_path / "backup");
+	boost::filesystem::create_directories(backup_path);
+	key_manager.write_backup(backup_path);
+
 	auto this_l(shared());
 	alarm.add(std::chrono::steady_clock::now() + backup_interval, [this_l]() {
 		this_l->backup_wallet();
@@ -785,27 +783,17 @@ void czr::add_node_options(boost::program_options::options_description & descrip
 {
 	// clang-format off
 	description_a.add_options()
-		("account_create", "Insert next deterministic key in to <wallet>")
-		("account_get", "Get account number for the <key>")
-		("account_key", "Get the public key for <account>")
+		("account_create", "Create new account")
+		("account_remove", "Remove account")
+		("account_import", "Imports account from json file")
+		("account_list", "List all accounts")
 		("vacuum", "Compact database. If data_path is missing, the database in data directory is compacted.")
 		("snapshot", "Compact database and create snapshot, functions similar to vacuum but does not replace the existing database")
 		("data_path", boost::program_options::value<std::string>(), "Use the supplied path as the data directory")
-		("key_create", "Generates a adhoc random keypair and prints it to stdout")
-		("key_expand", "Derive public key and account number from <key>")
-		("wallet_add_adhoc", "Insert <key> in to <wallet>")
-		("wallet_create", "Creates a new wallet and prints the ID")
-		("wallet_change_seed", "Changes seed for <wallet> to <key>")
-		("wallet_decrypt_unsafe", "Decrypts <wallet> using <password>, !!THIS WILL PRINT YOUR PRIVATE KEY TO STDOUT!!")
-		("wallet_destroy", "Destroys <wallet> and all keys it contains")
-		("wallet_import", "Imports keys in <file> using <password> in to <wallet>")
-		("wallet_list", "Dumps wallet IDs and public keys")
-		("wallet_remove", "Remove <account> from <wallet>")
 		("account", boost::program_options::value<std::string>(), "Defines <account> for other commands")
 		("file", boost::program_options::value<std::string>(), "Defines <file> for other commands")
 		("key", boost::program_options::value<std::string>(), "Defines the <key> for other commands, hex")
-		("password", boost::program_options::value<std::string>(), "Defines <password> for other commands")
-		("wallet", boost::program_options::value<std::string>(), "Defines <wallet> for other commands");
+		("password", boost::program_options::value<std::string>(), "Defines <password> for other commands");
 	// clang-format on
 }
 
@@ -815,76 +803,102 @@ bool czr::handle_node_options(boost::program_options::variables_map & vm)
 	boost::filesystem::path data_path = vm.count("data_path") ? boost::filesystem::path(vm["data_path"].as<std::string>()) : czr::working_path();
 	if (vm.count("account_create"))
 	{
-		if (vm.count("wallet") == 1)
+		//todo: get from input
+		std::string password;
+		password = vm["password"].as<std::string>();
+
+		inactive_node node(data_path);
+		czr::transaction transaction(node.node->store.environment, nullptr, true);
+		auto account(node.node->key_manager.create(transaction, password));
+		std::cout << boost::str(boost::format("Account: %1%\n") % account.to_account());
+	}
+	else if (vm.count("account_remove"))
+	{
+		if (vm.count("account") == 1)
 		{
-			czr::uint256_union wallet_id;
-			if (!wallet_id.decode_hex(vm["wallet"].as<std::string>()))
+			//todo: get from input
+			std::string password;
+			password = vm["password"].as<std::string>();
+
+			inactive_node node(data_path);
+			czr::account account;
+			if (!account.decode_account(vm["account"].as<std::string>()))
 			{
-				std::string password;
-				if (vm.count("password") > 0)
+				bool exists(node.node->key_manager.exists(account));
+				if (exists)
 				{
-					password = vm["password"].as<std::string>();
-				}
-				inactive_node node(data_path);
-				auto wallet(node.node->wallets.open(wallet_id));
-				if (wallet != nullptr)
-				{
-					if (!wallet->enter_password(password))
+					czr::transaction transaction(node.node->store.environment, nullptr, true);
+					auto error(node.node->key_manager.remove(transaction, account, password));
+					if (error)
 					{
-						czr::transaction transaction(wallet->store.environment, nullptr, true);
-						auto pub(wallet->store.deterministic_insert(transaction));
-						std::cout << boost::str(boost::format("Account: %1%\n") % pub.to_account());
-					}
-					else
-					{
-						std::cerr << "Invalid password\n";
+						std::cerr << "Wrong password\n";
 						result = true;
 					}
 				}
 				else
 				{
-					std::cerr << "Wallet doesn't exist\n";
+					std::cerr << "Account not found\n";
 					result = true;
 				}
 			}
 			else
 			{
-				std::cerr << "Invalid wallet id\n";
+				std::cerr << "Invalid account\n";
 				result = true;
 			}
 		}
 		else
 		{
-			std::cerr << "wallet_add command requires one <wallet> option and one <key> option and optionally one <password> option\n";
+			std::cerr << "Requires one <account> option\n";
 			result = true;
 		}
 	}
-	else if (vm.count("account_get") > 0)
+	else if (vm.count("account_import"))
 	{
-		if (vm.count("key") == 1)
+		if (vm.count("file") == 1)
 		{
-			czr::uint256_union pub;
-			pub.decode_hex(vm["key"].as<std::string>());
-			std::cout << "Account: " << pub.to_account() << std::endl;
+			std::string filename(vm["file"].as<std::string>());
+			std::ifstream stream;
+			stream.open(filename.c_str());
+			if (!stream.fail())
+			{
+				std::stringstream contents;
+				contents << stream.rdbuf();
+
+				inactive_node node(data_path);
+				czr::transaction transaction(node.node->store.environment, nullptr, true);
+				czr::key_content kc;
+				bool error(node.node->key_manager.import(transaction, contents.str(), kc));
+				if (!error)
+				{
+					std::cerr << "Import account " << kc.account.to_account() << std::endl;
+					result = false;
+				}
+				else
+				{
+					std::cerr << "Unable to import account\n";
+					result = true;
+				}
+			}
+			else
+			{
+				std::cerr << "Unable to open <file>\n";
+				result = true;
+			}
 		}
 		else
 		{
-			std::cerr << "account comand requires one <key> option\n";
+			std::cerr << "Requires one <file> option\n";
 			result = true;
 		}
 	}
-	else if (vm.count("account_key") > 0)
+	else if (vm.count("account_list"))
 	{
-		if (vm.count("account") == 1)
+		inactive_node node(data_path);
+		std::list<czr::account> account_list(node.node->key_manager.list());
+		for (czr::account account : account_list)
 		{
-			czr::uint256_union account;
-			account.decode_account(vm["account"].as<std::string>());
-			std::cout << "Hex: " << account.to_string() << std::endl;
-		}
-		else
-		{
-			std::cerr << "account_key command requires one <account> option\n";
-			result = true;
+			std::cout << account.to_account() << '\n';
 		}
 	}
 	else if (vm.count("vacuum") > 0)
@@ -954,360 +968,6 @@ bool czr::handle_node_options(boost::program_options::variables_map & vm)
 		catch (...)
 		{
 			std::cerr << "Snapshot Failed" << std::endl;
-		}
-	}
-	else if (vm.count("key_create"))
-	{
-		czr::keypair pair;
-		std::cout << "Private: " << pair.prv.data.to_string() << std::endl
-			<< "Public: " << pair.pub.to_string() << std::endl
-			<< "Account: " << pair.pub.to_account() << std::endl;
-	}
-	else if (vm.count("key_expand"))
-	{
-		if (vm.count("key") == 1)
-		{
-			czr::uint256_union prv;
-			prv.decode_hex(vm["key"].as<std::string>());
-			czr::uint256_union pub;
-			ed25519_publickey(prv.bytes.data(), pub.bytes.data());
-			std::cout << "Private: " << prv.to_string() << std::endl
-				<< "Public: " << pub.to_string() << std::endl
-				<< "Account: " << pub.to_account() << std::endl;
-		}
-		else
-		{
-			std::cerr << "key_expand command requires one <key> option\n";
-			result = true;
-		}
-	}
-	else if (vm.count("wallet_add_adhoc"))
-	{
-		if (vm.count("wallet") == 1 && vm.count("key") == 1)
-		{
-			czr::uint256_union wallet_id;
-			if (!wallet_id.decode_hex(vm["wallet"].as<std::string>()))
-			{
-				std::string password;
-				if (vm.count("password") > 0)
-				{
-					password = vm["password"].as<std::string>();
-				}
-				inactive_node node(data_path);
-				auto wallet(node.node->wallets.open(wallet_id));
-				if (wallet != nullptr)
-				{
-					if (!wallet->enter_password(password))
-					{
-						czr::raw_key key;
-						if (!key.data.decode_hex(vm["key"].as<std::string>()))
-						{
-							czr::transaction transaction(wallet->store.environment, nullptr, true);
-							wallet->store.insert_adhoc(transaction, key);
-						}
-						else
-						{
-							std::cerr << "Invalid key\n";
-							result = true;
-						}
-					}
-					else
-					{
-						std::cerr << "Invalid password\n";
-						result = true;
-					}
-				}
-				else
-				{
-					std::cerr << "Wallet doesn't exist\n";
-					result = true;
-				}
-			}
-			else
-			{
-				std::cerr << "Invalid wallet id\n";
-				result = true;
-			}
-		}
-		else
-		{
-			std::cerr << "wallet_add command requires one <wallet> option and one <key> option and optionally one <password> option\n";
-			result = true;
-		}
-	}
-	else if (vm.count("wallet_change_seed"))
-	{
-		if (vm.count("wallet") == 1 && vm.count("key") == 1)
-		{
-			czr::uint256_union wallet_id;
-			if (!wallet_id.decode_hex(vm["wallet"].as<std::string>()))
-			{
-				std::string password;
-				if (vm.count("password") > 0)
-				{
-					password = vm["password"].as<std::string>();
-				}
-				inactive_node node(data_path);
-				auto wallet(node.node->wallets.open(wallet_id));
-				if (wallet != nullptr)
-				{
-					if (!wallet->enter_password(password))
-					{
-						czr::raw_key key;
-						if (!key.data.decode_hex(vm["key"].as<std::string>()))
-						{
-							czr::transaction transaction(wallet->store.environment, nullptr, true);
-							wallet->change_seed(transaction, key);
-						}
-						else
-						{
-							std::cerr << "Invalid key\n";
-							result = true;
-						}
-					}
-					else
-					{
-						std::cerr << "Invalid password\n";
-						result = true;
-					}
-				}
-				else
-				{
-					std::cerr << "Wallet doesn't exist\n";
-					result = true;
-				}
-			}
-			else
-			{
-				std::cerr << "Invalid wallet id\n";
-				result = true;
-			}
-		}
-		else
-		{
-			std::cerr << "wallet_add command requires one <wallet> option and one <key> option and optionally one <password> option\n";
-			result = true;
-		}
-	}
-	else if (vm.count("wallet_create"))
-	{
-		inactive_node node(data_path);
-		czr::keypair key;
-		std::cout << key.pub.to_string() << std::endl;
-		auto wallet(node.node->wallets.create(key.pub));
-		wallet->enter_initial_password();
-	}
-	else if (vm.count("wallet_decrypt_unsafe"))
-	{
-		if (vm.count("wallet") == 1)
-		{
-			std::string password;
-			if (vm.count("password") == 1)
-			{
-				password = vm["password"].as<std::string>();
-			}
-			czr::uint256_union wallet_id;
-			if (!wallet_id.decode_hex(vm["wallet"].as<std::string>()))
-			{
-				inactive_node node(data_path);
-				auto existing(node.node->wallets.items.find(wallet_id));
-				if (existing != node.node->wallets.items.end())
-				{
-					if (!existing->second->enter_password(password))
-					{
-						czr::transaction transaction(existing->second->store.environment, nullptr, false);
-						czr::raw_key seed;
-						existing->second->store.seed(seed, transaction);
-						std::cout << boost::str(boost::format("Seed: %1%\n") % seed.data.to_string());
-						for (auto i(existing->second->store.begin(transaction)), m(existing->second->store.end()); i != m; ++i)
-						{
-							czr::account account(i->first.uint256());
-							czr::raw_key key;
-							auto error(existing->second->store.fetch(transaction, account, key));
-							assert(!error);
-							std::cout << boost::str(boost::format("Pub: %1% Prv: %2%\n") % account.to_account() % key.data.to_string());
-						}
-					}
-					else
-					{
-						std::cerr << "Invalid password\n";
-						result = true;
-					}
-				}
-				else
-				{
-					std::cerr << "Wallet doesn't exist\n";
-					result = true;
-				}
-			}
-			else
-			{
-				std::cerr << "Invalid wallet id\n";
-				result = true;
-			}
-		}
-		else
-		{
-			std::cerr << "wallet_decrypt_unsafe requires one <wallet> option\n";
-			result = true;
-		}
-	}
-	else if (vm.count("wallet_destroy"))
-	{
-		if (vm.count("wallet") == 1)
-		{
-			czr::uint256_union wallet_id;
-			if (!wallet_id.decode_hex(vm["wallet"].as<std::string>()))
-			{
-				inactive_node node(data_path);
-				if (node.node->wallets.items.find(wallet_id) != node.node->wallets.items.end())
-				{
-					node.node->wallets.destroy(wallet_id);
-				}
-				else
-				{
-					std::cerr << "Wallet doesn't exist\n";
-					result = true;
-				}
-			}
-			else
-			{
-				std::cerr << "Invalid wallet id\n";
-				result = true;
-			}
-		}
-		else
-		{
-			std::cerr << "wallet_destroy requires one <wallet> option\n";
-			result = true;
-		}
-	}
-	else if (vm.count("wallet_import"))
-	{
-		if (vm.count("file") == 1)
-		{
-			std::string filename(vm["file"].as<std::string>());
-			std::ifstream stream;
-			stream.open(filename.c_str());
-			if (!stream.fail())
-			{
-				std::stringstream contents;
-				contents << stream.rdbuf();
-				std::string password;
-				if (vm.count("password") == 1)
-				{
-					password = vm["password"].as<std::string>();
-				}
-				if (vm.count("wallet") == 1)
-				{
-					czr::uint256_union wallet_id;
-					if (!wallet_id.decode_hex(vm["wallet"].as<std::string>()))
-					{
-						inactive_node node(data_path);
-						auto existing(node.node->wallets.items.find(wallet_id));
-						if (existing != node.node->wallets.items.end())
-						{
-							if (!existing->second->import(contents.str(), password))
-							{
-								result = false;
-							}
-							else
-							{
-								std::cerr << "Unable to import wallet\n";
-								result = true;
-							}
-						}
-						else
-						{
-							std::cerr << "Wallet doesn't exist\n";
-							result = true;
-						}
-					}
-					else
-					{
-						std::cerr << "Invalid wallet id\n";
-						result = true;
-					}
-				}
-				else
-				{
-					std::cerr << "wallet_import requires one <wallet> option\n";
-					result = true;
-				}
-			}
-			else
-			{
-				std::cerr << "Unable to open <file>\n";
-				result = true;
-			}
-		}
-		else
-		{
-			std::cerr << "wallet_import requires one <file> option\n";
-			result = true;
-		}
-	}
-	else if (vm.count("wallet_list"))
-	{
-		inactive_node node(data_path);
-		for (auto i(node.node->wallets.items.begin()), n(node.node->wallets.items.end()); i != n; ++i)
-		{
-			std::cout << boost::str(boost::format("Wallet ID: %1%\n") % i->first.to_string());
-			czr::transaction transaction(i->second->store.environment, nullptr, false);
-			for (auto j(i->second->store.begin(transaction)), m(i->second->store.end()); j != m; ++j)
-			{
-				std::cout << czr::uint256_union(j->first.uint256()).to_account() << '\n';
-			}
-		}
-	}
-	else if (vm.count("wallet_remove"))
-	{
-		if (vm.count("wallet") == 1 && vm.count("account") == 1)
-		{
-			inactive_node node(data_path);
-			czr::uint256_union wallet_id;
-			if (!wallet_id.decode_hex(vm["wallet"].as<std::string>()))
-			{
-				auto wallet(node.node->wallets.items.find(wallet_id));
-				if (wallet != node.node->wallets.items.end())
-				{
-					czr::account account_id;
-					if (!account_id.decode_account(vm["account"].as<std::string>()))
-					{
-						czr::transaction transaction(wallet->second->store.environment, nullptr, true);
-						auto account(wallet->second->store.find(transaction, account_id));
-						if (account != wallet->second->store.end())
-						{
-							wallet->second->store.erase(transaction, account_id);
-						}
-						else
-						{
-							std::cerr << "Account not found in wallet\n";
-							result = true;
-						}
-					}
-					else
-					{
-						std::cerr << "Invalid account id\n";
-						result = true;
-					}
-				}
-				else
-				{
-					std::cerr << "Wallet not found\n";
-					result = true;
-				}
-			}
-			else
-			{
-				std::cerr << "Invalid wallet id\n";
-				result = true;
-			}
-		}
-		else
-		{
-			std::cerr << "wallet_remove command requires one <wallet> and one <account> option\n";
-			result = true;
 		}
 	}
 	else

@@ -692,13 +692,17 @@ void host::on_node_table_event(node_id const & node_id_a, node_table_event_type 
 	}
 }
 
-czr::keypair host::network_alias(dev::bytesConstRef const & bytes)
+czr::private_key host::network_alias(dev::bytesConstRef const & bytes)
 {
 	dev::RLP r(bytes);
 	if (r.itemCount() > 1)
-		return czr::keypair((czr::private_key)r[1]);
+		return (czr::private_key)r[1];
 	else
-		return czr::keypair();
+	{
+		czr::private_key prv;
+		random_pool.GenerateBlock(prv.bytes.data(), prv.bytes.size());
+		return prv;
+	}
 }
 
 void host::restore_network(dev::bytesConstRef const & bytes)
