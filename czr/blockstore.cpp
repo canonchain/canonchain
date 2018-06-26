@@ -732,7 +732,7 @@ bool czr::block_store::block_state_get(MDB_txn * transaction_a, czr::block_hash 
 	czr::mdb_val value;
 	auto status(mdb_get(transaction_a, block_state, czr::mdb_val(hash_a), value));
 	assert(status == 0 || status == MDB_NOTFOUND);
-	bool result;
+	bool result(false);
 	if (status == MDB_NOTFOUND)
 	{
 		result = true;
@@ -971,11 +971,11 @@ void czr::block_store::genesis_hash_put(MDB_txn * transaction_a, czr::block_hash
 }
 
 
-bool czr::block_store::my_witness_list_get(MDB_txn * transaction_a, czr::witness_list_info my_wl_info)
+bool czr::block_store::my_witness_list_get(MDB_txn * transaction_a, czr::witness_list_info &my_wl_info)
 {
 	czr::mdb_val value;
 	auto status(mdb_get(transaction_a, prop, czr::mdb_val(my_witness_list_key), value));
-	bool result;
+	bool result(false);
 	if (status == MDB_NOTFOUND)
 	{
 		result = true;

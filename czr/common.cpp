@@ -131,7 +131,7 @@ czr::witness_list_hash czr::witness_list_info::hash() const
 
 bool czr::witness_list_info::is_compatible(witness_list_info const & other_a) const
 {
-	uint8_t uncompatible_count;
+	uint8_t uncompatible_count(0);
 	for (auto w : witness_list)
 	{
 		auto iter(std::find(other_a.witness_list.begin(), other_a.witness_list.end(), w));

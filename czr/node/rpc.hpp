@@ -124,6 +124,7 @@ public:
 	void wallet_destroy ();
 	void wallet_export ();
 	void wallet_lock ();
+	void witness_list();
 	std::string body;
 	czr::node & node;
 	czr::rpc & rpc;

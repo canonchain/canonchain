@@ -170,7 +170,7 @@ czr::witness_list_info czr::ledger::block_witness_list(MDB_txn * transaction_a, 
 //best parent:compatible parent, witnessed_level DESC, level ASC, unit ASC
 czr::block_hash czr::ledger::determine_best_parent(MDB_txn * transaction_a, std::vector<czr::block_hash> const & pblock_hashs, czr::witness_list_info const & wl_info)
 {
-	czr::block_hash best_pblock_hash;
+	czr::block_hash best_pblock_hash(0);
 	czr::block_state best_pblock_state;
 	for (czr::block_hash const & pblock_hash : pblock_hashs)
 	{
@@ -531,3 +531,14 @@ czr::block_hash czr::ledger::find_witness_list_block(MDB_txn * transaction_a, cz
 	return witness_list_block;
 }
 
+
+void czr::ledger::witness_list_put(MDB_txn* transaction_a, czr::witness_list_info const & wl_info)
+{
+	store.my_witness_list_put(transaction_a, wl_info);
+}
+
+void czr::ledger::witness_list_get(MDB_txn* transaction_a, czr::witness_list_info & wl_info)
+{
+
+	store.my_witness_list_get(transaction_a,wl_info);
+}
