@@ -899,23 +899,27 @@ void czr::rpc_handler::process_request()
 		boost::property_tree::read_json(istream, request);
 		std::string action(request.get<std::string>("action"));
 
+		bool handled = false;
 		if (action == "account_create")
 		{
 			account_create();
 			request.erase("password");
 			reprocess_body(body, request);
+			handled = true;
 		}
 		else if (action == "account_remove")
 		{
 			account_remove();
 			request.erase("password");
 			reprocess_body(body, request);
+			handled = true;
 		}
 		else if (action == "account_unlock")
 		{
 			account_unlock();
 			request.erase("password");
 			reprocess_body(body, request);
+			handled = true;
 		}
 		else if (action == "account_password_change")
 		{
@@ -923,13 +927,19 @@ void czr::rpc_handler::process_request()
 			request.erase("old_password");
 			request.erase("new_password");
 			reprocess_body(body, request);
+			handled = true;
 		}
 		else if (action == "send")
 		{
 			send();
 			request.erase("password");
 			reprocess_body(body, request);
+			handled = true;
 		}
+
+		if (handled)
+			return;
+
 		if (node.config.logging.log_rpc())
 		{
 			BOOST_LOG(node.log) << body;
