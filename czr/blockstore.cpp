@@ -73,11 +73,6 @@ czr::store_entry & czr::store_iterator::operator-> ()
 	return current;
 }
 
-czr::store_iterator::store_iterator(MDB_txn *, MDB_dbi):
-	cursor(nullptr)
-{
-}
-
 czr::store_iterator::store_iterator(MDB_txn * transaction_a, MDB_dbi db_a, czr::store_iterator_direction direction_a) :
 	cursor(nullptr),
 	direction(direction_a)
