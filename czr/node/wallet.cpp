@@ -1016,3 +1016,212 @@ czr::send_result::send_result(czr::send_result_codes const & code_a, std::shared
 	block(block_a)
 {
 }
+
+czr::key_content::key_content(MDB_val const & val_a)
+{
+	assert(val_a.mv_size == sizeof(*this));
+	std::copy(reinterpret_cast<uint8_t const *> (val_a.mv_data), reinterpret_cast<uint8_t const *> (val_a.mv_data) + sizeof(*this), reinterpret_cast<uint8_t *> (this));
+}
+
+czr::key_content::key_content(bool & error_a, std::string const & json_a)
+{
+	boost::property_tree::ptree p;
+	std::stringstream istream(json_a);
+	try
+	{
+		boost::property_tree::read_json(istream, p);
+
+		if (!error_a)
+		{
+			std::string account_text(p.get<std::string>("account"));
+			error_a = account.decode_account(account_text);
+
+			if (!error_a)
+			{
+				std::string kdf_salt_text(p.get<std::string>("kdf_salt"));
+				error_a = kdf_salt.decode_hex(kdf_salt_text);
+
+				if (!error_a)
+				{
+					std::string iv_text(p.get<std::string>("iv"));
+					error_a = iv.decode_hex(iv_text);
+
+					if (!error_a)
+					{
+						std::string ciphertext_text(p.get<std::string>("ciphertext"));
+						error_a = ciphertext.decode_hex(ciphertext_text);
+					}
+				}
+			}
+		}
+	}
+	catch (...)
+	{
+		error_a = true;
+	}
+}
+
+czr::key_content::key_content(czr::account const & account_a, czr::uint256_union const & kdf_salt_a, 
+	czr::uint128_union const & iv_a, czr::secret_key const & ciphertext_a):
+	account(account_a),
+	kdf_salt(kdf_salt_a),
+	iv(iv_a),
+	ciphertext(ciphertext_a)
+{
+}
+
+czr::mdb_val czr::key_content::val() const
+{
+	return czr::mdb_val(sizeof(*this), const_cast<czr::key_content *> (this));
+}
+
+std::string czr::key_content::to_json()
+{
+	boost::property_tree::ptree p;
+
+	p.put("account", account.to_account());
+	p.put("kdf_salt", kdf_salt.to_string());
+	p.put("iv", iv.to_string());
+	p.put("ciphertext", ciphertext.to_string());
+
+	std::stringstream ostream;
+	boost::property_tree::write_json(ostream, p);
+	return ostream.str();
+}
+
+
+czr::key_manager::key_manager(bool & init_a, MDB_txn * transaction_a)
+{
+	auto error(0);
+	error |= mdb_dbi_open(transaction_a, "keys", MDB_CREATE, &keys);
+	init_a = error != 0;
+	if (!init_a)
+	{
+		for (czr::store_iterator i(transaction_a, keys), n(nullptr); i != n; ++i)
+		{
+			czr::public_key pub(i->first.uint256());
+			czr::key_content key_content(i->second);
+			key_contents[pub] = key_content;
+		}
+	}
+}
+
+bool czr::key_manager::get(czr::public_key const & pub_a, czr::key_content & kc_a)
+{
+	bool not_found(false);
+	std::lock_guard<std::mutex> lock(key_contents_mutex);
+	if (key_contents.count(pub_a))
+	{
+		kc_a = key_contents[pub_a];
+	}
+	else
+	{
+		not_found = true;
+	}
+	return not_found;
+}
+
+std::list<czr::public_key> czr::key_manager::list()
+{
+	std::list<czr::public_key> pubs;
+	std::lock_guard<std::mutex> lock(key_contents_mutex);
+	for (auto pair : key_contents)
+		pubs.push_back(pair.first);
+	return pubs;
+}
+
+czr::public_key czr::key_manager::create(MDB_txn * transaction_a, std::string const & password_a)
+{
+	czr::uint256_union kdf_salt;
+	random_pool.GenerateBlock(kdf_salt.bytes.data(), kdf_salt.bytes.size());
+
+	czr::raw_key derive_pwd;
+	kdf.phs(derive_pwd, password_a, kdf_salt);
+
+	czr::private_key prv;
+	random_pool.GenerateBlock(prv.bytes.data(), prv.bytes.size());
+
+	czr::uint128_union iv;
+	random_pool.GenerateBlock(iv.bytes.data(), iv.bytes.size());
+
+	czr::uint256_union ciphertext;
+	ciphertext.encrypt(prv, derive_pwd, iv);
+
+	czr::public_key pub;
+	ed25519_publickey(prv.bytes.data(), pub.bytes.data());
+
+	czr::key_content kc(pub, kdf_salt, iv, ciphertext);
+	add_key(transaction_a, kc);
+
+	return pub;
+}
+
+bool czr::key_manager::remove(MDB_txn * transaction_a, czr::public_key const & pub_a)
+{
+	{
+		std::lock_guard<std::mutex> lock(key_contents_mutex);
+		key_contents.erase(pub_a);
+	}
+	key_del(transaction_a, pub_a);
+}
+
+bool czr::key_manager::import(MDB_txn * transaction_a, std::string const & json_a)
+{
+	bool error(false);
+	czr::key_content kc(error, json_a);
+	if (!error)
+		add_key(transaction_a, kc);
+
+	return error;
+}
+
+czr::raw_key czr::key_manager::decrypt_prv(MDB_txn * transaction_a, czr::key_content const & kc_a, std::string const & password_a)
+{
+	czr::raw_key derive_pwd;
+	kdf.phs(derive_pwd, password_a, kc_a.kdf_salt);
+
+	czr::raw_key prv;
+	prv.decrypt(kc_a.ciphertext, derive_pwd, kc_a.iv);
+
+	return prv;
+}
+
+void czr::key_manager::add_key(MDB_txn * transaction_a, czr::key_content const & kc)
+{
+	{
+		std::lock_guard<std::mutex> lock(key_contents_mutex);
+		key_contents[kc.account] = kc;
+	}
+	key_put(transaction_a, kc.account, kc);
+}
+
+bool czr::key_manager::key_get(MDB_txn * transaction_a, czr::public_key const & pub_a, czr::key_content & content)
+{
+	czr::mdb_val value;
+	auto status(mdb_get(transaction_a, keys, czr::mdb_val(pub_a), value));
+	assert(status == 0 || status == MDB_NOTFOUND);
+	bool result(false);
+	if (status == MDB_NOTFOUND)
+	{
+		result = true;
+	}
+	else
+	{
+		content = czr::key_content(value);
+		assert(!result);
+	}
+	return result;
+}
+
+void czr::key_manager::key_put(MDB_txn * transaction_a, czr::public_key const & pub_a, czr::key_content const & content)
+{
+	auto status(mdb_put(transaction_a, keys, czr::mdb_val(pub_a), content.val(), 0));
+	assert(status == 0);
+}
+
+void czr::key_manager::key_del(MDB_txn * transaction_a, czr::public_key const & pub_a)
+{
+	auto status(mdb_del(transaction_a, keys, czr::mdb_val(pub_a), nullptr));
+	assert(status == 0 || status == MDB_NOTFOUND);
+}
+

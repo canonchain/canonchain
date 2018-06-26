@@ -177,4 +177,42 @@ public:
 	bool stopped;
 	std::thread thread;
 };
+
+class key_content
+{
+public:
+	key_content(MDB_val const & val_a);
+	key_content(bool & error_a, std::string const & json_a);
+	key_content(czr::account const & account_a, czr::uint256_union const & kdf_salt_a, czr::uint128_union const & iv_a, czr::secret_key const & ciphertext_a);
+	czr::mdb_val val() const;
+	std::string to_json();
+
+	czr::account account;
+	czr::uint256_union kdf_salt;
+	czr::uint128_union iv;
+	czr::secret_key ciphertext;
+};
+
+class key_manager
+{
+public:
+	key_manager(bool & init_a, MDB_txn * transaction_a);
+	bool get(czr::public_key const & pub_a, czr::key_content & kc_a);
+	std::list<czr::public_key> list();
+	czr::public_key create(MDB_txn * transaction_a, std::string const & password_a);
+	bool remove(MDB_txn * transaction_a, czr::public_key const & pub_a);
+	bool import(MDB_txn * transaction_a, std::string const & json_a);
+	czr::raw_key decrypt_prv(MDB_txn * transaction_a, czr::key_content const & kc_a, std::string const & password_a);
+
+private:
+	void add_key(MDB_txn * transaction_a, czr::key_content const & kc);
+	bool key_get(MDB_txn * transaction_a, czr::public_key const & pub_a, czr::key_content & value_a);
+	void key_put(MDB_txn * transaction_a, czr::public_key const & pub_a, czr::key_content const & content_a);
+	void key_del(MDB_txn * transaction_a, czr::public_key const & pub_a);
+
+	czr::kdf kdf;
+	MDB_dbi keys;
+	std::unordered_map<czr::public_key, czr::key_content> key_contents;
+	std::mutex key_contents_mutex;
+};
 }
