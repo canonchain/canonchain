@@ -277,7 +277,7 @@ std::string czr::key_content::to_json()
 	p.put("ciphertext", ciphertext.to_string());
 
 	std::stringstream ostream;
-	boost::property_tree::write_json(ostream, p);
+	boost::property_tree::write_json(ostream, p, false);
 	return ostream.str();
 }
 
