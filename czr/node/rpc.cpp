@@ -1,5 +1,6 @@
 #include <boost/algorithm/string.hpp>
 #include <boost/property_tree/ptree.hpp>
+#include <boost/optional.hpp>
 #include <czr/node/rpc.hpp>
 
 #include <czr/node/node.hpp>
@@ -540,13 +541,13 @@ void czr::rpc_handler::accounts_frontiers()
 		}
 		else
 		{
+
 			error_response(response, "Invalid account");
 		}
 	}
 	response_l.add_child("frontiers", frontiers);
 	response(response_l);
 }
-
 
 void czr::rpc_handler::block()
 {
@@ -572,6 +573,7 @@ void czr::rpc_handler::block()
 	}
 	else
 	{
+
 		error_response(response, "Invalid hash");
 	}
 }
@@ -603,6 +605,7 @@ void czr::rpc_handler::blocks()
 		}
 		else
 		{
+
 			error_response(response, "Invalid hash");
 		}
 	}
@@ -740,6 +743,69 @@ void czr::rpc_handler::version()
 	response(response_l);
 }
 
+void czr::rpc_handler::witness_list()
+{
+
+	if (!rpc.config.enable_control)
+	{
+		error_response(response, "RPC control is disabled");
+		return;
+	}
+
+	boost::optional<boost::property_tree::ptree> opwin(request.get_child_optional("witness_list"));
+	if (!opwin)
+	{
+		error_response(response, "Not found witness_list");
+		return;
+	}
+	//check witness_list
+	std::vector<czr::account> vecwin;
+	bool error(false);
+	for (auto i : *opwin)
+	{
+		czr::account acco;
+		std::string win_text = i.second.data();		
+		error = acco.decode_account(win_text);
+		if (error)
+		{
+		   error_response(response, "Bad from witness_list");
+		   return;
+		}
+		auto it = std::find(vecwin.begin(), vecwin.end(), acco);
+		if (it != vecwin.end())
+		{
+			error_response(response, "Has same witness in witness_list");
+			return;
+		}
+	    vecwin.push_back(acco);		
+	}
+	
+	if (vecwin.size() != 12)
+	{
+		error_response(response, "Witness_list not equal 12");
+		return;
+	}
+	//asc sort
+	std::sort(vecwin.begin(),vecwin.end());
+	//store 
+	czr::transaction        transaction(node.store.environment, nullptr, true);;
+	czr::witness_list_info  wl_info(vecwin);
+	node.ledger.witness_list_put(transaction, wl_info);
+
+
+	czr::witness_list_info  wl_infoget;
+	czr::transaction        transactionget(node.store.environment, nullptr, false);;
+	node.ledger.witness_list_get(transaction, wl_infoget);
+	for (auto i : wl_infoget.witness_list)
+	{
+		std::cout << i.to_string() << std::endl;
+	}
+	boost::property_tree::ptree response_l;
+	response_l.put("witness_list store" ," success");
+	response(response_l);
+}
+
+
 czr::rpc_connection::rpc_connection(czr::node & node_a, czr::rpc & rpc_a) :
 	node(node_a.shared()),
 	rpc(rpc_a),
@@ -832,6 +898,7 @@ void czr::rpc_handler::process_request()
 		std::stringstream istream(body);
 		boost::property_tree::read_json(istream, request);
 		std::string action(request.get<std::string>("action"));
+
 		if (action == "account_create")
 		{
 			account_create();
@@ -852,7 +919,7 @@ void czr::rpc_handler::process_request()
 		}
 		else if (action == "account_password_change")
 		{
-			account_unlock();
+			account_password_change();
 			request.erase("old_password");
 			request.erase("new_password");
 			reprocess_body(body, request);
@@ -867,7 +934,6 @@ void czr::rpc_handler::process_request()
 		{
 			BOOST_LOG(node.log) << body;
 		}
-
 		if (action == "account_list")
 		{
 			account_list();
@@ -884,10 +950,12 @@ void czr::rpc_handler::process_request()
 		{
 			account_export();
 		}
+
 		else if (action == "account_import")
 		{
 			account_import();
 		}
+
 		else if (action == "account_balance")
 		{
 			account_balance();
@@ -916,6 +984,7 @@ void czr::rpc_handler::process_request()
 		{
 			block_count();
 		}
+
 		else if (action == "stop")
 		{
 			stop();
@@ -923,6 +992,11 @@ void czr::rpc_handler::process_request()
 		else if (action == "version")
 		{
 			version();
+		}
+
+		else if (action == "witness_list")
+		{
+			witness_list();
 		}
 		else
 		{

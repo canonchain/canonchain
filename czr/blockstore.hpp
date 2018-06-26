@@ -143,7 +143,7 @@ namespace czr
 		bool genesis_hash_get(MDB_txn * transaction_a, czr::block_hash & genesis_hash);
 		void genesis_hash_put(MDB_txn * transaction_a, czr::block_hash const & genesis_hash);
 
-		bool my_witness_list_get(MDB_txn * transaction_a, czr::witness_list_info my_wl_info);
+		bool my_witness_list_get(MDB_txn * transaction_a, czr::witness_list_info &my_wl_info);
 		void my_witness_list_put(MDB_txn * transaction_a, czr::witness_list_info my_wl_info);
 
 		void flush(MDB_txn *);

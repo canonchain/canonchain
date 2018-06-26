@@ -93,6 +93,7 @@ public:
 	rpc_handler (czr::node &, czr::rpc &, std::string const &, std::function<void(boost::property_tree::ptree const &)> const &);
 	void process_request ();
 
+
 	void account_list();
 	void account_validate();
 	void account_create();
@@ -112,10 +113,13 @@ public:
 	void blocks ();
 	void block_count ();
 
+
 	void send ();
 	void stop ();
 	void version ();
 
+
+	void witness_list();
 	std::string body;
 	czr::node & node;
 	czr::rpc & rpc;
