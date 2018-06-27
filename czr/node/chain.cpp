@@ -721,6 +721,7 @@ void czr::chain::search_stable_block(MDB_txn * transaction_a, czr::block_hash co
 	if (state.level == 0)
 		return;
 	assert(state.main_chain_index);
+	assert(*state.main_chain_index <= mci);
 	if (*state.main_chain_index != mci)
 		return;
 
