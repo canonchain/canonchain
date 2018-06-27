@@ -414,7 +414,7 @@ void czr::rpc_handler::account_export()
 		if (exists)
 		{
 			boost::property_tree::ptree response_l;
-			std::string & json(kc.to_json());
+			std::string const & json(kc.to_json());
 			response_l.put("json",json);
 			response(response_l);
 		}
