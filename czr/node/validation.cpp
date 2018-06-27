@@ -16,7 +16,7 @@ czr::validation::~validation()
 czr::validate_result czr::validation::validate(MDB_txn * transaction_a, czr::joint_message const & message)
 {
 	czr::validate_result result;
-	if (message.block == nullptr)
+	if (!message.block)
 	{
 		result.code = czr::validate_result_codes::invalid_message;
 		result.err_msg = "block is null";
