@@ -239,7 +239,7 @@ void peer::do_write()
 
 		if (ec)
 		{
-			BOOST_LOG_TRIVIAL(warning) << boost::str(boost::format("Error sending: %1%")% ec.message());
+			BOOST_LOG_TRIVIAL(warning) << "Error while peer sending, message: %1%" << ec.message();
 			drop(disconnect_reason::tcp_error);
 			return;
 		}
@@ -259,14 +259,16 @@ void peer::drop(disconnect_reason const & reason)
 	if (is_dropped)
 		return;
 	if (socket->is_open())
-	try
 	{
-		boost::system::error_code ec;
-		BOOST_LOG_TRIVIAL(info) << "Closing " << socket->remote_endpoint(ec) << " (" << reason_of(reason) << ")";
-		socket->shutdown(boost::asio::ip::tcp::socket::shutdown_both, ec);
-		socket->close();
+		try
+		{
+			boost::system::error_code ec;
+			BOOST_LOG_TRIVIAL(info) << "Closing " << socket->remote_endpoint(ec) << " (" << reason_of(reason) << ")";
+			socket->shutdown(boost::asio::ip::tcp::socket::shutdown_both, ec);
+			socket->close();
+		}
+		catch (...) {}
 	}
-	catch (...) {}
 
 	is_dropped = true;
 }

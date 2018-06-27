@@ -8,6 +8,9 @@
 #include <sstream>
 #include <iostream>
 
+#define STR(s) STR_TEMP(s)
+#define STR_TEMP(s) #s
+
 namespace czr
 {
 // Lower priority of calling work generating thread
