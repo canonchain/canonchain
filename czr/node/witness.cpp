@@ -56,10 +56,12 @@ void czr::witness::check_and_witness()
 		max_my_mci = *head_state.main_chain_index;
 	}
 
+	uint64_t distance;
 	if (max_my_mci == 0)
-		max_my_mci = -threshold_distance - 1;
+		distance = max_mci  + 1000;
+	else
+		distance = max_mci - max_my_mci;
 
-	uint64_t distance = max_mci - max_my_mci;
 	if (distance > threshold_distance)
 	{
 		auto this_l(shared_from_this());
@@ -194,6 +196,6 @@ bool czr::witness::is_my_block_without_mci(MDB_txn * transaction_a)
 }
 
 std::atomic_flag is_witnessing = ATOMIC_FLAG_INIT;
-uint64_t const czr::witness::max_do_witness_interval(3000);
+uint32_t const czr::witness::max_do_witness_interval(3000);
 uint64_t const czr::witness::threshold_distance(50);
 

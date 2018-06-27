@@ -248,6 +248,7 @@ czr::validate_result czr::validation::validate(MDB_txn * transaction_a, czr::joi
 	assert(last_summary_block_state.main_chain_index);
 	uint64_t last_summary_mci = *last_summary_block_state.main_chain_index;
 
+	//todo:uninitialized
 	uint64_t max_parent_limci;
 	for (czr::block_hash & pblock_hash : block->parents())
 	{
@@ -466,7 +467,7 @@ czr::validate_result czr::validation::validate(MDB_txn * transaction_a, czr::joi
 	}
 
 	//check last summary mci retreat
-	uint64_t max_parent_last_summary_mci;
+	uint64_t max_parent_last_summary_mci(0);
 	for (czr::block_hash & pblock_hash : block->parents())
 	{
 		std::unique_ptr<czr::block> pblock = ledger.store.block_get(transaction_a, pblock_hash);

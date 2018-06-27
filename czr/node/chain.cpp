@@ -20,7 +20,7 @@ void czr::chain::save_block(MDB_txn * transaction_a, czr::block const & block_a)
 
 	czr::witness_list_info wl_info(ledger.block_witness_list(transaction_a, block_a));
 
-	uint64_t max_parent_level;
+	uint64_t max_parent_level(0);
 	for (czr::block_hash & pblock_hash : block_a.parents())
 	{
 		std::unique_ptr<czr::block> pblock(ledger.store.block_get(transaction_a, pblock_hash));
@@ -302,7 +302,7 @@ void czr::chain::check_mc_stable_block(MDB_txn * transaction_a)
 	{
 		//branch
 		std::unique_ptr<std::list<czr::block_hash>> search_hash_list(new std::list<czr::block_hash>);
-		uint64_t branch_max_level;
+		uint64_t branch_max_level(0);
 		for (auto i(branch_child_hashs->begin()); i != branch_child_hashs->end(); i++)
 		{
 			czr::block_hash branch_child_hash(*i);

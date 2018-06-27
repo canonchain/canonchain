@@ -33,7 +33,7 @@ namespace czr
 
 		bool is_known_block(czr::block_hash const & block_hash_a) const 
 		{
-			return known_blocks.count(block_hash_a);
+			return known_blocks.count(block_hash_a) > 0;
 		}
 
 		void mark_as_known_block(czr::block_hash const & block_hash_a)
