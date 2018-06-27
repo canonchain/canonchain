@@ -107,18 +107,20 @@ void czr::genesis::try_initialize(MDB_txn * transaction_a, czr::block_store & st
 
 	//block state
 	czr::block_state block_state;
-	block_state.is_fork = false;
-	block_state.is_invalid = false;
-	block_state.is_fail = false;
+
 	block_state.is_free = true;
-	block_state.is_on_main_chain = true;
-	block_state.main_chain_index = 0;
-	block_state.latest_included_mc_index = boost::none;
-	block_state.is_stable = 1;
 	block_state.level = 0;
 	block_state.witnessed_level = 0;
 	block_state.best_parent = 0;
-	block_state.timestamp = block->hashables.exec_timestamp;
+
+	block_state.is_stable = 1;
+	block_state.is_fork = false;
+	block_state.is_invalid = false;
+	block_state.is_fail = false;
+	block_state.is_on_main_chain = true;
+	block_state.main_chain_index = 0;
+	block_state.latest_included_mc_index = boost::none;
+	block_state.mc_timestamp = block->hashables.exec_timestamp;
 	block_state.from_state = 0;
 	block_state.to_state = 0;
 	store_a.block_state_put(transaction_a, block_hash, block_state);

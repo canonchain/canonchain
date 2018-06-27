@@ -199,7 +199,7 @@ czr::block_state::block_state() :
 	level(0),
 	witnessed_level(0),
 	best_parent(0),
-	timestamp(0),
+	mc_timestamp(0),
 	from_state(0),
 	to_state(0)
 {
@@ -214,6 +214,22 @@ czr::block_state::block_state(MDB_val const & val_a)
 czr::mdb_val czr::block_state::val() const
 {
 	return czr::mdb_val(sizeof(*this), const_cast<czr::block_state *> (this));
+}
+
+void czr::block_state::serialize_json(boost::property_tree::ptree & tree)
+{
+	tree.put("is_free", is_free ? "1" : "0");
+	tree.put("level", level);
+	tree.put("witnessed_level", witnessed_level);
+	tree.put("best_parent", best_parent.to_string());
+	tree.put("is_stable", is_stable ? "1" : "0");
+	tree.put("is_fork", is_fork ? "1" : "0");
+	tree.put("is_invalid", is_invalid ? "1" : "0");
+	tree.put("is_fail", is_fail ? "1" : "0");
+	tree.put("is_on_mc", is_on_main_chain ? "1" : "0");
+	tree.put("mci", main_chain_index ? std::to_string(*main_chain_index) : "null");
+	tree.put("latest_included_mci", latest_included_mc_index ? std::to_string(*latest_included_mc_index) : "null");
+	tree.put("mc_timestamp", mc_timestamp);
 }
 
 czr::free_key::free_key(uint64_t const & witnessed_level_a, uint64_t const & level_a, czr::block_hash const & hash_a) :

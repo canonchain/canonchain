@@ -563,6 +563,12 @@ void czr::rpc_handler::block()
 		{
 			boost::property_tree::ptree block_l;
 			block->serialize_json(block_l);
+
+			czr::block_state state;
+			bool error(node.store.block_state_get(transaction, hash, state));
+			assert(!error);
+			state.serialize_json(block_l);
+
 			response(block_l);
 		}
 		else
@@ -593,6 +599,12 @@ void czr::rpc_handler::blocks()
 			{
 				boost::property_tree::ptree block_l;
 				block->serialize_json(block_l);
+
+				czr::block_state state;
+				bool error(node.store.block_state_get(transaction, hash, state));
+				assert(!error);
+				state.serialize_json(block_l);
+
 				response_l.add_child(hash_text, block_l);
 			}
 			else

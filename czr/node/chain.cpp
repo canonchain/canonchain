@@ -385,7 +385,7 @@ void czr::chain::advance_mc_stable_block(MDB_txn * transaction_a, czr::block_has
 
 	std::unique_ptr<czr::block> mc_stable_block(ledger.store.block_get(transaction_a, mc_stable_hash));
 	assert(mc_stable_block != nullptr);
-	uint64_t timestamp(mc_stable_block->hashables.exec_timestamp);
+	uint64_t mc_timestamp(mc_stable_block->hashables.exec_timestamp);
 
 #pragma region handle fork block
 
@@ -541,7 +541,7 @@ void czr::chain::advance_mc_stable_block(MDB_txn * transaction_a, czr::block_has
 			//save block state
 			block_state.is_invalid = is_invalid;
 			block_state.is_fail = is_fail;
-			block_state.timestamp = timestamp;
+			block_state.mc_timestamp = mc_timestamp;
 			block_state.is_stable = true;
 			ledger.store.block_state_put(transaction_a, block_hash, block_state);
 
