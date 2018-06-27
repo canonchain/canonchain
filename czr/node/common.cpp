@@ -21,7 +21,7 @@ czr::joint_message::joint_message(bool & error_a, dev::RLP const & r)
 	{
 		summary_hash = (czr::summary_hash)r[1];
 		dev::RLP const & sk_list_rlp = r[2];
-		block_skiplist.resize(sk_list_rlp.itemCount());
+		block_skiplist.reserve(sk_list_rlp.itemCount());
 		for (dev::RLP const & sk : sk_list_rlp)
 			block_skiplist.push_back((czr::block_hash)sk);
 		is_fork = (bool)r[3];

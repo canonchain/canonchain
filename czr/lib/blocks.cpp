@@ -120,7 +120,7 @@ czr::block_hashables::block_hashables(bool & error_a, dev::RLP const & r)
 	previous = (czr::block_hash)r[3];
 
 	dev::RLP const & parents_rlp = r[4];
-	parents.resize(parents_rlp.itemCount());
+	parents.reserve(parents_rlp.itemCount());
 	for (dev::RLP const &  parent : parents_rlp)
 	{
 		parents.push_back((czr::block_hash)parent);
@@ -133,7 +133,8 @@ czr::block_hashables::block_hashables(bool & error_a, dev::RLP const & r)
 	}
 	else
 	{
-		witness_list.resize(witness_rlp.itemCount());
+		witness_list_block = 0;
+		witness_list.reserve(witness_rlp.itemCount());
 		for (dev::RLP const & witness : witness_rlp)
 			witness_list.push_back((czr::block_hash)witness);
 	}
@@ -248,6 +249,12 @@ void czr::block_hashables::deserialize_json(bool & error_a, boost::property_tree
 
 		if (error_a)
 			return;
+
+		if (!witness_list_block.is_zero() && witness_list.size() > 0)
+		{
+			error_a = true;
+			return;
+		}
 
 		auto last_summary_l(tree_a.get<std::string>("last_summary"));
 		error_a = last_summary.decode_hex(last_summary_l);
