@@ -31,6 +31,10 @@ int main(int argc, char * const * argv)
 	if (!czr::handle_node_options(vm))
 	{
 	}
+	else if (vm.count("version"))
+	{
+		std::cout << "Version: " << CANONCHAIN_VERSION << std::endl;
+	}
 	else if (vm.count("daemon") > 0)
 	{
 		czr_daemon::daemon daemon;

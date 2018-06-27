@@ -115,7 +115,7 @@ private:
 	std::unordered_map<czr::public_key, czr::key_content> key_contents;
 	std::mutex key_contents_mutex;
 
-	//todo: to use fan
+	//todo: to use fan for security
 	std::unordered_map<czr::public_key, czr::private_key> unlocked;
 	std::mutex unlocked_mutex;
 };
