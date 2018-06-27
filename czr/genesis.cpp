@@ -111,7 +111,7 @@ void czr::genesis::try_initialize(MDB_txn * transaction_a, czr::block_store & st
 	block_state.is_invalid = false;
 	block_state.is_fail = false;
 	block_state.is_free = true;
-	block_state.is_on_main_chain = 1;
+	block_state.is_on_main_chain = true;
 	block_state.main_chain_index = 0;
 	block_state.latest_included_mc_index = boost::none;
 	block_state.is_stable = 1;

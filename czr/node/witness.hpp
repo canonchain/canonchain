@@ -19,7 +19,7 @@ namespace czr
 		czr::account account;
 
 		static std::atomic_flag is_witnessing;
-		static uint64_t const max_do_witness_interval;
+		static uint32_t const max_do_witness_interval;
 		static uint64_t const threshold_distance;
 	};
 }

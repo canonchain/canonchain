@@ -20,7 +20,7 @@ public:
 	void stream_RLP(dev::RLPStream & s) const;
 
 	std::shared_ptr<czr::block> block;
-	czr::summary_hash summary_hash;
+	czr::summary_hash summary_hash = 0;
 	std::vector<block_hash> block_skiplist;
 	bool is_fork;
 	bool is_invalid;

@@ -16,7 +16,7 @@ czr::validation::~validation()
 czr::validate_result czr::validation::validate(MDB_txn * transaction_a, czr::joint_message const & message)
 {
 	czr::validate_result result;
-	if (message.block == nullptr)
+	if (!message.block)
 	{
 		result.code = czr::validate_result_codes::invalid_message;
 		result.err_msg = "block is null";
@@ -248,8 +248,7 @@ czr::validate_result czr::validation::validate(MDB_txn * transaction_a, czr::joi
 	assert(last_summary_block_state.main_chain_index);
 	uint64_t last_summary_mci = *last_summary_block_state.main_chain_index;
 
-	//todo:uninitialized
-	uint64_t max_parent_limci;
+	uint64_t max_parent_limci(0);
 	for (czr::block_hash & pblock_hash : block->parents())
 	{
 		if (pblock_hash != czr::genesis::block_hash)

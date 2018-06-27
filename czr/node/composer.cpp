@@ -36,8 +36,8 @@ czr::compose_result czr::composer::compose(MDB_txn * transaction_a, czr::account
 
 	//previous
 	czr::account_info info;
-	bool new_account(node.ledger.store.account_get(transaction_a, from_a, info));
-	czr::block_hash previous = new_account ? 0 : info.head;
+	bool account_error(node.ledger.store.account_get(transaction_a, from_a, info));
+	czr::block_hash previous = account_error ? 0 : info.head;
 
 	//pick parents and last summary
 	std::vector<czr::block_hash> parents;
@@ -63,11 +63,15 @@ czr::compose_result czr::composer::compose(MDB_txn * transaction_a, czr::account
 
 	//exec timestamp
 	uint64_t exec_timestamp(czr::seconds_since_epoch());
-	std::unique_ptr<czr::block> prev_block(ledger.store.block_get(transaction_a, previous));
-	if (prev_block->hashables.exec_timestamp > exec_timestamp)
+	if (!previous.is_zero())
 	{
-		BOOST_LOG(node.log) << "compose error: previous's exec_timestamp is later than yours";
-		return czr::compose_result(czr::compose_result_codes::error, nullptr);
+		std::unique_ptr<czr::block> prev_block(ledger.store.block_get(transaction_a, previous));
+		assert(prev_block);
+		if (prev_block->hashables.exec_timestamp > exec_timestamp)
+		{
+			BOOST_LOG(node.log) << "compose error: previous's exec_timestamp is later than yours";
+			return czr::compose_result(czr::compose_result_codes::error, nullptr);
+		}
 	}
 
 	for (czr::block_hash phash : parents)
@@ -82,7 +86,7 @@ czr::compose_result czr::composer::compose(MDB_txn * transaction_a, czr::account
 
 	//check balance
 	czr::amount balance(ledger.account_balance(transaction_a, from_a));
-	czr::amount fee; //todo: calculate fee, !!parents count not relate to fee
+	czr::amount fee(0); //todo: calculate fee, !!parents count not relate to fee
 	if (balance.number() < amount_a.number() + fee.number())
 		return czr::compose_result(czr::compose_result_codes::insufficient_balance, nullptr);
 
@@ -153,6 +157,8 @@ void czr::composer::pick_parents_and_last_summary_and_wl_block(czr::error_messag
 			{
 				if (p != best_parent)
 					new_parents.push_back(p);
+				if (new_parents.size() == czr::max_parents_size)
+					break;
 			}
 
 			parents = new_parents;

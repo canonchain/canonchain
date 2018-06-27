@@ -426,7 +426,7 @@ bool czr::ledger::check_stable_from_later_blocks(MDB_txn * transaction_a, czr::b
 		}
 	}
 
-	bool is_stable;
+	bool is_stable(false);
 	if (branch_child_hashs->size() == 0)
 	{
 		//non branch
@@ -516,10 +516,9 @@ bool czr::ledger::check_stable_from_later_blocks(MDB_txn * transaction_a, czr::b
 
 czr::block_hash czr::ledger::find_witness_list_block(MDB_txn * transaction_a, czr::witness_list_info const & wl_info, uint64_t const & last_stable_mci)
 {
+	czr::block_hash witness_list_block(0);
 	czr::witness_list_key search_wl_key(wl_info.hash(), 0);
 	czr::store_iterator iter(store.witness_list_hash_block_begin(transaction_a, search_wl_key));
-
-	czr::block_hash witness_list_block;
 	if (iter != czr::store_iterator(nullptr))
 	{
 		czr::witness_list_key iter_wl_key(iter->first);

@@ -105,6 +105,7 @@ namespace czr
 		block_state();
 		block_state(MDB_val const &);
 		czr::mdb_val val() const;
+
 		bool is_fork;	//fork, not to pay fee, need clear content
 		bool is_invalid;	//invalid, not to pay fee, need clear content
 		bool is_fail;	//fail, pay fee, no need to clear content
