@@ -58,8 +58,8 @@ char const * beta_genesis_data = R"%%%({
 })%%%";
 
 char const * live_genesis_data = R"%%%({
-    "from":"czr_3t6k35gi95xu6tergt6p69ck76ogmitsa8mnijtpxm9fkcm736xtoncuohr3",
-    "to":"czr_3t6k35gi95xu6tergt6p69ck76ogmitsa8mnijtpxm9fkcm736xtoncuohr3",
+    "from":"czr_1om565pqoa58fejtdcnz1taeuaocynotqdajbadnhoneqtx3xgoaqawtpac5",
+    "to":"czr_19rw6416uie15u9qfiyt8s8wr5zjac57c1gmb3bdrz1bo4dgm8gm3quwgrfg",
     "amount":"1000000",
     "previous":"000000000000000000000000000000000000000000000000000000000000",
     "parents":[],
