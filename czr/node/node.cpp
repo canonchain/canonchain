@@ -20,6 +20,7 @@
 
 #include <ed25519-donna/ed25519.h>
 
+#include <conio.h>  //password
 bool czr::operation::operator> (czr::operation const & other_a) const
 {
 	return wakeup > other_a.wakeup;
@@ -782,6 +783,28 @@ void czr::add_node_options(boost::program_options::options_description & descrip
 	// clang-format on
 }
 
+std::string czr::password_get(bool bconfirm)
+{
+	std::string hint_l("Please input your password");    
+	hint_l += bconfirm ? " again:" : ":";
+	std::cout << hint_l << std::endl;
+	std::string password;
+	char ch;
+	while (ch = _getch())
+	{
+		if (ch == '\r' || ch == '\x3')//Enter or CTRL+C
+			break;
+		if (ch == '\b')  //BACK
+		{
+			password.pop_back();
+		}
+		password += ch;
+		std::cout << "*";
+	}
+	std::cout << std::endl;
+	return password;
+}
+
 bool czr::handle_node_options(boost::program_options::variables_map & vm)
 {
 	auto result(false);
@@ -789,22 +812,30 @@ bool czr::handle_node_options(boost::program_options::variables_map & vm)
 	if (vm.count("account_create"))
 	{
 		//todo: get from input
-		std::string password;
-		password = vm["password"].as<std::string>();
-
-		inactive_node node(data_path);
-		czr::transaction transaction(node.node->store.environment, nullptr, true);
-		auto account(node.node->key_manager.create(transaction, password));
-		std::cout << boost::str(boost::format("Account: %1%\n") % account.to_account());
+		std::string password = czr::password_get(false);
+		std::string password_sec = czr::password_get(true);
+		if (password != password_sec)
+		{
+			std::cerr << "Entered passwords differ\n";
+			result = true;
+		}
+		else
+		{
+			inactive_node node(data_path);
+			czr::transaction transaction(node.node->store.environment, nullptr, true);
+			auto account(node.node->key_manager.create(transaction, password));
+			std::cout << boost::str(boost::format("Account: %1%\n") % account.to_account());				
+		}
 	}
 	else if (vm.count("account_remove"))
 	{
 		if (vm.count("account") == 1)
 		{
 			//todo: get from input
-			std::string password;
-			password = vm["password"].as<std::string>();
+			//std::string password;
+			//password = vm["password"].as<std::string>();
 
+			std::string password(czr::password_get(false));
 			inactive_node node(data_path);
 			czr::account account;
 			if (!account.decode_account(vm["account"].as<std::string>()))
