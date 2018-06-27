@@ -817,7 +817,6 @@ bool czr::handle_node_options(boost::program_options::variables_map & vm)
 		if (password != password_sec)
 		{
 			std::cerr << "Entered passwords differ\n";
-			result = true;
 		}
 		else
 		{
@@ -848,25 +847,21 @@ bool czr::handle_node_options(boost::program_options::variables_map & vm)
 					if (error)
 					{
 						std::cerr << "Wrong password\n";
-						result = true;
 					}
 				}
 				else
 				{
 					std::cerr << "Account not found\n";
-					result = true;
 				}
 			}
 			else
 			{
 				std::cerr << "Invalid account\n";
-				result = true;
 			}
 		}
 		else
 		{
 			std::cerr << "Requires one <account> option\n";
-			result = true;
 		}
 	}
 	else if (vm.count("account_import"))
@@ -893,19 +888,16 @@ bool czr::handle_node_options(boost::program_options::variables_map & vm)
 				else
 				{
 					std::cerr << "Unable to import account\n";
-					result = true;
 				}
 			}
 			else
 			{
 				std::cerr << "Unable to open <file>\n";
-				result = true;
 			}
 		}
 		else
 		{
 			std::cerr << "Requires one <file> option\n";
-			result = true;
 		}
 	}
 	else if (vm.count("account_list"))
