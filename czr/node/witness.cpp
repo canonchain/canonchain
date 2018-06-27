@@ -2,35 +2,23 @@
 #include <czr/node/common.hpp>
 
 
-czr::witness::witness(czr::error_message & error_msg, czr::node & node_a, std::string const & wallet_text, std::string const & account_text):
+czr::witness::witness(czr::error_message & error_msg, czr::node & node_a, std::string const & account_text, std::string const & password_a):
 	node(node_a),
 	ledger(node_a.ledger)
 {
-	czr::uint256_union wallet_key;
-	bool error(wallet_key.decode_hex(wallet_text));
+	bool error(account.decode_account(account_text));
 	if (error)
 	{
 		error_msg.error = true;
-		error_msg.message = "Bad wallet number";
+		error_msg.message = "Invalid account";
 		return;
 	}
 
-	auto existing(node.wallets.items.find(wallet_key));
-	error = existing == node.wallets.items.end();
+	error = node.key_manager.unlock(account, password_a);
 	if (error)
 	{
 		error_msg.error = true;
-		error_msg.message = "Wallet not found";
-		return;
-	}
-
-	wallet = existing->second;
-
-	error = account.decode_account(account_text);
-	if (error)
-	{
-		error_msg.error = true;
-		error_msg.message = "Bad account";
+		error_msg.message = "Wrong password";
 		return;
 	}
 }
@@ -126,13 +114,19 @@ void czr::witness::do_witness()
 	std::vector<uint8_t> data;
 
 	auto this_l(shared_from_this());
-	wallet->send_async(from, to, amount, data, [this_l](czr::send_result result) {
+	node.wallet.send_async(from, to, amount, data, "", [from, this_l](czr::send_result result) {
 		switch (result.code)
 		{
 		case czr::send_result_codes::ok:
 			break;
+		case czr::send_result_codes::from_not_exists:
+			BOOST_LOG(this_l->node.log) << "Witness error: Account not exists, " << from.to_account();
+			break;
 		case czr::send_result_codes::account_locked:
 			BOOST_LOG(this_l->node.log) << "Witness error: Account locked";
+			break;
+		case czr::send_result_codes::wrong_password:
+			BOOST_LOG(this_l->node.log) << "Witness error: Wrong password";
 			break;
 		case czr::send_result_codes::insufficient_balance:
 			BOOST_LOG(this_l->node.log) << "Witness error: Insufficient balance";

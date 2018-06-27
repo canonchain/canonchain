@@ -267,7 +267,6 @@ namespace czr
 		std::unique_ptr<czr::block> block(czr::block_hash const &);
 		void ongoing_store_flush();
 		void ongoing_retry_late_message();
-		void backup_wallet();
 		dev::bytes network_bytes();
 
 		boost::asio::io_service & io_service;
@@ -280,7 +279,8 @@ namespace czr
 		czr::gap_cache gap_cache;
 		czr::ledger ledger;
 		boost::filesystem::path application_path;
-		czr::wallets wallets;
+		czr::key_manager key_manager;
+		czr::wallet wallet;
 		unsigned warmed_up;
 		std::shared_ptr<czr::validation> validation;
 		std::shared_ptr<czr::chain> chain;
@@ -289,7 +289,6 @@ namespace czr
 		czr::block_arrival block_arrival;
 		czr::late_message_cache late_message_cache;
 		czr::invalid_block_cache invalid_block_cache;
-		static std::chrono::minutes constexpr backup_interval = std::chrono::minutes(5);
 	};
 
 	class thread_runner

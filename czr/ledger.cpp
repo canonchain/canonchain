@@ -539,6 +539,5 @@ void czr::ledger::witness_list_put(MDB_txn* transaction_a, czr::witness_list_inf
 
 void czr::ledger::witness_list_get(MDB_txn* transaction_a, czr::witness_list_info & wl_info)
 {
-
 	store.my_witness_list_get(transaction_a,wl_info);
 }

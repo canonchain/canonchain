@@ -92,37 +92,33 @@ class rpc_handler : public std::enable_shared_from_this<czr::rpc_handler>
 public:
 	rpc_handler (czr::node &, czr::rpc &, std::string const &, std::function<void(boost::property_tree::ptree const &)> const &);
 	void process_request ();
-	void account_balance ();
-	void account_block_count ();
-	void account_create ();
-	void account_get ();
-	void account_key ();
-	void account_list ();
-	void account_move ();
-	void account_remove ();
-	void accounts_balances ();
-	void accounts_create ();
-	void accounts_frontiers ();
+
+
+	void account_list();
 	void account_validate();
+	void account_create();
+	void account_remove();
+	void account_unlock();
+	void account_lock();
+	void account_export();
+	void account_import();
+	void account_password_change();
+
+	void account_balance();
+	void accounts_balances();
+	void account_block_count();
+	void accounts_frontiers();
+
 	void block ();
 	void blocks ();
 	void block_count ();
-	void deterministic_key ();
-	void key_create ();
-	void password_change ();
-	void password_enter ();
-	void password_valid (bool wallet_locked);
+
+
 	void send ();
 	void stop ();
 	void version ();
-	void wallet_add ();
-	void wallet_balances ();
-	void wallet_change_seed ();
-	void wallet_contains ();
-	void wallet_create ();
-	void wallet_destroy ();
-	void wallet_export ();
-	void wallet_lock ();	
+
+
 	void witness_set();
 	void witness_list();
 	std::string body;

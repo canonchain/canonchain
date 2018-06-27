@@ -48,7 +48,7 @@ namespace czr
 			void read_ack(std::shared_ptr<bi::tcp::socket> const & socket, std::shared_ptr<ba::deadline_timer> const & idle_timer, hash256 const & my_nonce);
 			void start_peer(std::shared_ptr<bi::tcp::socket> const & socket, ack_message const & ack);
 
-			czr::keypair network_alias(dev::bytesConstRef const & bytes);
+			czr::private_key network_alias(dev::bytesConstRef const & bytes);
 			void restore_network(dev::bytesConstRef const & bytes);
 
 			p2p_config const & config;

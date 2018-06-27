@@ -7,7 +7,7 @@ namespace czr
 	class witness :public std::enable_shared_from_this<czr::witness>
 	{
 	public:
-		witness(czr::error_message & error_msg, czr::node & node_a, std::string const & wallet_text, std::string const & account_text);
+		witness(czr::error_message & error_msg, czr::node & node_a, std::string const & account_text, std::string const & password_a);
 		void check_and_witness();
 		void do_witness();
 		void do_witness_before_threshold();
@@ -16,7 +16,6 @@ namespace czr
 
 		czr::node & node;
 		czr::ledger & ledger;
-		std::shared_ptr<czr::wallet> wallet;
 		czr::account account;
 
 		static std::atomic_flag is_witnessing;

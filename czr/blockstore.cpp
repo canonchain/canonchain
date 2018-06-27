@@ -396,7 +396,7 @@ bool czr::block_store::account_get(MDB_txn * transaction_a, czr::account const &
 	czr::mdb_val value;
 	auto status(mdb_get(transaction_a, accounts, czr::mdb_val(account_a), value));
 	assert(status == 0 || status == MDB_NOTFOUND);
-	bool result;
+	bool result(false);
 	if (status == MDB_NOTFOUND)
 	{
 		result = true;
@@ -439,7 +439,7 @@ bool czr::block_store::account_state_get(MDB_txn * transaction_a, czr::account_s
 {
 	czr::mdb_val value;
 	auto status(mdb_get(transaction_a, account_state, czr::mdb_val(hash_a), value));
-	bool result;
+	bool result(false);
 	if (status == MDB_NOTFOUND)
 	{
 		result = true;
@@ -463,7 +463,7 @@ bool czr::block_store::latest_account_state_get(MDB_txn * transaction_a, czr::ac
 {
 	czr::mdb_val value;
 	auto status(mdb_get(transaction_a, latest_account_state, czr::mdb_val(account_a), value));
-	bool result;
+	bool result(false);
 	if (status == MDB_NOTFOUND)
 	{
 		result = true;
@@ -608,7 +608,7 @@ bool czr::block_store::block_summary_get(MDB_txn * transaction_a, czr::block_has
 	czr::mdb_val value;
 	auto status(mdb_get(transaction_a, block_summary, czr::mdb_val(block_hash_a), value));
 	assert(status == 0 || status == MDB_NOTFOUND);
-	bool result;
+	bool result(false);
 	if (status == MDB_NOTFOUND)
 	{
 		result = true;
@@ -633,7 +633,7 @@ bool czr::block_store::summary_block_get(MDB_txn * transaction_a, czr::summary_h
 	czr::mdb_val value;
 	auto status(mdb_get(transaction_a, summary_block, czr::mdb_val(summary_hash_a), value));
 	assert(status == 0 || status == MDB_NOTFOUND);
-	bool result;
+	bool result(false);
 	if (status == MDB_NOTFOUND)
 	{
 		result = true;
@@ -658,7 +658,7 @@ bool czr::block_store::witness_list_hash_block_get(MDB_txn * transaction_a, czr:
 	czr::mdb_val value;
 	auto status(mdb_get(transaction_a, witness_list_hash_block, key_a.val(), value));
 	assert(status == 0 || status == MDB_NOTFOUND);
-	bool result;
+	bool result(false);
 	if (status == MDB_NOTFOUND)
 	{
 		result = true;
@@ -695,7 +695,7 @@ bool czr::block_store::block_witness_list_get(MDB_txn * transaction_a, czr::bloc
 	czr:mdb_val value;
 	auto status(mdb_get(transaction_a, block_witness_list, czr::mdb_val(hash_a), value));
 	assert(status == 0 || status == MDB_NOTFOUND);
-	bool result;
+	bool result(false);
 	if (status == MDB_NOTFOUND)
 	{
 		result = true;
@@ -789,7 +789,7 @@ bool czr::block_store::main_chain_get(MDB_txn * transaction_a, uint64_t const & 
 {
 	czr::mdb_val value;
 	auto status(mdb_get(transaction_a, main_chain, czr::mdb_val(mci), value));
-	bool result;
+	bool result(false);
 	if (status == MDB_NOTFOUND)
 	{
 		result = true;
@@ -885,7 +885,7 @@ bool czr::block_store::skiplist_get(MDB_txn * transaction_a, czr::block_hash con
 {
 	czr::mdb_val value;
 	auto status(mdb_get(transaction_a, skiplist, czr::mdb_val(hash_a), value));
-	bool result;
+	bool result(false);
 	if (status == MDB_NOTFOUND)
 	{
 		result = true;
@@ -916,7 +916,7 @@ bool czr::block_store::fork_successor_get(MDB_txn * transaction_a, czr::block_ha
 {
 	czr::mdb_val value;
 	auto status(mdb_get(transaction_a, fork_successor, czr::mdb_val(pervious_hash_a), value));
-	bool result;
+	bool result(false);
 	if (status == MDB_NOTFOUND)
 	{
 		result = true;
