@@ -28,10 +28,8 @@ int main(int argc, char * const * argv)
 
 	int result(0);
 	boost::filesystem::path data_path = vm.count("data_path") ? boost::filesystem::path(vm["data_path"].as<std::string>()) : czr::working_path();
-	if (!czr::handle_node_options(vm))
-	{
-	}
-	else if (vm.count("version"))
+
+	if (vm.count("version"))
 	{
 		std::cout << "Version: " << STR(CANONCHAIN_VERSION) << std::endl;
 	}
@@ -39,6 +37,10 @@ int main(int argc, char * const * argv)
 	{
 		czr_daemon::daemon daemon;
 		daemon.run(data_path);
+	}
+	else if (!czr::handle_node_options(vm))
+	{
+		;
 	}
 	else
 	{

@@ -743,7 +743,7 @@ void czr::rpc_handler::version()
 	response_l.put("store_version", std::to_string(node.store_version()));
 	response(response_l);
 }
-void czr::rpc_handler::witness_set()
+void czr::rpc_handler::witness_list_set()
 {
 	if (!rpc.config.enable_control)
 	{
@@ -1015,9 +1015,9 @@ void czr::rpc_handler::process_request()
 			version();
 		}
 
-		else if (action == "witness_set")
+		else if (action == "witness_list_set")
 		{
-			witness_set();
+			witness_list_set();
 		}
 		else if (action == "witness_list")
 		{

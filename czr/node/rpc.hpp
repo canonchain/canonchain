@@ -119,7 +119,7 @@ public:
 	void version ();
 
 
-	void witness_set();
+	void witness_list_set();
 	void witness_list();
 	std::string body;
 	czr::node & node;
