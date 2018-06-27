@@ -20,8 +20,6 @@
 
 #include <ed25519-donna/ed25519.h>
 
-std::chrono::minutes constexpr czr::node::backup_interval;
-
 bool czr::operation::operator> (czr::operation const & other_a) const
 {
 	return wakeup > other_a.wakeup;
@@ -578,7 +576,7 @@ czr::node::node(czr::node_init & init_a, boost::asio::io_service & service_a,
 	store(init_a.error, application_path_a / "data.ldb", config_a.lmdb_max_dbs),
 	gap_cache(*this),
 	ledger(store),
-	key_manager(init_a.error, store.environment),
+	key_manager(init_a.error, store.environment, application_path_a),
 	wallet(init_a.error, *this),
 	application_path(application_path_a),
 	warmed_up(0),
@@ -632,7 +630,6 @@ void czr::node::start()
 	host->start();
 	ongoing_store_flush();
 	ongoing_retry_late_message();
-	backup_wallet();
 }
 
 void czr::node::stop()
@@ -693,18 +690,6 @@ void czr::node::ongoing_retry_late_message()
 		{
 			node_l->ongoing_retry_late_message();
 		}
-	});
-}
-
-void czr::node::backup_wallet()
-{
-	auto backup_path(application_path / "backup");
-	boost::filesystem::create_directories(backup_path);
-	key_manager.write_backup(backup_path);
-
-	auto this_l(shared());
-	alarm.add(std::chrono::steady_clock::now() + backup_interval, [this_l]() {
-		this_l->backup_wallet();
 	});
 }
 

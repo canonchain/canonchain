@@ -74,7 +74,7 @@ public:
 	key_content(bool & error_a, std::string const & json_a);
 	key_content(czr::account const & account_a, czr::uint256_union const & kdf_salt_a, czr::uint128_union const & iv_a, czr::secret_key const & ciphertext_a);
 	czr::mdb_val val() const;
-	std::string to_json();
+	std::string to_json() const;
 
 	czr::account account;
 	czr::uint256_union kdf_salt;
@@ -85,7 +85,7 @@ public:
 class key_manager
 {
 public:
-	key_manager(bool & error_a, czr::mdb_env & environment);
+	key_manager(bool & error_a, czr::mdb_env & environment, boost::filesystem::path const & application_path_a);
 	bool exists(czr::public_key const & pub_a);
 	bool find(czr::public_key const & pub_a, czr::key_content & kc_a);
 	std::list<czr::public_key> list();
@@ -98,7 +98,7 @@ public:
 	bool is_locked(czr::public_key const & pub_a);
 	bool find_unlocked_prv(czr::public_key const & pub_a, czr::raw_key & prv);
 	bool unlock(czr::public_key const & pub_a, std::string const & password_a);
-	void write_backup(boost::filesystem::path const & path_a);
+	void write_backup(czr::public_key const & account, std::string const & json);
 	void lock(czr::public_key const & pub_a);
 
 private:
@@ -110,6 +110,8 @@ private:
 
 	czr::kdf kdf;
 	MDB_dbi keys;
+	boost::filesystem::path backup_path;
+
 	std::unordered_map<czr::public_key, czr::key_content> key_contents;
 	std::mutex key_contents_mutex;
 

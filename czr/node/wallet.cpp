@@ -267,7 +267,7 @@ czr::mdb_val czr::key_content::val() const
 	return czr::mdb_val(sizeof(*this), const_cast<czr::key_content *> (this));
 }
 
-std::string czr::key_content::to_json()
+std::string czr::key_content::to_json() const
 {
 	boost::property_tree::ptree p;
 
@@ -281,7 +281,8 @@ std::string czr::key_content::to_json()
 	return ostream.str();
 }
 
-czr::key_manager::key_manager(bool & error_a, czr::mdb_env & environment)
+czr::key_manager::key_manager(bool & error_a, czr::mdb_env & environment, boost::filesystem::path const & application_path_a):
+	backup_path(application_path_a / "backup")
 {
 	if (!error_a)
 	{
@@ -461,24 +462,13 @@ bool czr::key_manager::unlock(czr::public_key const & pub_a, std::string const &
 	return error;
 }
 
-void czr::key_manager::write_backup(boost::filesystem::path const & path_a)
+void czr::key_manager::write_backup(czr::public_key const & account, std::string const & json)
 {
-	std::list<czr::key_content> kcs;
+	std::ofstream backup_file;
+	backup_file.open((backup_path / (account.to_account() + ".json")).string());
+	if (!backup_file.fail())
 	{
-		std::lock_guard<std::mutex> lock(key_contents_mutex);
-		for (auto pair : key_contents)
-			kcs.push_back(pair.second);
-	}
-
-	for (auto kc : kcs)
-	{
-		std::ofstream backup_file;
-		backup_file.open((path_a / (kc.account.to_account() + ".json")).string());
-		if (!backup_file.fail())
-		{
-			std::string json(kc.to_json());
-			backup_file << json;
-		}
+		backup_file << json;
 	}
 }
 
@@ -510,6 +500,7 @@ void czr::key_manager::add_or_update_key(MDB_txn * transaction_a, czr::key_conte
 		key_contents[kc.account] = kc;
 	}
 	key_put(transaction_a, kc.account, kc);
+	write_backup(kc.account, kc.to_json());
 }
 
 bool czr::key_manager::key_get(MDB_txn * transaction_a, czr::public_key const & pub_a, czr::key_content & content)
