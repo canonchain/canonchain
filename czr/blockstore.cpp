@@ -183,7 +183,7 @@ bool czr::store_iterator::operator!= (czr::store_iterator const & other_a) const
 
 czr::block_store::block_store(bool & error_a, boost::filesystem::path const & path_a, int lmdb_max_dbs) :
 	environment(error_a, path_a, lmdb_max_dbs),
-	accounts(0),
+	account_info(0),
 	account_state(0),
 	latest_account_state(0),
 	blocks(0),
@@ -206,7 +206,7 @@ czr::block_store::block_store(bool & error_a, boost::filesystem::path const & pa
 	if (!error_a)
 	{
 		czr::transaction transaction(environment, nullptr, true);
-		error_a |= mdb_dbi_open(transaction, "accounts", MDB_CREATE, &accounts) != 0;
+		error_a |= mdb_dbi_open(transaction, "account_info", MDB_CREATE, &account_info) != 0;
 		error_a |= mdb_dbi_open(transaction, "account_state", MDB_CREATE, &account_state) != 0;
 		error_a |= mdb_dbi_open(transaction, "latest_account_state", MDB_CREATE, &latest_account_state) != 0;
 		error_a |= mdb_dbi_open(transaction, "blocks", MDB_CREATE, &blocks) != 0;
@@ -381,7 +381,7 @@ void czr::block_store::block_successor_clear(MDB_txn * transaction_a, czr::block
 
 void czr::block_store::account_del(MDB_txn * transaction_a, czr::account const & account_a)
 {
-	auto status(mdb_del(transaction_a, accounts, czr::mdb_val(account_a), nullptr));
+	auto status(mdb_del(transaction_a, account_info, czr::mdb_val(account_a), nullptr));
 	assert(status == 0);
 }
 
@@ -394,7 +394,7 @@ bool czr::block_store::account_exists(MDB_txn * transaction_a, czr::account cons
 bool czr::block_store::account_get(MDB_txn * transaction_a, czr::account const & account_a, czr::account_info & info_a)
 {
 	czr::mdb_val value;
-	auto status(mdb_get(transaction_a, accounts, czr::mdb_val(account_a), value));
+	auto status(mdb_get(transaction_a, account_info, czr::mdb_val(account_a), value));
 	assert(status == 0 || status == MDB_NOTFOUND);
 	bool result(false);
 	if (status == MDB_NOTFOUND)
@@ -412,19 +412,19 @@ bool czr::block_store::account_get(MDB_txn * transaction_a, czr::account const &
 
 void czr::block_store::account_put(MDB_txn * transaction_a, czr::account const & account_a, czr::account_info const & info_a)
 {
-	auto status(mdb_put(transaction_a, accounts, czr::mdb_val(account_a), info_a.val(), 0));
+	auto status(mdb_put(transaction_a, account_info, czr::mdb_val(account_a), info_a.val(), 0));
 	assert(status == 0);
 }
 
 czr::store_iterator czr::block_store::account_begin(MDB_txn * transaction_a, czr::account const & account_a)
 {
-	czr::store_iterator result(transaction_a, accounts, czr::mdb_val(account_a));
+	czr::store_iterator result(transaction_a, account_info, czr::mdb_val(account_a));
 	return result;
 }
 
 czr::store_iterator czr::block_store::account_begin(MDB_txn * transaction_a)
 {
-	czr::store_iterator result(transaction_a, accounts);
+	czr::store_iterator result(transaction_a, account_info);
 	return result;
 }
 
@@ -861,7 +861,7 @@ uint64_t czr::block_store::last_stable_mci_get(MDB_txn * transaction_a)
 {
 	czr::mdb_val value;
 	auto error(mdb_get(transaction_a, prop, czr::mdb_val(last_stable_mci_key), value));
-	int result;
+	uint64_t result(0);
 	if (error != MDB_NOTFOUND)
 		result = value.uint64();
 	return result;

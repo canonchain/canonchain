@@ -156,7 +156,7 @@ namespace czr
 
 		czr::mdb_env environment;
 		// block_hash -> account                                        // Maps head blocks to owning account
-		MDB_dbi accounts;
+		MDB_dbi account_info;
 		//account state hash -> account state
 		MDB_dbi account_state;
 		//account -> latest account state
