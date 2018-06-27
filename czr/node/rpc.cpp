@@ -1240,10 +1240,8 @@ void czr::rpc_handler::wallet_lock()
 	}
 }
 
-
-void czr::rpc_handler::witness_list()
+void czr::rpc_handler::witness_set()
 {
-
 	if (!rpc.config.enable_control)
 	{
 		error_response(response, "RPC control is disabled");
@@ -1262,12 +1260,12 @@ void czr::rpc_handler::witness_list()
 	for (auto i : *opwin)
 	{
 		czr::account acco;
-		std::string win_text = i.second.data();		
+		std::string win_text = i.second.data();
 		error = acco.decode_account(win_text);
 		if (error)
 		{
-		   error_response(response, "Bad from witness_list");
-		   return;
+			error_response(response, "Bad from witness_list");
+			return;
 		}
 		auto it = std::find(vecwin.begin(), vecwin.end(), acco);
 		if (it != vecwin.end())
@@ -1275,31 +1273,43 @@ void czr::rpc_handler::witness_list()
 			error_response(response, "Has same witness in witness_list");
 			return;
 		}
-	    vecwin.push_back(acco);		
+		vecwin.push_back(acco);
 	}
-	
+
 	if (vecwin.size() != 12)
 	{
 		error_response(response, "Witness_list not equal 12");
 		return;
 	}
+	
 	//asc sort
-	std::sort(vecwin.begin(),vecwin.end());
+	std::sort(vecwin.begin(), vecwin.end());
+	
 	//store 
 	czr::transaction        transaction(node.store.environment, nullptr, true);;
 	czr::witness_list_info  wl_info(vecwin);
 	node.ledger.witness_list_put(transaction, wl_info);
-
-
-	czr::witness_list_info  wl_infoget;
-	czr::transaction        transactionget(node.store.environment, nullptr, false);;
-	node.ledger.witness_list_get(transaction, wl_infoget);
-	for (auto i : wl_infoget.witness_list)
-	{
-		std::cout << i.to_string() << std::endl;
-	}
+	
+	//response
 	boost::property_tree::ptree response_l;
-	response_l.put("witness_list store" ," success");
+	response_l.put("witness_list store", " success");
+	response(response_l);
+
+}
+void czr::rpc_handler::witness_list()
+{
+	czr::witness_list_info  wl_infoget;
+	czr::transaction        transaction(node.store.environment, nullptr, false);;
+	node.ledger.witness_list_get(transaction, wl_infoget);
+	boost::property_tree::ptree response_l;
+	boost::property_tree::ptree witness_list;
+	for (auto i: wl_infoget.witness_list)
+	{
+		boost::property_tree::ptree entry;
+		entry.put("", i.to_account());
+		witness_list.push_back(std::make_pair("", entry));
+	}
+	response_l.add_child("witness_list", witness_list);
 	response(response_l);
 }
 
@@ -1538,6 +1548,10 @@ void czr::rpc_handler::process_request()
 		else if (action == "wallet_locked")
 		{
 			password_valid(true);
+		}
+		else if (action == "witness_set")
+		{
+			witness_set();
 		}
 		else if (action == "witness_list")
 		{
