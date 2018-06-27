@@ -308,16 +308,16 @@ add_library (p2p
 SET (ACTIVE_NETWORK czr_live_network CACHE STRING "Selects which network parameters are used")
 set_property (CACHE ACTIVE_NETWORK PROPERTY STRINGS czr_test_network czr_beta_network czr_live_network)
 
-add_executable (czr_node
-	czr/czr_node/daemon.cpp
-	czr/czr_node/daemon.hpp
-	czr/czr_node/entry.cpp)
+add_executable (canonchain
+	czr/canonchain/daemon.cpp
+	czr/canonchain/daemon.hpp
+	czr/canonchain/entry.cpp)
 
 set_target_properties (argon2 PROPERTIES COMPILE_FLAGS "${PLATFORM_C_FLAGS} ${PLATFORM_COMPILE_FLAGS}")
 set_target_properties (blake2 PROPERTIES COMPILE_FLAGS "${PLATFORM_C_FLAGS} ${PLATFORM_COMPILE_FLAGS} -D__SSE2__")
 set_target_properties (ed25519 PROPERTIES COMPILE_FLAGS "${PLATFORM_C_FLAGS} ${PLATFORM_COMPILE_FLAGS} -DED25519_CUSTOMHASH -DED25519_CUSTOMRNG")
-set_target_properties (secure node rlp p2p czr_node czr_lib czr_lib_static PROPERTIES COMPILE_FLAGS "${PLATFORM_CXX_FLAGS} ${PLATFORM_COMPILE_FLAGS} -DQT_NO_KEYWORDS -DACTIVE_NETWORK=${ACTIVE_NETWORK} -DCANONCHAIN_VERSION_MAJOR=${VERSION_MAJOR} -DCANONCHAIN_VERSION_MINOR=${VERSION_MINOR} -DBOOST_ASIO_HAS_STD_ARRAY=1")
-set_target_properties (secure node p2p czr_node PROPERTIES LINK_FLAGS "${PLATFORM_LINK_FLAGS}")
+set_target_properties (secure node rlp p2p canonchain czr_lib czr_lib_static PROPERTIES COMPILE_FLAGS "${PLATFORM_CXX_FLAGS} ${PLATFORM_COMPILE_FLAGS} -DQT_NO_KEYWORDS -DACTIVE_NETWORK=${ACTIVE_NETWORK} -DCANONCHAIN_VERSION_MAJOR=${VERSION_MAJOR} -DCANONCHAIN_VERSION_MINOR=${VERSION_MINOR} -DBOOST_ASIO_HAS_STD_ARRAY=1")
+set_target_properties (secure node p2p canonchain PROPERTIES LINK_FLAGS "${PLATFORM_LINK_FLAGS}")
 
 if (WIN32)
 	set (PLATFORM_LIBS Ws2_32 mswsock iphlpapi ntdll)
@@ -328,4 +328,4 @@ endif (WIN32)
 target_link_libraries (czr_lib ed25519 xxhash blake2 ${CRYPTOPP_LIBRARY})
 target_link_libraries (czr_lib_static ed25519 xxhash blake2 ${CRYPTOPP_LIBRARY})
 
-target_link_libraries (czr_node p2p rlp node secure lmdb ed25519 czr_lib_static argon2 ${OPENSSL_LIBRARIES} ${CRYPTOPP_LIBRARY} ${Boost_ATOMIC_LIBRARY} ${Boost_CHRONO_LIBRARY} ${Boost_REGEX_LIBRARY} ${Boost_DATE_TIME_LIBRARY} ${Boost_FILESYSTEM_LIBRARY} ${Boost_SYSTEM_LIBRARY} ${Boost_LOG_LIBRARY} ${Boost_PROGRAM_OPTIONS_LIBRARY} ${Boost_LOG_SETUP_LIBRARY} ${Boost_THREAD_LIBRARY} ${PLATFORM_LIBS})
+target_link_libraries (canonchain p2p rlp node secure lmdb ed25519 czr_lib_static argon2 ${OPENSSL_LIBRARIES} ${CRYPTOPP_LIBRARY} ${Boost_ATOMIC_LIBRARY} ${Boost_CHRONO_LIBRARY} ${Boost_REGEX_LIBRARY} ${Boost_DATE_TIME_LIBRARY} ${Boost_FILESYSTEM_LIBRARY} ${Boost_SYSTEM_LIBRARY} ${Boost_LOG_LIBRARY} ${Boost_PROGRAM_OPTIONS_LIBRARY} ${Boost_LOG_SETUP_LIBRARY} ${Boost_THREAD_LIBRARY} ${PLATFORM_LIBS})

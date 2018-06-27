@@ -1,4 +1,4 @@
-#include <czr/czr_node/daemon.hpp>
+#include <czr/canonchain/daemon.hpp>
 
 #include <boost/property_tree/json_parser.hpp>
 #include <fstream>

@@ -1,5 +1,5 @@
 #include <czr/node/node.hpp>
-#include <czr/czr_node/daemon.hpp>
+#include <czr/canonchain/daemon.hpp>
 #include <boost/lexical_cast.hpp>
 #include <boost/program_options.hpp>
 
