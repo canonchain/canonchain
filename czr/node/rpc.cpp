@@ -738,7 +738,7 @@ void czr::rpc_handler::stop()
 void czr::rpc_handler::version()
 {
 	boost::property_tree::ptree response_l;
-	response_l.put("version", boost::str(boost::format("Canonchain %1%") % CANONCHAIN_VERSION));
+	response_l.put("version", STR(CANONCHAIN_VERSION));
 	response_l.put("rpc_version", "1");
 	response_l.put("store_version", std::to_string(node.store_version()));
 	response(response_l);

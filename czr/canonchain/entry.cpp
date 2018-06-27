@@ -33,7 +33,7 @@ int main(int argc, char * const * argv)
 	}
 	else if (vm.count("version"))
 	{
-		std::cout << "Version: " << CANONCHAIN_VERSION << std::endl;
+		std::cout << "Version: " << STR(CANONCHAIN_VERSION) << std::endl;
 	}
 	else if (vm.count("daemon") > 0)
 	{

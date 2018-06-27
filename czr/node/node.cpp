@@ -624,7 +624,7 @@ void czr::node::process_active(czr::joint_message const & message)
 
 void czr::node::start()
 {
-	BOOST_LOG(log) << "Node starting, version: " << CANONCHAIN_VERSION;
+	BOOST_LOG(log) << "Node starting, version: " << STR(CANONCHAIN_VERSION) << ".";
 
 	host->register_capability(capability);
 	host->start();
