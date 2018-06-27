@@ -148,8 +148,7 @@ czr::send_result czr::wallet::send_action(czr::account const & from_a, czr::acco
 	}
 	if (!error && message != nullptr)
 	{
-		node.block_arrival.add(message->block->hash());
-		node.block_processor.process_receive_many(*message);
+		node.process_active(*message);
 	}
 
 	if (error)

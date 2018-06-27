@@ -22,6 +22,11 @@ void czr::node_capability::on_disconnect(std::shared_ptr<p2p::peer> peer_a)
 
 bool czr::node_capability::read_packet(std::shared_ptr<p2p::peer> peer_a, unsigned const & type, dev::RLP const & r)
 {
+	if (node.config.logging.network_packet_logging())
+	{
+		BOOST_LOG(node.log) << "node id: " << peer_a->remote_node_id().to_string() << ", packet type: " << type << ", rlp: " << r;
+	}
+
 	try
 	{
 		switch ((czr::sub_packet_type)type)
@@ -32,7 +37,10 @@ bool czr::node_capability::read_packet(std::shared_ptr<p2p::peer> peer_a, unsign
 			czr::joint_message message(error, r);
 			if (error)
 			{
-				BOOST_LOG(node.log) << "Invalid new block message rlp: " << r;
+				if (node.config.logging.network_logging())
+				{
+					BOOST_LOG(node.log) << "Invalid new block message rlp: " << r;
+				}
 				peer_a->disconnect(p2p::disconnect_reason::bad_protocol);
 				return true;
 			}
@@ -55,8 +63,11 @@ bool czr::node_capability::read_packet(std::shared_ptr<p2p::peer> peer_a, unsign
 	}
 	catch (std::exception const & e)
 	{
-		BOOST_LOG_TRIVIAL(error) << "Peer error, node id: " << peer_a->remote_node_id().to_string()
-			<< ", packet type: " << type << ", rlp: " << r << ", message: " << e.what();
+		if (node.config.logging.network_logging())
+		{
+			BOOST_LOG_TRIVIAL(error) << "Peer error, node id: " << peer_a->remote_node_id().to_string()
+				<< ", packet type: " << type << ", rlp: " << r << ", message: " << e.what();
+		}
 		throw;
 	}
 
