@@ -426,7 +426,7 @@ bool czr::ledger::check_stable_from_later_blocks(MDB_txn * transaction_a, czr::b
 		}
 	}
 
-	bool is_stable;
+	bool is_stable(false);
 	if (branch_child_hashs->size() == 0)
 	{
 		//non branch

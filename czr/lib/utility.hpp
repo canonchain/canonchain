@@ -19,6 +19,10 @@ void work_thread_reprioritize ();
 class error_message
 {
 public:
+	error_message():
+		error(false)
+	{
+	}
 	bool error;
 	std::string message;
 };

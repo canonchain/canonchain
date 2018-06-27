@@ -187,7 +187,21 @@ czr::mdb_val czr::witness_list_key::val() const
 	return czr::mdb_val(sizeof(*this), const_cast<czr::witness_list_key *> (this));
 }
 
-czr::block_state::block_state()
+czr::block_state::block_state() :
+	is_fork(false),
+	is_invalid(false),
+	is_fail(false),
+	is_free(false),
+	is_stable(false),
+	is_on_main_chain(false),
+	main_chain_index(boost::none),
+	latest_included_mc_index(boost::none),
+	level(0),
+	witnessed_level(0),
+	best_parent(0),
+	timestamp(0),
+	from_state(0),
+	to_state(0)
 {
 }
 
