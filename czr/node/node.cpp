@@ -433,9 +433,8 @@ czr::validate_result czr::block_processor::process_receive_one(MDB_txn * transac
 
 			if (node.config.logging.ledger_logging())
 			{
-				std::string block;
-				message.block->serialize_json(block);
-				BOOST_LOG(node.log) << boost::str(boost::format("Processing block %1% %2%") % message.block->hash().to_string() % block);
+				std::string & json(message.block->to_json());
+				BOOST_LOG(node.log) << boost::str(boost::format("Processing block %1% %2%") % message.block->hash().to_string() % json);
 			}
 			break;
 		}

@@ -168,7 +168,7 @@ void czr::block_hashables::stream_RLP(dev::RLPStream & s) const
 	s << last_summary << last_summary_block << data << exec_timestamp;
 }
 
-void czr::block_hashables::serialize_json(boost::property_tree::ptree tree_a) const
+void czr::block_hashables::serialize_json(boost::property_tree::ptree & tree_a) const
 {
 	tree_a.put("from", from.to_account());
 	tree_a.put("to", to.to_account());
@@ -376,15 +376,20 @@ void czr::block::serialize_json(std::string & string_a) const
 {
 	boost::property_tree::ptree tree;
 
+	serialize_json(tree);
+
+	std::stringstream ostream;
+	boost::property_tree::write_json(ostream, tree);
+	string_a = ostream.str();
+}
+
+void czr::block::serialize_json(boost::property_tree::ptree & tree) const
+{
 	hashables.serialize_json(tree);
 
 	std::string signature_l;
 	signature.encode_hex(signature_l);
 	tree.put("signature", signature_l);
-
-	std::stringstream ostream;
-	boost::property_tree::write_json(ostream, tree);
-	string_a = ostream.str();
 }
 
 void czr::block::deserialize_json (bool & error_a, boost::property_tree::ptree const & tree_a)
