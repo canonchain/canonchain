@@ -435,7 +435,7 @@ czr::store_iterator czr::block_store::account_end()
 }
 
 
-bool czr::block_store::account_state_get(MDB_txn * transaction_a, czr::account_state_hash const & hash_a, czr::account_state value_a)
+bool czr::block_store::account_state_get(MDB_txn * transaction_a, czr::account_state_hash const & hash_a, czr::account_state & value_a)
 {
 	czr::mdb_val value;
 	auto status(mdb_get(transaction_a, account_state, czr::mdb_val(hash_a), value));
@@ -459,7 +459,7 @@ void czr::block_store::account_state_put(MDB_txn * transaction_a, czr::account_s
 }
 
 
-bool czr::block_store::latest_account_state_get(MDB_txn * transaction_a, czr::account const & account_a, czr::account_state value_a)
+bool czr::block_store::latest_account_state_get(MDB_txn * transaction_a, czr::account const & account_a, czr::account_state & value_a)
 {
 	czr::mdb_val value;
 	auto status(mdb_get(transaction_a, latest_account_state, czr::mdb_val(account_a), value));
@@ -881,7 +881,7 @@ void czr::block_store::block_child_put(MDB_txn * transaction_a, czr::block_child
 }
 
 
-bool czr::block_store::skiplist_get(MDB_txn * transaction_a, czr::block_hash const & hash_a, czr::skiplist_info skiplist_a)
+bool czr::block_store::skiplist_get(MDB_txn * transaction_a, czr::block_hash const & hash_a, czr::skiplist_info & skiplist_a)
 {
 	czr::mdb_val value;
 	auto status(mdb_get(transaction_a, skiplist, czr::mdb_val(hash_a), value));
@@ -912,7 +912,7 @@ void czr::block_store::skiplist_put(MDB_txn * transaction_a, czr::block_hash con
 }
 
 
-bool czr::block_store::fork_successor_get(MDB_txn * transaction_a, czr::block_hash const & pervious_hash_a, czr::block_hash hash_a)
+bool czr::block_store::fork_successor_get(MDB_txn * transaction_a, czr::block_hash const & pervious_hash_a, czr::block_hash & hash_a)
 {
 	czr::mdb_val value;
 	auto status(mdb_get(transaction_a, fork_successor, czr::mdb_val(pervious_hash_a), value));

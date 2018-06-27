@@ -67,10 +67,10 @@ namespace czr
 		std::unique_ptr<czr::block> block_random(MDB_txn *);
 		size_t block_count(MDB_txn *);
 
-		bool account_state_get(MDB_txn *, czr::account_state_hash const &, czr::account_state);
-		void account_state_put(MDB_txn *, czr::account_state_hash const &, czr::account_state const &);
+		bool account_state_get(MDB_txn * transaction_a, czr::account_state_hash const & hash_a, czr::account_state & value_a);
+		void account_state_put(MDB_txn * transaction_a, czr::account_state_hash const & hash_a, czr::account_state const & value_a);
 
-		bool latest_account_state_get(MDB_txn * transaction_a, czr::account const & account_a, czr::account_state value_a);
+		bool latest_account_state_get(MDB_txn * transaction_a, czr::account const & account_a, czr::account_state & value_a);
 		void latest_account_state_put(MDB_txn * transaction_a, czr::account const & account_a, czr::account_state const & value_a);
 
 		void account_put(MDB_txn *, czr::account const &, czr::account_info const &);
@@ -133,17 +133,17 @@ namespace czr
 		czr::store_iterator block_child_begin(MDB_txn * transaction_a, czr::block_child_key const & key_a);
 		void block_child_put(MDB_txn * transaction_a, czr::block_child_key const & key_a);
 
-		bool skiplist_get(MDB_txn * transaction_a, czr::block_hash const & hash_a, czr::skiplist_info skiplist);
+		bool skiplist_get(MDB_txn * transaction_a, czr::block_hash const & hash_a, czr::skiplist_info & skiplist);
 		void skiplist_put(MDB_txn * transaction_a, czr::block_hash const & hash_a, czr::skiplist_info const & skiplist);
 
-		bool fork_successor_get(MDB_txn *, czr::block_hash const &, czr::block_hash);
+		bool fork_successor_get(MDB_txn *, czr::block_hash const &, czr::block_hash &);
 		void fork_successor_put(MDB_txn *, czr::block_hash const &, czr::block_hash const &);
 		void fork_successor_del(MDB_txn *, czr::block_hash const &);
 
 		bool genesis_hash_get(MDB_txn * transaction_a, czr::block_hash & genesis_hash);
 		void genesis_hash_put(MDB_txn * transaction_a, czr::block_hash const & genesis_hash);
 
-		bool my_witness_list_get(MDB_txn * transaction_a, czr::witness_list_info &my_wl_info);
+		bool my_witness_list_get(MDB_txn * transaction_a, czr::witness_list_info & my_wl_info);
 		void my_witness_list_put(MDB_txn * transaction_a, czr::witness_list_info my_wl_info);
 
 		void flush(MDB_txn *);
