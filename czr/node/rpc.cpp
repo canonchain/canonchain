@@ -89,7 +89,7 @@ bool czr::rpc_config::deserialize_json(boost::property_tree::ptree const & tree_
 			enable_control = tree_a.get<bool>("enable_control");
 			try
 			{
-				port = std::stoul(port_l);
+				port = (uint16_t)std::stoul(port_l);
 				result = port > std::numeric_limits<uint16_t>::max();
 			}
 			catch (std::logic_error const &)

@@ -730,7 +730,7 @@ int czr::node::store_version()
 
 czr::thread_runner::thread_runner(boost::asio::io_service & service_a, unsigned service_threads_a)
 {
-	for (auto i(0); i < service_threads_a; ++i)
+	for (unsigned i(0); i < service_threads_a; ++i)
 	{
 		threads.push_back(std::thread([&service_a]() {
 			try
