@@ -36,7 +36,7 @@ int main(int argc, char * const * argv)
 	else if (vm.count("daemon") > 0)
 	{
 		czr_daemon::daemon daemon;
-		daemon.run(data_path);
+		daemon.run(data_path,vm);
 	}
 	else if (!czr::handle_node_options(vm))
 	{

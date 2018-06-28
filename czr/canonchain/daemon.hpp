@@ -21,7 +21,7 @@ namespace czr_daemon
 	class daemon
 	{
 	public:
-		void run(boost::filesystem::path const &);
+		void run(boost::filesystem::path const &, boost::program_options::variables_map &vm);
 	};
 	class daemon_config
 	{
