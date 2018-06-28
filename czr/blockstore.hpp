@@ -127,6 +127,12 @@ namespace czr
 		void mci_block_put(MDB_txn * transaction_a, czr::mci_block_key const & key);
 		void mci_block_del(MDB_txn * transaction_a, czr::mci_block_key const & key);
 
+		//unhandled_dependency
+		void unhandled_dependency_get(MDB_txn * transaction_a, czr::block_hash const &unhandle_a,std::list<czr::block_hash>& dependency_list_a);
+		bool unhandled_dependency_exists(MDB_txn * transaction_a, czr::block_hash const &unhandle_a);
+		void unhandled_dependency_put(MDB_txn * transaction_a, czr::unhandled_dependency_key const &key);
+		void unhandled_dependency_del(MDB_txn * transaction_a, czr::unhandled_dependency_key const &key);
+
 		void last_stable_mci_put(MDB_txn * transaction_a, uint64_t const & last_stable_mci_value);
 		uint64_t last_stable_mci_get(MDB_txn *);
 
@@ -195,6 +201,7 @@ namespace czr
 		MDB_dbi fork_successor;
 		//key -> value
 		MDB_dbi prop;
+		MDB_dbi unhandled_dependency;
 
 		
 		//genesis hash key

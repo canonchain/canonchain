@@ -146,6 +146,17 @@ namespace czr
 		czr::block_hash hash;
 	};
 
+	class unhandled_dependency_key
+	{
+	public:
+		unhandled_dependency_key(czr::block_hash const & unhandled_a, czr::block_hash const & dependency_a);
+		unhandled_dependency_key(MDB_val const &);
+		bool operator== (czr::unhandled_dependency_key const &) const;
+		czr::mdb_val val() const;
+		czr::block_hash dependency;
+		czr::block_hash unhandled;
+	};
+
 	class account_state
 	{
 	public:

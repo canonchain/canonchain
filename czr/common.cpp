@@ -376,6 +376,29 @@ czr::mdb_val czr::mci_block_key::val() const
 	return czr::mdb_val(sizeof(*this), const_cast<czr::mci_block_key *> (this));
 }
 
+
+czr::unhandled_dependency_key::unhandled_dependency_key(czr::block_hash const & unhandled_a, czr::block_hash const & dependency_a):
+	unhandled(unhandled_a),
+	dependency(dependency_a)
+{
+}
+
+czr::unhandled_dependency_key::unhandled_dependency_key(MDB_val const & val_a)
+{
+	assert(val_a.mv_size == sizeof(*this));
+	std::copy(reinterpret_cast<uint8_t const *> (val_a.mv_data), reinterpret_cast<uint8_t const *> (val_a.mv_data) + sizeof(*this), reinterpret_cast<uint8_t *> (this));
+}
+
+bool czr::unhandled_dependency_key::operator==(czr::unhandled_dependency_key const & other_a) const
+{
+	return unhandled == other_a.unhandled && dependency == other_a.dependency;
+}
+
+czr::mdb_val czr::unhandled_dependency_key::val() const
+{
+	return czr::mdb_val(sizeof(*this), const_cast<czr::unhandled_dependency_key *> (this));
+}
+
 czr::summary_hash czr::summary::gen_summary_hash(czr::block_hash const & block_hash, std::vector<czr::summary_hash> const & parent_hashs,
 	std::set<czr::summary_hash> const & skiplist, bool const & is_fork, bool const & is_invalid, bool const & is_fail,
 	czr::account_state_hash const & from_state_hash, czr::account_state_hash const & to_state_hash)
