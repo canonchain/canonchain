@@ -282,6 +282,7 @@ namespace czr
 		czr::uint128_t balance(czr::account const &);
 		std::unique_ptr<czr::block> block(czr::block_hash const &);
 		void ongoing_store_flush();
+		void ongoing_unhandle_flush();
 		void ongoing_retry_late_message();
 		dev::bytes network_bytes();
 

@@ -381,8 +381,7 @@ void czr::block_processor::process_receive_many(std::deque<czr::block_processor_
 						{
 							node.store.dependency_unhandled_del(transaction, b_hash, unhandled_hash);
 							node.store.unhandled_dependency_del(transaction, unhandled_hash, b_hash);
-							bool dependency_exists;
-							node.store.unhandled_dependency_exists(transaction, unhandled_hash);
+							bool dependency_exists(node.store.unhandled_dependency_exists(transaction, unhandled_hash));
 							if (!dependency_exists)
 							{
 								czr::joint_message jm;
@@ -393,10 +392,21 @@ void czr::block_processor::process_receive_many(std::deque<czr::block_processor_
 						}
 						break;
 					}
+					//------
 					case czr::validate_result_codes::invalid_block:
 					case czr::validate_result_codes::known_invalid_block:
 					{
+						auto block = item.joint.block;
+						auto dependency_hash(block->hash());
 
+						std::list<czr::block_hash> unhandleds;
+						node.store.dependency_unhandled_get(transaction, dependency_hash, unhandleds);
+						for (czr::block_hash unhandled_hash : unhandleds)
+						{
+							node.store.dependency_unhandled_del(transaction, dependency_hash, unhandled_hash);
+							node.store.unhandled_dependency_del(transaction, unhandled_hash, dependency_hash);
+						    node.store.unhandled_del(transaction, unhandled_hash);	
+						}
 						break;
 					}
 					default:
@@ -454,6 +464,9 @@ czr::validate_result czr::block_processor::process_receive_one(MDB_txn * transac
 			}
 			std::list<block_hash> missing_parents_and_previous(result.missing_parents_and_previous);
 			node.store.unhandled_put(transaction_a, b_hash, joint);
+
+			uint64_t dead_time(seconds_since_epoch());
+			node.store.deadtime_unhandle_put(transaction_a,dead_time, b_hash);
 			for (czr::block_hash p_missing : missing_parents_and_previous)
 			{
 				node.store.unhandled_dependency_put(transaction_a, b_hash, p_missing);
@@ -640,6 +653,7 @@ void czr::node::start()
 	host->register_capability(capability);
 	host->start();
 	ongoing_store_flush();
+	ongoing_unhandle_flush();
 	ongoing_retry_late_message();
 }
 
@@ -688,6 +702,29 @@ void czr::node::ongoing_store_flush()
 		}
 	});
 }
+
+//---ongoing_unhandle_flush
+void czr::node::ongoing_unhandle_flush()
+{
+	std::weak_ptr<czr::node> node_w(shared_from_this());
+	alarm.add(std::chrono::steady_clock::now() + std::chrono::minutes(10), [node_w](){
+		if (auto node_l = node_w.lock())
+		{			
+			{
+				czr::transaction transaction(node_l->store.environment, nullptr, true);
+				std::chrono::seconds sec(-3600);
+				auto dead_time = czr::future_from_epoch(sec);
+				node_l->store.deadtime_unhandle_del(transaction, dead_time);
+			}
+			node_l->ongoing_unhandle_flush();
+		}
+	});
+
+
+}
+
+
+
 
 void czr::node::ongoing_retry_late_message()
 {

@@ -424,7 +424,7 @@ void czr::joint_message::stream_RLP(dev::RLPStream & s) const
 	}
 }
 
-
+//---
 czr::unhandled_dependency_key::unhandled_dependency_key(czr::block_hash const & unhandled_a, czr::block_hash const & dependency_a):
 	unhandled(unhandled_a),
 	dependency(dependency_a)
@@ -446,7 +446,52 @@ czr::mdb_val czr::unhandled_dependency_key::val() const
 {
 	return czr::mdb_val(sizeof(*this), const_cast<czr::unhandled_dependency_key *> (this));
 }
+//---
+czr::dependency_unhandled_key::dependency_unhandled_key( czr::block_hash const & dependency_a,czr::block_hash const & unhandled_a) :
+	dependency(dependency_a),
+	unhandled(unhandled_a)
+{
+}
 
+czr::dependency_unhandled_key::dependency_unhandled_key(MDB_val const & val_a)
+{
+	assert(val_a.mv_size == sizeof(*this));
+	std::copy(reinterpret_cast<uint8_t const *> (val_a.mv_data), reinterpret_cast<uint8_t const *> (val_a.mv_data) + sizeof(*this), reinterpret_cast<uint8_t *> (this));
+}
+
+bool czr::dependency_unhandled_key::operator==(czr::dependency_unhandled_key const & other_a) const
+{
+	return  dependency == other_a.dependency&&unhandled == other_a.unhandled;
+}
+
+czr::mdb_val czr::dependency_unhandled_key::val() const
+{
+	return czr::mdb_val(sizeof(*this), const_cast<czr::dependency_unhandled_key *> (this));
+}
+
+//---
+czr::deadtime_unhandled_key::deadtime_unhandled_key(uint64_t const& deadtime_a, czr::block_hash const & unhandled_a):
+	deadtime(deadtime_a), unhandled(unhandled_a)
+{
+
+}
+czr::deadtime_unhandled_key::deadtime_unhandled_key(MDB_val const &val_a)
+{
+	assert(val_a.mv_size == sizeof(*this));
+	std::copy(reinterpret_cast<uint8_t const *> (val_a.mv_data), reinterpret_cast<uint8_t const *> (val_a.mv_data) + sizeof(*this), reinterpret_cast<uint8_t *> (this));
+}
+
+bool czr::deadtime_unhandled_key::operator== (czr::deadtime_unhandled_key const &other_a) const
+{
+	return  deadtime == other_a.deadtime&&unhandled == other_a.unhandled;
+}
+
+czr::mdb_val czr::deadtime_unhandled_key::val() const
+{
+	return czr::mdb_val(sizeof(*this), const_cast<czr::deadtime_unhandled_key *> (this));
+}
+
+//---
 czr::summary_hash czr::summary::gen_summary_hash(czr::block_hash const & block_hash, std::vector<czr::summary_hash> const & parent_hashs,
 	std::set<czr::summary_hash> const & skiplist, bool const & is_fork, bool const & is_invalid, bool const & is_fail,
 	czr::account_state_hash const & from_state_hash, czr::account_state_hash const & to_state_hash)

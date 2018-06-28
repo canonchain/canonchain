@@ -153,7 +153,29 @@ namespace czr
 		unhandled_dependency_key(MDB_val const &);
 		bool operator== (czr::unhandled_dependency_key const &) const;
 		czr::mdb_val val() const;
+		czr::block_hash unhandled;
+		czr::block_hash dependency;		
+	};
+
+	class dependency_unhandled_key
+	{
+	public:
+		dependency_unhandled_key(czr::block_hash const & dependency_a,czr::block_hash const & unhandled_a);
+		dependency_unhandled_key(MDB_val const &);
+		bool operator== (czr::dependency_unhandled_key const &) const;
+		czr::mdb_val val() const;		
 		czr::block_hash dependency;
+		czr::block_hash unhandled;
+	};
+
+	class deadtime_unhandled_key
+	{
+	public:
+		deadtime_unhandled_key(uint64_t const& deadtime_a, czr::block_hash const & unhandled_a);
+		deadtime_unhandled_key(MDB_val const &);
+		bool operator== (czr::deadtime_unhandled_key const &) const;
+		czr::mdb_val val() const;
+		uint64_t        deadtime;
 		czr::block_hash unhandled;
 	};
 
