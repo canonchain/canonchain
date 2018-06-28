@@ -197,7 +197,7 @@ czr::validate_result czr::validation::validate(MDB_txn * transaction_a, czr::joi
 	}
 
 	//check parents
-	czr::block_hash pre_pblock_hash;
+	czr::block_hash pre_pblock_hash(0);
 	std::list<czr::block_hash> pre_pblock_hashs;
 	for (czr::block_hash & pblock_hash : block->parents())
 	{

@@ -118,7 +118,6 @@ namespace czr
 		bool network_logging() const;
 		bool network_message_logging() const;
 		bool network_packet_logging() const;
-		bool network_keepalive_logging() const;
 		bool node_lifetime_tracing() const;
 		bool log_rpc() const;
 		bool callback_logging() const;
@@ -130,7 +129,6 @@ namespace czr
 		bool network_logging_value;
 		bool network_message_logging_value;
 		bool network_packet_logging_value;
-		bool network_keepalive_logging_value;
 		bool node_lifetime_tracing_value;
 		bool log_rpc_value;
 		bool log_to_cerr_value;

@@ -85,7 +85,6 @@ czr::logging::logging() :
 	network_logging_value(true),
 	network_message_logging_value(false),
 	network_packet_logging_value(false),
-	network_keepalive_logging_value(false),
 	node_lifetime_tracing_value(false),
 	log_rpc_value(true),
 	log_to_cerr_value(false),
@@ -117,7 +116,6 @@ void czr::logging::serialize_json(boost::property_tree::ptree & tree_a) const
 	tree_a.put("network", network_logging_value);
 	tree_a.put("network_message", network_message_logging_value);
 	tree_a.put("network_packet", network_packet_logging_value);
-	tree_a.put("network_keepalive", network_keepalive_logging_value);
 	tree_a.put("node_lifetime_tracing", node_lifetime_tracing_value);
 	tree_a.put("log_rpc", log_rpc_value);
 	tree_a.put("log_to_cerr", log_to_cerr_value);
@@ -150,7 +148,6 @@ bool czr::logging::deserialize_json(bool & upgraded_a, boost::property_tree::ptr
 		network_logging_value = tree_a.get<bool>("network");
 		network_message_logging_value = tree_a.get<bool>("network_message");
 		network_packet_logging_value = tree_a.get<bool>("network_packet");
-		network_keepalive_logging_value = tree_a.get<bool>("network_keepalive");
 		node_lifetime_tracing_value = tree_a.get<bool>("node_lifetime_tracing");
 		log_rpc_value = tree_a.get<bool>("log_rpc");
 		log_to_cerr_value = tree_a.get<bool>("log_to_cerr");
@@ -188,11 +185,6 @@ bool czr::logging::network_message_logging() const
 bool czr::logging::network_packet_logging() const
 {
 	return network_logging() && network_packet_logging_value;
-}
-
-bool czr::logging::network_keepalive_logging() const
-{
-	return network_logging() && network_keepalive_logging_value;
 }
 
 bool czr::logging::node_lifetime_tracing() const
@@ -433,9 +425,8 @@ czr::validate_result czr::block_processor::process_receive_one(MDB_txn * transac
 
 			if (node.config.logging.ledger_logging())
 			{
-				std::string block;
-				message.block->serialize_json(block);
-				BOOST_LOG(node.log) << boost::str(boost::format("Processing block %1% %2%") % message.block->hash().to_string() % block);
+				std::string const & json(message.block->to_json());
+				BOOST_LOG(node.log) << boost::str(boost::format("Processing block %1% %2%") % message.block->hash().to_string() % json);
 			}
 			break;
 		}

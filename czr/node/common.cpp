@@ -34,7 +34,7 @@ czr::joint_message::joint_message(bool & error_a, dev::RLP const & r)
 
 void czr::joint_message::stream_RLP(dev::RLPStream & s) const
 {
-	s.appendList(8);
+	summary_hash.is_zero() ? s.appendList(1): s.appendList(8);
 	block->stream_RLP(s);
 	if (!summary_hash.is_zero())
 	{

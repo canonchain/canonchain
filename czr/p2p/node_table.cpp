@@ -550,9 +550,9 @@ std::list<std::shared_ptr<node_info>> node_table::get_random_nodes(size_t const 
 			if (auto ne = bucket.back().lock())
 			{
 				result.push_back(ne);
+				bucket.pop_back();
 				break;
 			}
-			bucket.pop_back();
 		} 
 		while (bucket.size() > 0);
 

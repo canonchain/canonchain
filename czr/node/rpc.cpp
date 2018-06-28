@@ -414,7 +414,7 @@ void czr::rpc_handler::account_export()
 		if (exists)
 		{
 			boost::property_tree::ptree response_l;
-			std::string & json(kc.to_json());
+			std::string const & json(kc.to_json());
 			response_l.put("json",json);
 			response(response_l);
 		}
@@ -541,8 +541,8 @@ void czr::rpc_handler::accounts_frontiers()
 			}
 		}
 		else
-		{
 
+		{
 			error_response(response, "Invalid account");
 		}
 	}
@@ -561,11 +561,15 @@ void czr::rpc_handler::block()
 		auto block(node.store.block_get(transaction, hash));
 		if (block != nullptr)
 		{
-			boost::property_tree::ptree response_l;
-			std::string contents;
-			block->serialize_json(contents);
-			response_l.put("contents", contents);
-			response(response_l);
+			boost::property_tree::ptree block_l;
+			block->serialize_json(block_l);
+
+			czr::block_state state;
+			bool error(node.store.block_state_get(transaction, hash, state));
+			assert(!error);
+			state.serialize_json(block_l);
+
+			response(block_l);
 		}
 		else
 		{
@@ -574,7 +578,6 @@ void czr::rpc_handler::block()
 	}
 	else
 	{
-
 		error_response(response, "Invalid hash");
 	}
 }
@@ -583,7 +586,6 @@ void czr::rpc_handler::blocks()
 {
 	std::vector<std::string> hashes;
 	boost::property_tree::ptree response_l;
-	boost::property_tree::ptree blocks;
 	czr::transaction transaction(node.store.environment, nullptr, false);
 	for (boost::property_tree::ptree::value_type & hashes : request.get_child("hashes"))
 	{
@@ -595,9 +597,15 @@ void czr::rpc_handler::blocks()
 			auto block(node.store.block_get(transaction, hash));
 			if (block != nullptr)
 			{
-				std::string contents;
-				block->serialize_json(contents);
-				blocks.put(hash_text, contents);
+				boost::property_tree::ptree block_l;
+				block->serialize_json(block_l);
+
+				czr::block_state state;
+				bool error(node.store.block_state_get(transaction, hash, state));
+				assert(!error);
+				state.serialize_json(block_l);
+
+				response_l.add_child(hash_text, block_l);
 			}
 			else
 			{
@@ -606,11 +614,9 @@ void czr::rpc_handler::blocks()
 		}
 		else
 		{
-
 			error_response(response, "Invalid hash");
 		}
 	}
-	response_l.add_child("blocks", blocks);
 	response(response_l);
 }
 

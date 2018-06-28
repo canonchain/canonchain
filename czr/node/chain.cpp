@@ -183,7 +183,7 @@ void czr::chain::update_main_chain(MDB_txn * transaction_a, czr::block const & b
 		ledger.store.main_chain_put(transaction_a, new_mci, new_mc_block_hash);
 		ledger.store.mci_block_put(transaction_a, czr::mci_block_key(new_mci, new_mc_block_hash));
 
-		std::shared_ptr<std::unordered_set<czr::block_hash>> updated_hashs;
+		std::shared_ptr<std::unordered_set<czr::block_hash>> updated_hashs(std::make_shared<std::unordered_set<czr::block_hash>>());
 		update_parent_mci(transaction_a, new_mc_block_hash, new_mci, updated_hashs);
 	}
 
@@ -264,7 +264,6 @@ void czr::chain::check_mc_stable_block(MDB_txn * transaction_a)
 {
 	//get last stable main chain block
 	uint64_t last_stable_mci(ledger.store.last_stable_mci_get(transaction_a));
-	assert(last_stable_mci != 0);
 	czr::block_hash last_stable_block_hash;
 	bool mc_error(ledger.store.main_chain_get(transaction_a, last_stable_mci, last_stable_block_hash));
 	assert(!mc_error);
@@ -280,11 +279,11 @@ void czr::chain::check_mc_stable_block(MDB_txn * transaction_a)
 	czr::block_hash free_mc_block_hash(mc_iter->second.uint256());
 	uint64_t min_wl(ledger.find_mc_min_wl(transaction_a, free_mc_block_hash, last_stable_block_wl_info));
 
-	bool is_stable;
+	bool is_stable(false);
 
 #pragma region check is stable
 
-	czr::block_hash mc_child_hash;
+	czr::block_hash mc_child_hash(0);
 	std::shared_ptr<std::list<czr::block_hash>> branch_child_hashs(new std::list<czr::block_hash>);
 	ledger.find_unstable_child_blocks(transaction_a, last_stable_block_hash, mc_child_hash, branch_child_hashs);
 
@@ -386,7 +385,7 @@ void czr::chain::advance_mc_stable_block(MDB_txn * transaction_a, czr::block_has
 
 	std::unique_ptr<czr::block> mc_stable_block(ledger.store.block_get(transaction_a, mc_stable_hash));
 	assert(mc_stable_block != nullptr);
-	uint64_t timestamp(mc_stable_block->hashables.exec_timestamp);
+	uint64_t mc_timestamp(mc_stable_block->hashables.exec_timestamp);
 
 #pragma region handle fork block
 
@@ -542,7 +541,7 @@ void czr::chain::advance_mc_stable_block(MDB_txn * transaction_a, czr::block_has
 			//save block state
 			block_state.is_invalid = is_invalid;
 			block_state.is_fail = is_fail;
-			block_state.timestamp = timestamp;
+			block_state.mc_timestamp = mc_timestamp;
 			block_state.is_stable = true;
 			ledger.store.block_state_put(transaction_a, block_hash, block_state);
 
@@ -688,7 +687,7 @@ void czr::chain::update_parent_mci(MDB_txn * transaction_a, czr::block_hash cons
 {
 	std::unique_ptr<czr::block> block = ledger.store.block_get(transaction_a, hash_a);
 	assert(block != nullptr);
-	for (auto & pblock_hash : block->parents())
+	for (auto const & pblock_hash : block->parents())
 	{
 		if (updated_hashs->find(pblock_hash) != updated_hashs->end())
 			continue;
@@ -722,6 +721,7 @@ void czr::chain::search_stable_block(MDB_txn * transaction_a, czr::block_hash co
 	if (state.level == 0)
 		return;
 	assert(state.main_chain_index);
+	assert(*state.main_chain_index <= mci);
 	if (*state.main_chain_index != mci)
 		return;
 

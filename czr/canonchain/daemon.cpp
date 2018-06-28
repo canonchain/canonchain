@@ -140,62 +140,6 @@ void czr_daemon::daemon::run(boost::filesystem::path const & data_path)
 				{
 					rpc->start();
 				}
-
-#pragma region send test
-
-				//boost::asio::deadline_timer timer(io_service);
-				//timer.expires_from_now(boost::posix_time::seconds(5));
-				//timer.async_wait([node]() {
-				//	czr::uint256_union wallet;
-				//	wallet.decode_hex("");
-				//	auto existing(node->wallet.items.find(wallet));
-				//	if (existing == node->wallet.items.end())
-				//	{
-				//		std::cerr << "Wallet not exists";
-				//		return;
-				//	}
-
-				//	boost::optional<std::string> send_id;
-				//	czr::account from;
-				//	from.decode_account("");
-				//	czr::account to;
-				//	to.decode_account("");
-				//	czr::amount amount = 1000;
-				//	dev::bytes data;
-				//	existing->second->send_async(from, to, amount.number(), data, [from](czr::send_result result) {
-				//		switch (result.code)
-				//		{
-				//		case czr::send_result_codes::ok:
-				//			break;
-				//		case czr::send_result_codes::from_not_exists:
-				//			error_response(response_a, "Account not exists, " + from.to_account());
-				//			break;
-				//		case czr::send_result_codes::account_locked:
-				//			error_response(response_a, "Account locked");
-				//			break;
-				//		case czr::send_result_codes::wrong_password:
-				//			error_response(response_a, "Wrong password");
-				//			break;
-				//		case czr::send_result_codes::insufficient_balance:
-				//			std::cerr << "Insufficient balance";
-				//			break;
-				//		case czr::send_result_codes::data_size_too_large:
-				//			std::cerr << "Data size to large";
-				//			break;
-				//		case czr::send_result_codes::validate_error:
-				//			std::cerr << "Generate block fail, please retry later";
-				//		case czr::send_result_codes::error:
-				//			std::cerr << "Send block error";
-				//			break;
-				//		default:
-				//			std::cerr << "Unknown error";
-				//			break;
-				//		}
-				//	}, send_id);
-				//});
-
-#pragma endregion
-
 				runner = std::make_unique<czr::thread_runner>(io_service, config.node.io_threads);
 
 				signal(SIGABRT, &exit_handler::handle);

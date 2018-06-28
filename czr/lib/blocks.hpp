@@ -45,7 +45,7 @@ public:
 	block_hashables (bool &, boost::property_tree::ptree const &);
 	block_hashables(bool & error_a, dev::RLP const & r);
 	void stream_RLP(dev::RLPStream & s) const;
-	void serialize_json(boost::property_tree::ptree tree_a) const;
+	void serialize_json(boost::property_tree::ptree & tree_a) const;
 	void deserialize_json(bool & error_a, boost::property_tree::ptree const & tree_a);
 	void hash (blake2b_state &) const;
 
@@ -83,6 +83,7 @@ public:
 	std::vector<czr::block_hash> parents_and_previous() const;
 	czr::block_hash root() const;
 	void serialize_json(std::string &) const;
+	void serialize_json(boost::property_tree::ptree & tree) const;
 	void deserialize_json(bool & error_a, boost::property_tree::ptree const & tree_a);
 
 	void visit(czr::block_visitor & visitor_a) const;
