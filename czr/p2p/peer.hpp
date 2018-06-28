@@ -41,7 +41,7 @@ namespace czr
 			void register_capability(std::shared_ptr<peer_capability> const & cap);
 			void start();
 			void ping();
-			dev::RLPStream & prep(dev::RLPStream & s, packet_type const & type, unsigned const & size = 0);
+			dev::RLPStream & prep(dev::RLPStream & s, unsigned const & type, unsigned const & size = 0);
 			void send(dev::RLPStream & s);
 			bool is_connected();
 			void disconnect(disconnect_reason const & reason);

@@ -63,7 +63,7 @@ void node_table::discover_loop()
 		if (ec)
 			BOOST_LOG_TRIVIAL(warning) << "Discover loop error: " << ec.value() << ":" << ec.message();
 
-		BOOST_LOG_TRIVIAL(debug) << "Do discover";
+		//BOOST_LOG_TRIVIAL(debug) << "Do discover";
 
 		node_id rand_node_id;
 		czr::random_pool.GenerateBlock(rand_node_id.bytes.data(), rand_node_id.bytes.size());
@@ -78,7 +78,7 @@ void node_table::do_discover(node_id const & rand_node_id, unsigned const & roun
 
 	if (round == max_discover_rounds)
 	{
-		BOOST_LOG_TRIVIAL(debug) << "Terminating discover after " << round << " rounds.";
+		//BOOST_LOG_TRIVIAL(debug) << "Terminating discover after " << round << " rounds.";
 		discover_loop();
 		return;
 	}

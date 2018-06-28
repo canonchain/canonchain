@@ -8,10 +8,10 @@ czr::node_capability::node_capability(czr::node & node_a)
 {
 }
 
-void czr::node_capability::on_connect(std::shared_ptr<p2p::peer> peer_a)
+void czr::node_capability::on_connect(std::shared_ptr<p2p::peer> peer_a, unsigned const & offset)
 {
 	std::lock_guard<std::mutex> lock(peers_mutex);
-	peers[peer_a->remote_node_id()] = czr::peer_info(peer_a);
+	peers[peer_a->remote_node_id()] = czr::peer_info(peer_a, offset);
 }
 
 void czr::node_capability::on_disconnect(std::shared_ptr<p2p::peer> peer_a)
@@ -33,17 +33,20 @@ bool czr::node_capability::read_packet(std::shared_ptr<p2p::peer> peer_a, unsign
 		{
 		case czr::sub_packet_type::joint:
 		{
-			bool error;
-			czr::joint_message message(error, r);
+			bool error(r.itemCount() != 1);
+			czr::joint_message message(error, r[0]);
+
 			if (error)
 			{
 				if (node.config.logging.network_logging())
 				{
-					BOOST_LOG(node.log) << "Invalid new block message rlp: " << r;
+					BOOST_LOG(node.log) << "Invalid new block message rlp: " << r[0];
 				}
 				peer_a->disconnect(p2p::disconnect_reason::bad_protocol);
 				return true;
 			}
+
+			BOOST_LOG(node.log) << "Get joint message, blcok hash:" << message.block->hash().to_string();
 
 			czr::block_hash block_hash(message.block->hash());
 			if (node.config.logging.network_message_logging())
@@ -88,6 +91,7 @@ void czr::node_capability::send_block(czr::joint_message const & message)
 				continue;
 
 			dev::RLPStream s;
+			p->prep(s, pi.offset + (unsigned)czr::sub_packet_type::joint, 1);
 			message.stream_RLP(s);
 			p->send(s);
 		}

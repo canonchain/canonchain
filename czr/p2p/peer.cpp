@@ -29,7 +29,7 @@ void peer::start()
 {
 	auto this_l(shared_from_this());
 	for (auto pc : capabilities)
-		pc->cap->on_connect(this_l);
+		pc->cap->on_connect(this_l, pc->offset);
 
 	ping();
 	read_loop();
@@ -51,7 +51,7 @@ void peer::disconnect(disconnect_reason const & reason)
 	if (socket->is_open())
 	{
 		dev::RLPStream s;
-		prep(s, packet_type::disconect, 1) << (unsigned)reason;
+		prep(s, (unsigned)packet_type::disconect, 1) << (unsigned)reason;
 		send(s);
 	}
 	drop(reason);
@@ -70,7 +70,7 @@ node_id czr::p2p::peer::remote_node_id()
 void peer::ping()
 {
 	dev::RLPStream s;
-	send(prep(s, packet_type::ping));
+	send(prep(s, (unsigned)packet_type::ping));
 }
 
 void peer::read_loop()
@@ -151,7 +151,7 @@ bool peer::read_packet(unsigned const & type, dev::RLP const & r)
 			case packet_type::ping:
 			{
 				dev::RLPStream s;
-				send(prep(s, packet_type::pong));
+				send(prep(s, (unsigned)packet_type::pong));
 				break;
 			}
 			case packet_type::pong:
@@ -196,7 +196,7 @@ bool peer::read_packet(unsigned const & type, dev::RLP const & r)
 	return true;
 }
 
-dev::RLPStream & peer::prep(dev::RLPStream & s, packet_type const & type, unsigned const & size)
+dev::RLPStream & peer::prep(dev::RLPStream & s, unsigned const & type, unsigned const & size)
 {
 	return s.append((unsigned)type).appendList(size);
 }

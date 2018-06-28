@@ -629,6 +629,7 @@ void czr::rpc_handler::block_count()
 	response(response_l);
 }
 
+//todo: add secure send method without password
 void czr::rpc_handler::send()
 {
 	if (!rpc.config.enable_control)

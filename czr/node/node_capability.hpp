@@ -21,8 +21,9 @@ namespace czr
 		{
 		}
 
-		peer_info(std::shared_ptr<p2p::peer> peer_a):
-			peer(peer_a)
+		peer_info(std::shared_ptr<p2p::peer> peer_a, unsigned const & offset_a):
+			peer(peer_a),
+			offset(offset_a)
 		{
 		}
 		
@@ -42,6 +43,7 @@ namespace czr
 		}
 
 		std::weak_ptr<p2p::peer> peer;
+		unsigned offset;
 
 	private:
 		std::unordered_set<czr::block_hash> known_blocks;
@@ -51,7 +53,7 @@ namespace czr
 	{
 	public:
 		node_capability(czr::node & node_a);
-		void on_connect(std::shared_ptr<p2p::peer> peer_a);
+		void on_connect(std::shared_ptr<p2p::peer> peer_a, unsigned const & offset);
 		void on_disconnect(std::shared_ptr<p2p::peer> peer_a);
 		bool read_packet(std::shared_ptr<p2p::peer> peer_a, unsigned const & type, dev::RLP const & r);
 		void send_block(czr::joint_message const & message);

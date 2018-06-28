@@ -9,6 +9,9 @@ block (block_a)
 
 czr::joint_message::joint_message(bool & error_a, dev::RLP const & r)
 {
+	if (error_a)
+		return;
+
 	error_a = r.itemCount() != 1 && r.itemCount() != 8;
 	if (error_a)
 		return;
