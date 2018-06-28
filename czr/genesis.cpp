@@ -137,12 +137,14 @@ void czr::genesis::try_initialize(MDB_txn * transaction_a, czr::block_store & st
 	store_a.account_state_put(transaction_a, to_state.hash(), to_state);
 	store_a.latest_account_state_put(transaction_a, block->hashables.to, to_state);
 
-
-	//witness list
+	//block witness list
 	czr::witness_list_info wl_info(block->hashables.witness_list);
 	store_a.block_witness_list_put(transaction_a, block_hash, wl_info);
 	czr::witness_list_key wl_key(wl_info.hash(), *block_state.main_chain_index);
 	store_a.witness_list_hash_block_put(transaction_a, wl_key, block_hash);
+
+	//my witness list
+	store_a.my_witness_list_put(transaction_a, wl_info);
 
 	//summary hash
 	std::vector<czr::summary_hash> p_summary_hashs; //no parents

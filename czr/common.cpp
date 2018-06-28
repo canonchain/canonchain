@@ -89,6 +89,7 @@ czr::mdb_val czr::account_info::val() const
 	return czr::mdb_val(sizeof(*this), const_cast<czr::account_info *> (this));
 }
 
+
 czr::witness_list_info::witness_list_info()
 {
 }
@@ -100,11 +101,19 @@ czr::witness_list_info::witness_list_info(dev::RLP const & r)
 	{
 		witness_list.push_back((czr::account)w);
 	}
+	sort();
 }
 
 czr::witness_list_info::witness_list_info(std::vector<czr::account> const & list_a) :
 	witness_list(list_a)
 {
+	sort();
+}
+
+
+void czr::witness_list_info::sort()
+{
+	std::sort(witness_list.begin(), witness_list.end());
 }
 
 void czr::witness_list_info::stream_RLP(dev::RLPStream & s) const
@@ -113,6 +122,8 @@ void czr::witness_list_info::stream_RLP(dev::RLPStream & s) const
 	for (czr::account witness : witness_list)
 		s << witness;
 }
+
+
 
 czr::witness_list_hash czr::witness_list_info::hash() const
 {
