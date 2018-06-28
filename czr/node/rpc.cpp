@@ -554,24 +554,19 @@ void czr::rpc_handler::block()
 	auto error(hash.decode_hex(hash_text));
 	if (!error)
 	{
+		boost::property_tree::ptree block_l;
 		czr::transaction transaction(node.store.environment, nullptr, false);
 		auto block(node.store.block_get(transaction, hash));
 		if (block != nullptr)
 		{
-			boost::property_tree::ptree block_l;
 			block->serialize_json(block_l);
 
 			czr::block_state state;
 			bool error(node.store.block_state_get(transaction, hash, state));
 			assert(!error);
 			state.serialize_json(block_l);
-
-			response(block_l);
 		}
-		else
-		{
-			error_response(response, "Block not found");
-		}
+		response(block_l);
 	}
 	else
 	{

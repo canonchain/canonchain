@@ -1070,7 +1070,7 @@ void czr::block_store::my_witness_list_put(MDB_txn * transaction_a, czr::witness
 	assert(status == 0);
 }
 
-bool czr::block_store::unhandled_get(MDB_txn * transaction_a, czr::block_hash const & hash_a, czr::joint_message & joint)
+bool czr::block_store::unhandled_get(MDB_txn * transaction_a, czr::block_hash const & hash_a, dev::bytes & rlp)
 {
 	czr::mdb_val value;
 	auto status(mdb_get(transaction_a, unhandled, czr::mdb_val(hash_a), value));
@@ -1081,22 +1081,15 @@ bool czr::block_store::unhandled_get(MDB_txn * transaction_a, czr::block_hash co
 	}
 	else
 	{
-		dev::RLP r(reinterpret_cast<byte *>(value.data()), value.size());
-		joint = czr::joint_message(result, r);
+		rlp = dev::bytes(reinterpret_cast<byte *>(value.data()), reinterpret_cast<byte *>(value.data()) + value.size());
 		assert(!result);
 	}
 	return result;
 }
 
-void czr::block_store::unhandled_put(MDB_txn * transaction_a, czr::block_hash const & hash_a, czr::joint_message const & joint)
+void czr::block_store::unhandled_put(MDB_txn * transaction_a, czr::block_hash const & hash_a, dev::bytes & rlp)
 {
-	dev::bytes b;
-	{
-		dev::RLPStream s;
-		joint.stream_RLP(s);
-		s.swapOut(b);
-	}
-	auto status(mdb_put(transaction_a, unhandled, czr::mdb_val(hash_a), czr::mdb_val(b.size(), b.data()), 0));
+	auto status(mdb_put(transaction_a, unhandled, czr::mdb_val(hash_a), czr::mdb_val(rlp.size(), rlp.data()), 0));
 	assert(status == 0);
 }
 

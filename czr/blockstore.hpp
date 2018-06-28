@@ -156,8 +156,8 @@ namespace czr
 		bool my_witness_list_get(MDB_txn * transaction_a, czr::witness_list_info & my_wl_info);
 		void my_witness_list_put(MDB_txn * transaction_a, czr::witness_list_info my_wl_info);
 
-		bool unhandled_get(MDB_txn * transaction_a, czr::block_hash const & hash_a, czr::joint_message & joint);
-		void unhandled_put(MDB_txn * transaction_a, czr::block_hash const & hash_a, czr::joint_message const & joint);
+		bool unhandled_get(MDB_txn * transaction_a, czr::block_hash const & hash_a, dev::bytes & rlp);
+		void unhandled_put(MDB_txn * transaction_a, czr::block_hash const & hash_a, dev::bytes & rlp);
 		void unhandled_del(MDB_txn * transaction_a, czr::block_hash const & hash_a);
 
 		void flush(MDB_txn *);

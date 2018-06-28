@@ -385,10 +385,14 @@ void czr::block_processor::process_receive_many(std::deque<czr::block_processor_
 							node.store.unhandled_dependency_exists(transaction, unhandled_hash);
 							if (!dependency_exists)
 							{
-								czr::joint_message jm;
-								node.store.unhandled_get(transaction, unhandled_hash, jm);
+								dev::bytes b;
+								node.store.unhandled_get(transaction, unhandled_hash, b);
 								node.store.unhandled_del(transaction, unhandled_hash);
-								blocks_processing.push_front(jm);
+								bool error(false);
+								czr::block_processor_item item(error, dev::RLP(b));
+								assert(!error);
+								if (!error)
+									blocks_processing.push_front(item);
 							}
 						}
 						break;
@@ -452,8 +456,15 @@ czr::validate_result czr::block_processor::process_receive_one(MDB_txn * transac
 			{
 				BOOST_LOG(node.log) << boost::str(boost::format("Missing parents and previous for: %1%") % b_hash.to_string());
 			}
+
+			dev::bytes b;
+			{
+				dev::RLPStream s;
+				item.stream_RLP(s);
+				s.swapOut(b);
+			}
+			node.store.unhandled_put(transaction_a, b_hash, b);
 			std::list<block_hash> missing_parents_and_previous(result.missing_parents_and_previous);
-			node.store.unhandled_put(transaction_a, b_hash, joint);
 			for (czr::block_hash p_missing : missing_parents_and_previous)
 			{
 				node.store.unhandled_dependency_put(transaction_a, b_hash, p_missing);

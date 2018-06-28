@@ -177,6 +177,26 @@ namespace czr
 		{
 		}
 
+		block_processor_item(bool & error_a, dev::RLP const & r)
+		{
+			error_a = r.itemCount() != 2;
+			if (error_a)
+				return;
+
+			joint = czr::joint_message(error_a, r[0]);
+			if (error_a)
+				return;
+
+			remote_node_id = (p2p::node_id)r[1];
+		}
+
+		void stream_RLP(dev::RLPStream & s) const
+		{
+			s.appendList(2);
+			joint.stream_RLP(s);
+			s << remote_node_id;
+		}
+
 		bool is_local() const
 		{
 			return remote_node_id.is_zero();
