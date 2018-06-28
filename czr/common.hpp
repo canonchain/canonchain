@@ -108,18 +108,17 @@ namespace czr
 		czr::mdb_val val() const;
 		void serialize_json(boost::property_tree::ptree & tree);
 
-		bool is_free;
-		uint64_t level;
-		uint64_t witnessed_level;
-		czr::block_hash best_parent;
-
-		bool is_stable;
 		bool is_fork;	//fork, not to pay fee, need clear content
 		bool is_invalid;	//invalid, not to pay fee, need clear content
 		bool is_fail;	//fail, pay fee, no need to clear content
+		bool is_free;
+		bool is_stable;
 		bool is_on_main_chain;
 		boost::optional<uint64_t> main_chain_index;
 		boost::optional<uint64_t> latest_included_mc_index;
+		uint64_t level;
+		uint64_t witnessed_level;
+		czr::block_hash best_parent;
 		uint64_t mc_timestamp;
 		czr::account_state_hash from_state;
 		czr::account_state_hash to_state;
