@@ -201,8 +201,11 @@ czr::block_store::block_store(bool & error_a, boost::filesystem::path const & pa
 	summary_block(0),
 	skiplist(0),
 	fork_successor(0),
-	prop(0),
-	unhandled_dependency(0)
+    unhandled(0),
+    
+
+    unhandled_dependency(0),
+	prop(0)
 {
 	if (!error_a)
 	{
@@ -225,6 +228,7 @@ czr::block_store::block_store(bool & error_a, boost::filesystem::path const & pa
 		error_a |= mdb_dbi_open(transaction, "summary_block", MDB_CREATE, &summary_block) != 0;
 		error_a |= mdb_dbi_open(transaction, "skiplist", MDB_CREATE, &skiplist) != 0;
 		error_a |= mdb_dbi_open(transaction, "fork_successor", MDB_CREATE, &fork_successor) != 0;
+		error_a |= mdb_dbi_open(transaction, "unhandled", MDB_CREATE, &unhandled) != 0;
 		error_a |= mdb_dbi_open(transaction, "prop", MDB_CREATE, &prop) != 0;
 		error_a |= mdb_dbi_open(transaction, "unhandled_dependency", MDB_CREATE, &unhandled_dependency) != 0;
 	}
@@ -1030,6 +1034,42 @@ void czr::block_store::my_witness_list_put(MDB_txn * transaction_a, czr::witness
 		s.swapOut(b);
 	}
 	auto status(mdb_put(transaction_a, prop, czr::mdb_val(my_witness_list_key), czr::mdb_val(b.size(), b.data()), 0));
+	assert(status == 0);
+}
+
+bool czr::block_store::unhandled_get(MDB_txn * transaction_a, czr::block_hash const & hash_a, czr::joint_message & joint)
+{
+	czr::mdb_val value;
+	auto status(mdb_get(transaction_a, unhandled, czr::mdb_val(hash_a), value));
+	bool result(false);
+	if (status == MDB_NOTFOUND)
+	{
+		result = true;
+	}
+	else
+	{
+		dev::RLP r(reinterpret_cast<byte *>(value.data()), value.size());
+		joint = czr::joint_message(result, r);
+		assert(!result);
+	}
+	return result;
+}
+
+void czr::block_store::unhandled_put(MDB_txn * transaction_a, czr::block_hash const & hash_a, czr::joint_message const & joint)
+{
+	dev::bytes b;
+	{
+		dev::RLPStream s;
+		joint.stream_RLP(s);
+		s.swapOut(b);
+	}
+	auto status(mdb_put(transaction_a, unhandled, czr::mdb_val(hash_a), czr::mdb_val(b.size(), b.data()), 0));
+	assert(status == 0);
+}
+
+void czr::block_store::unhandled_del(MDB_txn * transaction_a, czr::block_hash const & hash_a)
+{
+	auto status(mdb_del(transaction_a, unhandled, czr::mdb_val(hash_a), nullptr));
 	assert(status == 0);
 }
 

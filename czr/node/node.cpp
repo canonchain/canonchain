@@ -374,25 +374,32 @@ void czr::block_processor::process_receive_many(std::deque<czr::block_processor_
 				while (!blocks_processing.empty() && std::chrono::steady_clock::now() < cutoff)
 				{
 					auto item(blocks_processing.front());
-					auto block = item.joint.block;
 					blocks_processing.pop_front();
-					auto hash(block->hash());
 					auto result(process_receive_one(transaction, item.joint));
 					switch (result.code)
 					{
 					case czr::validate_result_codes::ok:
 					case czr::validate_result_codes::old:
 					{
-						//todo:check unhandle_message db if any unhandle message can be process again;
+						auto block = item.joint.block;
+						auto b_hash(block->hash());
 
-						//auto cached(node.store.unchecked_get(transaction, hash));
-						//for (auto i(cached.begin()), n(cached.end()); i != n; ++i)
-						//{
-						//	node.store.unchecked_del(transaction, hash, **i);
-						//	blocks_processing.push_front(czr::block_processor_item(*i));
-						//}
-						//std::lock_guard<std::mutex> lock(node.gap_cache.mutex);
-						//node.gap_cache.blocks.get<1>().erase(hash);
+						std::list<czr::block_hash> unhandleds;
+						//todo:dependency_unhandled_get(transaction, b_hash, unhandleds);
+						for (czr::block_hash unhandled_hash : unhandleds)
+						{
+							//todo:dependency_unhandled_del(transaction, b_hash, unhandled_hash);
+							//todo:unhandled_dependency_del(transaction, unhandled_hash, b_hash);
+							bool dependency_exists;
+							//todo:unhandled_dependency_exists(transaction, unhandled_hash);
+							if (!dependency_exists)
+							{
+								czr::joint_message jm;
+								node.store.unhandled_get(transaction, unhandled_hash, jm);
+								node.store.unhandled_del(transaction, unhandled_hash);
+								blocks_processing.push_front(jm);
+							}
+						}
 						break;
 					}
 					default:
@@ -440,12 +447,18 @@ czr::validate_result czr::block_processor::process_receive_one(MDB_txn * transac
 		}
 		case czr::validate_result_codes::missing_parents_and_previous:
 		{
+			czr::block_hash b_hash(message.block->hash());
 			if (node.config.logging.ledger_logging())
 			{
-				BOOST_LOG(node.log) << boost::str(boost::format("Missing parents and previous for: %1%") % message.block->hash().to_string());
+				BOOST_LOG(node.log) << boost::str(boost::format("Missing parents and previous for: %1%") % b_hash.to_string());
 			}
-			std::vector<block_hash> missing_parents_and_previous(result.missing_parents_and_previous);
-			//todo: store message to unhandle_message db 
+			std::list<block_hash> missing_parents_and_previous(result.missing_parents_and_previous);
+			node.store.unhandled_put(transaction_a, b_hash, message);
+			for (czr::block_hash p_missing : missing_parents_and_previous)
+			{
+				//todo:unhandled_dependency_put(transaction_a, b_hash, p_missing);
+				//todo:dependency_unhandled_put(transaction_a, p_missing, b_hash);
+			}
 			//todo: to request missing parents_and_previous
 			break;
 		}

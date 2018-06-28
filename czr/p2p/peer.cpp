@@ -27,6 +27,8 @@ void peer::register_capability(std::shared_ptr<peer_capability> const & cap)
 
 void peer::start()
 {
+	BOOST_LOG_TRIVIAL(info) << "Peer start, node id: " << m_node_id.to_string();
+
 	auto this_l(shared_from_this());
 	for (auto pc : capabilities)
 		pc->cap->on_connect(this_l, pc->offset);
@@ -181,7 +183,7 @@ bool peer::read_packet(unsigned const & type, dev::RLP const & r)
 		auto this_l(shared_from_this());
 		for (auto & p_cap : capabilities)
 		{
-			if (type >= p_cap->offset && type < p_cap->cap->packet_count())
+			if (type >= p_cap->offset && type < p_cap->offset + p_cap->cap->packet_count())
 				return p_cap->cap->read_packet(this_l, type - p_cap->offset, r);
 		}
 

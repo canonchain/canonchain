@@ -12,23 +12,6 @@
 namespace czr
 {
 
-class joint_message
-{
-public:
-	joint_message(std::shared_ptr<czr::block>);
-	joint_message (bool & error_a, dev::RLP const & r);
-	void stream_RLP(dev::RLPStream & s) const;
-
-	std::shared_ptr<czr::block> block;
-	czr::summary_hash summary_hash = 0;
-	std::vector<block_hash> block_skiplist;
-	bool is_fork;
-	bool is_invalid;
-	bool is_fail;
-	czr::account_state_hash from_state;
-	czr::account_state_hash to_state;
-};
-
 enum class validate_result_codes
 {
 	ok, // Hasn't been seen before, signed correctly
@@ -46,7 +29,7 @@ class validate_result
 public:
 	czr::validate_result_codes code;
 	std::string err_msg;
-	std::vector<czr::block_hash> missing_parents_and_previous;
+	std::list<czr::block_hash> missing_parents_and_previous;
 	czr::account account;
 	czr::amount amount;
 };
