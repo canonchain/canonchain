@@ -45,7 +45,6 @@ public:
 	boost::asio::ip::address address;
 	uint16_t port;
 	bool enable_control;
-	rpc_secure_config secure;
 };
 enum class payment_status
 {

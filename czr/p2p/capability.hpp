@@ -26,7 +26,7 @@ namespace czr
 		{
 		public:
 			icapability(capability_desc const & desc_a, unsigned const & packet_count);
-			virtual void on_connect(std::shared_ptr<peer> peer_a) = 0;
+			virtual void on_connect(std::shared_ptr<p2p::peer> peer_a, unsigned const & offset) = 0;
 			virtual void on_disconnect(std::shared_ptr<peer> peer_a) = 0;
 			virtual bool read_packet(std::shared_ptr<peer> peer_a, unsigned const & type, dev::RLP const & r) = 0;
 			unsigned packet_count() const;
