@@ -290,11 +290,6 @@ bool czr::node_config::deserialize_json(bool & upgraded_a, boost::property_tree:
 	return result;
 }
 
-czr::block_processor_item::block_processor_item(czr::joint_message joint_a) :
-	joint(joint_a)
-{
-}
-
 czr::block_processor::block_processor(czr::node & node_a) :
 	stopped(false),
 	idle(true),
@@ -326,7 +321,10 @@ void czr::block_processor::flush()
 void czr::block_processor::add(czr::block_processor_item const & item_a)
 {
 	std::lock_guard<std::mutex> lock(mutex);
-	blocks.push_back(item_a);
+	if (item_a.is_local())
+		blocks.push_front(item_a);
+	else
+		blocks.push_back(item_a);
 	condition.notify_all();
 }
 
@@ -355,13 +353,6 @@ void czr::block_processor::process_blocks()
 	}
 }
 
-void czr::block_processor::process_receive_many(czr::block_processor_item const & item_a)
-{
-	std::deque<czr::block_processor_item> blocks_processing;
-	blocks_processing.push_back(item_a);
-	process_receive_many(blocks_processing);
-}
-
 void czr::block_processor::process_receive_many(std::deque<czr::block_processor_item> & blocks_processing)
 {
 	while (!blocks_processing.empty())
@@ -375,7 +366,7 @@ void czr::block_processor::process_receive_many(std::deque<czr::block_processor_
 				{
 					auto item(blocks_processing.front());
 					blocks_processing.pop_front();
-					auto result(process_receive_one(transaction, item.joint));
+					auto result(process_receive_one(transaction, item));
 					switch (result.code)
 					{
 					case czr::validate_result_codes::ok:
@@ -385,13 +376,13 @@ void czr::block_processor::process_receive_many(std::deque<czr::block_processor_
 						auto b_hash(block->hash());
 
 						std::list<czr::block_hash> unhandleds;
-						//todo:dependency_unhandled_get(transaction, b_hash, unhandleds);
+						//todo:node.store.dependency_unhandled_get(transaction, b_hash, unhandleds);
 						for (czr::block_hash unhandled_hash : unhandleds)
 						{
-							//todo:dependency_unhandled_del(transaction, b_hash, unhandled_hash);
-							//todo:unhandled_dependency_del(transaction, unhandled_hash, b_hash);
+							//todo:node.store.dependency_unhandled_del(transaction, b_hash, unhandled_hash);
+							//todo:node.store.unhandled_dependency_del(transaction, unhandled_hash, b_hash);
 							bool dependency_exists;
-							//todo:unhandled_dependency_exists(transaction, unhandled_hash);
+							//todo:node.store.unhandled_dependency_exists(transaction, unhandled_hash);
 							if (!dependency_exists)
 							{
 								czr::joint_message jm;
@@ -417,23 +408,24 @@ void czr::block_processor::process_receive_many(std::deque<czr::block_processor_
 	}
 }
 
-czr::validate_result czr::block_processor::process_receive_one(MDB_txn * transaction_a, czr::joint_message const & message)
+czr::validate_result czr::block_processor::process_receive_one(MDB_txn * transaction_a, czr::block_processor_item const & item)
 {
-	czr::validate_result result(node.validation->validate(transaction_a, message));
+	czr::joint_message const & joint(item.joint);
+	czr::validate_result result(node.validation->validate(transaction_a, item.joint));
 
 	switch (result.code)
 	{
 		case czr::validate_result_codes::ok:
 		{
-			node.chain->save_block(transaction_a, *message.block);
+			node.chain->save_block(transaction_a, *joint.block);
 
 			//send block
-			node.capability->send_block(message);
+			node.capability->send_block(joint);
 
 			if (node.config.logging.ledger_logging())
 			{
-				std::string const & json(message.block->to_json());
-				BOOST_LOG(node.log) << boost::str(boost::format("Processing block %1% %2%") % message.block->hash().to_string() % json);
+				std::string const & json(joint.block->to_json());
+				BOOST_LOG(node.log) << boost::str(boost::format("Processing block %1% %2%") % joint.block->hash().to_string() % json);
 			}
 			break;
 		}
@@ -441,23 +433,25 @@ czr::validate_result czr::block_processor::process_receive_one(MDB_txn * transac
 		{
 			if (node.config.logging.ledger_duplicate_logging())
 			{
-				BOOST_LOG(node.log) << boost::str(boost::format("Old for: %1%") % message.block->hash().to_string());
+				BOOST_LOG(node.log) << boost::str(boost::format("Old for: %1%") % joint.block->hash().to_string());
 			}
 			break;
 		}
 		case czr::validate_result_codes::missing_parents_and_previous:
 		{
-			czr::block_hash b_hash(message.block->hash());
+			assert(!item.is_local());
+
+			czr::block_hash b_hash(joint.block->hash());
 			if (node.config.logging.ledger_logging())
 			{
 				BOOST_LOG(node.log) << boost::str(boost::format("Missing parents and previous for: %1%") % b_hash.to_string());
 			}
 			std::list<block_hash> missing_parents_and_previous(result.missing_parents_and_previous);
-			node.store.unhandled_put(transaction_a, b_hash, message);
+			node.store.unhandled_put(transaction_a, b_hash, joint);
 			for (czr::block_hash p_missing : missing_parents_and_previous)
 			{
-				//todo:unhandled_dependency_put(transaction_a, b_hash, p_missing);
-				//todo:dependency_unhandled_put(transaction_a, p_missing, b_hash);
+				//todo:node.store.unhandled_dependency_put(transaction_a, b_hash, p_missing);
+				//todo:node.store.dependency_unhandled_put(transaction_a, p_missing, b_hash);
 			}
 			//todo: to request missing parents_and_previous
 			break;
@@ -466,7 +460,7 @@ czr::validate_result czr::block_processor::process_receive_one(MDB_txn * transac
 		{
 			if (node.config.logging.ledger_logging())
 			{
-				BOOST_LOG(node.log) << boost::str(boost::format("Missing hash tree summary for: %1%") % message.block->hash().to_string());
+				BOOST_LOG(node.log) << boost::str(boost::format("Missing hash tree summary for: %1%") % joint.block->hash().to_string());
 			}
 			//todo:to request catchup
 			break;
@@ -476,13 +470,13 @@ czr::validate_result czr::block_processor::process_receive_one(MDB_txn * transac
 			if (node.config.logging.ledger_logging())
 			{
 				BOOST_LOG(node.log) << boost::str(boost::format("Exec timestamp too late, block: %1%, exec_timestamp: %2%")
-					% message.block->hash().to_string() % message.block->hashables.exec_timestamp);
+					% joint.block->hash().to_string() % joint.block->hashables.exec_timestamp);
 			}
 
 			//cache late message
-			if (message.block->hashables.exec_timestamp < czr::seconds_since_epoch() + 600) //10 minutes
+			if (joint.block->hashables.exec_timestamp < czr::seconds_since_epoch() + 600) //10 minutes
 			{
-				node.late_message_cache.add(message);
+				node.late_message_cache.add(item);
 			}
 
 			break;
@@ -491,18 +485,18 @@ czr::validate_result czr::block_processor::process_receive_one(MDB_txn * transac
 		{
 			if (node.config.logging.ledger_logging())
 			{
-				BOOST_LOG(node.log) << boost::str(boost::format("Invalid block: %1%, error message: %2%") % message.block->hash().to_string() % result.err_msg);
+				BOOST_LOG(node.log) << boost::str(boost::format("Invalid block: %1%, error message: %2%") % joint.block->hash().to_string() % result.err_msg);
 			}
 
 			//cache invalid block
-			node.invalid_block_cache.add(message.block->hash());
+			node.invalid_block_cache.add(joint.block->hash());
 			break;
 		}
 		case czr::validate_result_codes::known_invalid_block:
 		{
 			if (node.config.logging.ledger_logging())
 			{
-				BOOST_LOG(node.log) << boost::str(boost::format("Known invalid block: %1%") % message.block->hash().to_string());
+				BOOST_LOG(node.log) << boost::str(boost::format("Known invalid block: %1%") % joint.block->hash().to_string());
 			}
 			break;
 		}
@@ -621,10 +615,16 @@ bool czr::node::copy_with_compaction(boost::filesystem::path const & destination
 		destination_file.string().c_str(), MDB_CP_COMPACT);
 }
 
-void czr::node::process_active(czr::joint_message const & message)
+void czr::node::process_local_joint(czr::joint_message const & joint)
 {
-	block_arrival.add(message.block->hash());
-	block_processor.add(message);
+	block_arrival.add(joint.block->hash());
+	block_processor.add(czr::block_processor_item(joint, 0));
+}
+
+void czr::node::process_remote_joint(czr::joint_message const & joint, p2p::node_id const & remote_node_id)
+{
+	block_arrival.add(joint.block->hash());
+	block_processor.add(czr::block_processor_item(joint, remote_node_id));
 }
 
 void czr::node::start()
@@ -687,7 +687,7 @@ void czr::node::ongoing_retry_late_message()
 {
 	auto late_msg_info_list(late_message_cache.purge_list_ealier_than(czr::seconds_since_epoch()));
 	for (auto info : late_msg_info_list)
-		block_processor.add(czr::block_processor_item(info.message));
+		block_processor.add(info.item);
 
 	std::weak_ptr<czr::node> node_w(shared_from_this());
 	alarm.add(std::chrono::steady_clock::now() + std::chrono::seconds(5), [node_w]() {
@@ -999,10 +999,10 @@ czr::inactive_node::~inactive_node()
 	node->stop();
 }
 
-czr::late_message_info::late_message_info(czr::joint_message const & message_a) :
-	message(message_a),
-	timestamp(message_a.block->hashables.exec_timestamp),
-	hash(message_a.block->hash())
+czr::late_message_info::late_message_info(czr::block_processor_item const & item_a) :
+	item(item_a),
+	timestamp(item_a.joint.block->hashables.exec_timestamp),
+	hash(item_a.joint.block->hash())
 {
 }
 
