@@ -146,6 +146,10 @@ namespace czr
 		bool my_witness_list_get(MDB_txn * transaction_a, czr::witness_list_info & my_wl_info);
 		void my_witness_list_put(MDB_txn * transaction_a, czr::witness_list_info my_wl_info);
 
+		bool unhandled_get(MDB_txn * transaction_a, czr::block_hash const & hash_a, czr::joint_message & joint);
+		void unhandled_put(MDB_txn * transaction_a, czr::block_hash const & hash_a, czr::joint_message const & joint);
+		void unhandled_del(MDB_txn * transaction_a, czr::block_hash const & hash_a);
+
 		void flush(MDB_txn *);
 		std::mutex cache_mutex;
 
@@ -193,10 +197,12 @@ namespace czr
 		MDB_dbi skiplist;
 		//pervious block hash -> block hash
 		MDB_dbi fork_successor;
+		//joint block hash -> joint
+		MDB_dbi unhandled;
 		//key -> value
 		MDB_dbi prop;
 
-		
+
 		//genesis hash key
 		static czr::uint256_union const genesis_hash_key;
 		//last statble main chain index key

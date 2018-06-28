@@ -170,6 +170,24 @@ namespace czr
 		std::vector<czr::block_hash> list;
 	};
 
+	class joint_message
+	{
+	public:
+		joint_message() = default;
+		joint_message(std::shared_ptr<czr::block>);
+		joint_message(bool & error_a, dev::RLP const & r);
+		void stream_RLP(dev::RLPStream & s) const;
+
+		std::shared_ptr<czr::block> block;
+		czr::summary_hash summary_hash = 0;
+		std::vector<block_hash> block_skiplist;
+		bool is_fork;
+		bool is_invalid;
+		bool is_fail;
+		czr::account_state_hash from_state;
+		czr::account_state_hash to_state;
+	};
+
 	class summary
 	{
 	public:

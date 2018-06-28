@@ -376,6 +376,54 @@ czr::mdb_val czr::mci_block_key::val() const
 	return czr::mdb_val(sizeof(*this), const_cast<czr::mci_block_key *> (this));
 }
 
+czr::joint_message::joint_message(std::shared_ptr<czr::block> block_a) :
+	block(block_a)
+{
+}
+
+czr::joint_message::joint_message(bool & error_a, dev::RLP const & r)
+{
+	if (error_a)
+		return;
+
+	error_a = r.itemCount() != 1 && r.itemCount() != 8;
+	if (error_a)
+		return;
+
+	block = std::make_shared<czr::block>(error_a, r[0]);
+	if (error_a)
+		return;
+
+	if (r.itemCount() > 1)
+	{
+		summary_hash = (czr::summary_hash)r[1];
+		dev::RLP const & sk_list_rlp = r[2];
+		block_skiplist.reserve(sk_list_rlp.itemCount());
+		for (dev::RLP const & sk : sk_list_rlp)
+			block_skiplist.push_back((czr::block_hash)sk);
+		is_fork = (bool)r[3];
+		is_invalid = (bool)r[4];
+		is_fail = (bool)r[5];
+		from_state = (czr::account_state_hash)r[6];
+		to_state = (czr::account_state_hash)r[7];
+	}
+}
+
+void czr::joint_message::stream_RLP(dev::RLPStream & s) const
+{
+	summary_hash.is_zero() ? s.appendList(1) : s.appendList(8);
+	block->stream_RLP(s);
+	if (!summary_hash.is_zero())
+	{
+		s << summary_hash;
+		s.appendList(block_skiplist.size());
+		for (czr::block_hash sk : block_skiplist)
+			s << sk;
+		s << is_fork << is_invalid << is_fail;
+		s << from_state << to_state;
+	}
+}
+
 czr::summary_hash czr::summary::gen_summary_hash(czr::block_hash const & block_hash, std::vector<czr::summary_hash> const & parent_hashs,
 	std::set<czr::summary_hash> const & skiplist, bool const & is_fork, bool const & is_invalid, bool const & is_fail,
 	czr::account_state_hash const & from_state_hash, czr::account_state_hash const & to_state_hash)
