@@ -393,6 +393,12 @@ void czr::block_processor::process_receive_many(std::deque<czr::block_processor_
 						}
 						break;
 					}
+					case czr::validate_result_codes::invalid_block:
+					case czr::validate_result_codes::known_invalid_block:
+					{
+
+						break;
+					}
 					default:
 						break;
 					}
