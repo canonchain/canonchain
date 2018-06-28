@@ -64,7 +64,7 @@ namespace czr
 
 	class witness_list_info
 	{
-	public:
+	public:	
 		witness_list_info();
 		witness_list_info(dev::RLP const & r);
 		witness_list_info(std::vector<czr::account> const &);
@@ -73,8 +73,9 @@ namespace czr
 		bool is_compatible(witness_list_info const &) const;
 		bool contains(czr::account const &) const;
 		std::string to_string() const;
-
 		std::vector<czr::account> witness_list;
+		void sort();
+		
 	};
 	class free_key
 	{
