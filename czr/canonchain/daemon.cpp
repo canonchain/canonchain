@@ -135,9 +135,9 @@ void czr_daemon::daemon::run(boost::filesystem::path const & data_path)
 			{
 				node->start();
 
+				std::unique_ptr<czr::rpc> rpc = get_rpc(io_service, *node, config.rpc);
 				if (config.rpc_enable)
 				{
-					std::unique_ptr<czr::rpc> rpc = get_rpc(io_service, *node, config.rpc);
 					rpc->start();
 				}
 				else

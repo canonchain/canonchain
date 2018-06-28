@@ -130,7 +130,7 @@ void czr::rpc::start()
 	acceptor.listen();
 
 	BOOST_LOG(node.log) << "RPC started, bind on " << endpoint;
-	BOOST_LOG(node.log) << "RPC control is " << config.enable_control ? "enabled" : "disabled";
+	BOOST_LOG(node.log) << "RPC control is " << (config.enable_control ? "enabled" : "disabled");
 
 	accept();
 }
