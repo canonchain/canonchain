@@ -1050,6 +1050,11 @@ std::vector<czr::late_message_info> czr::late_message_cache::purge_list_ealier_t
 	return result;
 }
 
+size_t czr::late_message_cache::size() const
+{
+	return container.size();
+}
+
 czr::invalid_block_cache::invalid_block_cache(size_t const & capacity_a):
 	capacity(capacity_a)
 {
@@ -1067,4 +1072,9 @@ void czr::invalid_block_cache::add(czr::block_hash const & hash_a)
 bool czr::invalid_block_cache::contains(czr::block_hash const & hash_a)
 {
 	return container.get<1>().find(hash_a) != container.get<1>().end();
+}
+
+size_t czr::invalid_block_cache::size() const
+{
+	return container.size();
 }

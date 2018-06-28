@@ -562,15 +562,6 @@ void czr::block_store::unchecked_del(MDB_txn * transaction_a, czr::block_hash co
 	assert(status == 0 || status == MDB_NOTFOUND);
 }
 
-size_t czr::block_store::unchecked_count(MDB_txn * transaction_a)
-{
-	MDB_stat unchecked_stats;
-	auto status(mdb_stat(transaction_a, unchecked, &unchecked_stats));
-	assert(status == 0);
-	auto result(unchecked_stats.ms_entries);
-	return result;
-}
-
 czr::store_iterator czr::block_store::unchecked_begin(MDB_txn * transaction_a)
 {
 	czr::store_iterator result(transaction_a, unchecked);
@@ -587,6 +578,11 @@ czr::store_iterator czr::block_store::unchecked_end()
 {
 	czr::store_iterator result(nullptr);
 	return result;
+}
+
+size_t czr::block_store::unchecked_count(MDB_txn *)
+{
+	return size_t();
 }
 
 void czr::block_store::flush(MDB_txn * transaction_a)
@@ -1097,6 +1093,15 @@ void czr::block_store::unhandled_del(MDB_txn * transaction_a, czr::block_hash co
 {
 	auto status(mdb_del(transaction_a, unhandled, czr::mdb_val(hash_a), nullptr));
 	assert(status == 0);
+}
+
+size_t czr::block_store::unhandled_count(MDB_txn * transaction_a)
+{
+	MDB_stat unhandled_stats;
+	auto status(mdb_stat(transaction_a, unhandled, &unhandled_stats));
+	assert(status == 0);
+	auto result(unhandled_stats.ms_entries);
+	return result;
 }
 
 czr::uint256_union const czr::block_store::genesis_hash_key(0); 

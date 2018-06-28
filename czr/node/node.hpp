@@ -245,6 +245,7 @@ namespace czr
 
 		void add(czr::late_message_info const & info);
 		std::vector<czr::late_message_info> purge_list_ealier_than(uint64_t const & timestamp);
+		size_t size() const;
 
 	private:
 		boost::multi_index_container<
@@ -263,6 +264,7 @@ namespace czr
 
 		void add(czr::block_hash const & hash_a);
 		bool contains(czr::block_hash const & hash_a);
+		size_t size() const;
 
 	private:
 		boost::multi_index_container<

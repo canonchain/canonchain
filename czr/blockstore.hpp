@@ -159,6 +159,7 @@ namespace czr
 		bool unhandled_get(MDB_txn * transaction_a, czr::block_hash const & hash_a, dev::bytes & rlp);
 		void unhandled_put(MDB_txn * transaction_a, czr::block_hash const & hash_a, dev::bytes & rlp);
 		void unhandled_del(MDB_txn * transaction_a, czr::block_hash const & hash_a);
+		size_t unhandled_count(MDB_txn * transaction_a);
 
 		void flush(MDB_txn *);
 		std::mutex cache_mutex;

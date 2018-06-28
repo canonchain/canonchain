@@ -215,7 +215,7 @@ void czr::rpc_handler::account_list()
 void czr::rpc_handler::account_validate()
 {
 	std::string account_text(request.get<std::string>("account"));
-	czr::uint256_union account;
+	czr::account account;
 	auto error(account.decode_account(account_text));
 	boost::property_tree::ptree response_l;
 	response_l.put("valid", error ? "0" : "1");
@@ -578,6 +578,7 @@ void czr::rpc_handler::blocks()
 {
 	std::vector<std::string> hashes;
 	boost::property_tree::ptree response_l;
+	boost::property_tree::ptree blocks_l;
 	czr::transaction transaction(node.store.environment, nullptr, false);
 	for (boost::property_tree::ptree::value_type & hashes : request.get_child("hashes"))
 	{
@@ -597,18 +598,16 @@ void czr::rpc_handler::blocks()
 				assert(!error);
 				state.serialize_json(block_l);
 
-				response_l.add_child(hash_text, block_l);
-			}
-			else
-			{
-				error_response(response, "Block not found");
+				blocks_l.push_back(std::make_pair("", block_l));
 			}
 		}
 		else
 		{
 			error_response(response, "Invalid hash");
+			return;
 		}
 	}
+	response_l.add_child("blocks", blocks_l);
 	response(response_l);
 }
 
@@ -616,10 +615,72 @@ void czr::rpc_handler::block_count()
 {
 	czr::transaction transaction(node.store.environment, nullptr, false);
 	boost::property_tree::ptree response_l;
-	response_l.put("count", std::to_string(node.store.block_count(transaction)));
-	response_l.put("unchecked", std::to_string(node.store.unchecked_count(transaction)));
-	response(response_l);
+	response_l.put("handled", std::to_string(node.store.block_count(transaction)));
+	response_l.put("unhandled", std::to_string(node.store.unhandled_count(transaction)));
+	response_l.put("late", std::to_string(node.late_message_cache.size()));
+	response_l.put("invalid", std::to_string(node.invalid_block_cache.size()));
 }
+
+void czr::rpc_handler::block_list()
+{
+	std::string account_text(request.get<std::string>("account"));
+	czr::account account;
+	auto error(account.decode_account(account_text));
+
+	std::uint32_t limit(request.get<std::uint32_t>("limit"));
+
+	if (!error)
+	{
+		czr::transaction transaction(node.store.environment, nullptr, false);
+		czr::block_hash last_hash(0);
+		boost::optional<std::string> last_hash_text(request.get_optional<std::string>("last_hash"));
+		if (last_hash_text)
+		{
+			error = last_hash.decode_hex(*last_hash_text);
+			if (error)
+			{
+				error_response(response, "Invalid last_hash");
+				return;
+			}
+		}
+		else
+		{
+			czr::account_info info;
+			bool error(node.store.account_get(transaction, account, info));
+			if (!error)
+			{
+				last_hash = info.head;
+			}
+		}
+
+		boost::property_tree::ptree resp_l;
+		boost::property_tree::ptree blocks_l;
+		int i = 0;
+		while (i++ < limit && !last_hash.is_zero())
+		{
+			boost::property_tree::ptree block_l;
+			auto block = node.store.block_get(transaction, last_hash);
+			if (!block)
+				break;
+			block->serialize_json(block_l);
+
+			czr::block_state state;
+			bool error(node.store.block_state_get(transaction, last_hash, state));
+			assert(!error);
+			state.serialize_json(block_l);
+
+			blocks_l.push_back(std::make_pair("", block_l));
+			last_hash = block->previous();
+		}
+		resp_l.add_child("list", blocks_l);
+		response(resp_l);
+	}
+	else
+	{
+		error_response(response, "Invalid account");
+	}
+}
+
 
 //todo: add secure send method without password
 void czr::rpc_handler::send()
@@ -742,6 +803,7 @@ void czr::rpc_handler::version()
 	response_l.put("store_version", std::to_string(node.store_version()));
 	response(response_l);
 }
+
 void czr::rpc_handler::witness_list_set()
 {
 	if (!rpc.config.enable_control)
@@ -798,6 +860,7 @@ void czr::rpc_handler::witness_list_set()
 	response(response_l);
 
 }
+
 void czr::rpc_handler::witness_list()
 {
 	czr::witness_list_info  wl_infoget;
@@ -1003,6 +1066,10 @@ void czr::rpc_handler::process_request()
 		else if (action == "block_count")
 		{
 			block_count();
+		}
+		else if (action == "block_list")
+		{
+			block_list();
 		}
 
 		else if (action == "stop")
