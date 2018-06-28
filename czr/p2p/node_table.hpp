@@ -61,8 +61,8 @@ namespace czr
 				//rlp sig : S(H(packet type || packet))
 				czr::signature rlp_sig(czr::sign_message(prv_a, packet_a.source_id, rlp_hash));
 
-				BOOST_LOG_TRIVIAL(debug) << boost::str(boost::format("send packet sig, node id:%1%, hash:%2%, sig:%3%") 
-					% packet_a.source_id.to_string() % rlp_hash.to_string() % rlp_sig.to_string());
+				//BOOST_LOG_TRIVIAL(debug) << boost::str(boost::format("send packet sig, node id:%1%, hash:%2%, sig:%3%") 
+				//	% packet_a.source_id.to_string() % rlp_hash.to_string() % rlp_sig.to_string());
 
 				//data:  H( node id || rlp sig || rlp ) || node id || rlp sig || rlp 
 				data.resize(sizeof(hash256) + sizeof(node_id) + sizeof(czr::signature) + rlp.size());

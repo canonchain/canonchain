@@ -304,7 +304,7 @@ std::unique_ptr<discover_packet> node_table::interpret_packet(bi::udp::endpoint 
 
 	hash256 rlp_hash(blake2b_hash(rlp_cref));
 
-	BOOST_LOG_TRIVIAL(debug) << boost::str(boost::format("receive packet sig, node id:%1%, hash:%2%, sig:%3%") % from_node_id.to_string() % rlp_hash.to_string() % rlp_sig.to_string());
+	//BOOST_LOG_TRIVIAL(debug) << boost::str(boost::format("receive packet sig, node id:%1%, hash:%2%, sig:%3%") % from_node_id.to_string() % rlp_hash.to_string() % rlp_sig.to_string());
 
 	bool is_bad_sig(czr::validate_message(from_node_id, rlp_hash, rlp_sig));
 	if (is_bad_sig)
