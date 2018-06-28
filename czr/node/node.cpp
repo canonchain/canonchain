@@ -650,7 +650,6 @@ void czr::node::start()
 
 	host->register_capability(capability);
 	host->start();
-	ongoing_store_flush();
 	ongoing_retry_late_message();
 }
 
@@ -683,21 +682,6 @@ std::unique_ptr<czr::block> czr::node::block(czr::block_hash const & hash_a)
 {
 	czr::transaction transaction(store.environment, nullptr, false);
 	return store.block_get(transaction, hash_a);
-}
-
-void czr::node::ongoing_store_flush()
-{
-	{
-		czr::transaction transaction(store.environment, nullptr, true);
-		store.flush(transaction);
-	}
-	std::weak_ptr<czr::node> node_w(shared_from_this());
-	alarm.add(std::chrono::steady_clock::now() + std::chrono::seconds(5), [node_w]() {
-		if (auto node_l = node_w.lock())
-		{
-			node_l->ongoing_store_flush();
-		}
-	});
 }
 
 void czr::node::ongoing_retry_late_message()

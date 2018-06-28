@@ -124,7 +124,6 @@ void czr::witness_list_info::stream_RLP(dev::RLPStream & s) const
 }
 
 
-
 czr::witness_list_hash czr::witness_list_info::hash() const
 {
 	czr::uint256_union result;

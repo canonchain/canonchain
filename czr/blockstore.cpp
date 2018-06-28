@@ -187,7 +187,6 @@ czr::block_store::block_store(bool & error_a, boost::filesystem::path const & pa
 	account_state(0),
 	latest_account_state(0),
 	blocks(0),
-	unchecked(0),
 	meta(0),
 	block_witness_list(0),
 	witness_list_hash_block(0),
@@ -213,7 +212,6 @@ czr::block_store::block_store(bool & error_a, boost::filesystem::path const & pa
 		error_a |= mdb_dbi_open(transaction, "account_state", MDB_CREATE, &account_state) != 0;
 		error_a |= mdb_dbi_open(transaction, "latest_account_state", MDB_CREATE, &latest_account_state) != 0;
 		error_a |= mdb_dbi_open(transaction, "blocks", MDB_CREATE, &blocks) != 0;
-		error_a |= mdb_dbi_open(transaction, "unchecked", MDB_CREATE | MDB_DUPSORT, &unchecked) != 0;
 		error_a |= mdb_dbi_open(transaction, "meta", MDB_CREATE, &meta) != 0;
 		error_a |= mdb_dbi_open(transaction, "block_witness_list", MDB_CREATE, &block_witness_list) != 0;
 		error_a |= mdb_dbi_open(transaction, "witness_list_hash_block", MDB_CREATE, &witness_list_hash_block) != 0;
@@ -385,7 +383,6 @@ void czr::block_store::block_successor_clear(MDB_txn * transaction_a, czr::block
 }
 
 
-
 void czr::block_store::account_del(MDB_txn * transaction_a, czr::account const & account_a)
 {
 	auto status(mdb_del(transaction_a, account_info, czr::mdb_val(account_a), nullptr));
@@ -487,122 +484,6 @@ void czr::block_store::latest_account_state_put(MDB_txn * transaction_a, czr::ac
 {
 	auto status(mdb_put(transaction_a, latest_account_state, czr::mdb_val(account_a), value_a.val(), 0));
 	assert(status == 0);
-}
-
-
-void czr::block_store::unchecked_clear(MDB_txn * transaction_a)
-{
-	auto status(mdb_drop(transaction_a, unchecked, 0));
-	assert(status == 0);
-}
-
-void czr::block_store::unchecked_put(MDB_txn * transaction_a, czr::block_hash const & hash_a, std::shared_ptr<czr::block> const & block_a)
-{
-	// Checking if same unchecked block is already in database
-	bool exists(false);
-	auto block_hash(block_a->hash());
-	auto cached(unchecked_get(transaction_a, hash_a));
-	for (auto i(cached.begin()), n(cached.end()); i != n && !exists; ++i)
-	{
-		if ((*i)->hash() == block_hash)
-		{
-			exists = true;
-		}
-	}
-	// Inserting block if it wasn't found in database
-	if (!exists)
-	{
-		std::lock_guard<std::mutex> lock(cache_mutex);
-		unchecked_cache.insert(std::make_pair(hash_a, block_a));
-	}
-}
-
-std::vector<std::shared_ptr<czr::block>> czr::block_store::unchecked_get(MDB_txn * transaction_a, czr::block_hash const & hash_a)
-{
-	std::vector<std::shared_ptr<czr::block>> result;
-	{
-		std::lock_guard<std::mutex> lock(cache_mutex);
-		for (auto i(unchecked_cache.find(hash_a)), n(unchecked_cache.end()); i != n && i->first == hash_a; ++i)
-		{
-			result.push_back(i->second);
-		}
-	}
-	for (auto i(unchecked_begin(transaction_a, hash_a)), n(unchecked_end()); i != n && czr::block_hash(i->first.uint256()) == hash_a; i.next_dup())
-	{
-		dev::bytesConstRef data_cref(reinterpret_cast<byte const *> (i->second.data()), i->second.size());
-		dev::RLP r(data_cref);
-		result.push_back(czr::interpret_block_RLP(r));
-	}
-	return result;
-}
-
-void czr::block_store::unchecked_del(MDB_txn * transaction_a, czr::block_hash const & hash_a, czr::block const & block_a)
-{
-	{
-		std::lock_guard<std::mutex> lock(cache_mutex);
-		for (auto i(unchecked_cache.find(hash_a)), n(unchecked_cache.end()); i != n && i->first == hash_a;)
-		{
-			if (*i->second == block_a)
-			{
-				i = unchecked_cache.erase(i);
-			}
-			else
-			{
-				++i;
-			}
-		}
-	}
-	dev::bytes data;
-	{
-		dev::RLPStream s;
-		block_a.stream_RLP(s);
-		s.swapOut(data);
-	}
-	auto status(mdb_del(transaction_a, unchecked, czr::mdb_val(hash_a), czr::mdb_val(data.size(), data.data())));
-	assert(status == 0 || status == MDB_NOTFOUND);
-}
-
-czr::store_iterator czr::block_store::unchecked_begin(MDB_txn * transaction_a)
-{
-	czr::store_iterator result(transaction_a, unchecked);
-	return result;
-}
-
-czr::store_iterator czr::block_store::unchecked_begin(MDB_txn * transaction_a, czr::block_hash const & hash_a)
-{
-	czr::store_iterator result(transaction_a, unchecked, czr::mdb_val(hash_a));
-	return result;
-}
-
-czr::store_iterator czr::block_store::unchecked_end()
-{
-	czr::store_iterator result(nullptr);
-	return result;
-}
-
-size_t czr::block_store::unchecked_count(MDB_txn *)
-{
-	return size_t();
-}
-
-void czr::block_store::flush(MDB_txn * transaction_a)
-{
-	std::unordered_multimap<czr::block_hash, std::shared_ptr<czr::block>> unchecked_cache_l;
-	{
-		std::lock_guard<std::mutex> lock(cache_mutex);
-		unchecked_cache_l.swap(unchecked_cache);
-	}
-	for (auto & i : unchecked_cache_l)
-	{
-		std::vector<uint8_t> data;
-		{
-			dev::RLPStream s;
-			i.second->stream_RLP(s);
-			s.swapOut(data);
-		}
-		auto status(mdb_put(transaction_a, unchecked, czr::mdb_val(i.first), czr::mdb_val(data.size(), data.data()), 0));
-		assert(status == 0);
-	}
 }
 
 
