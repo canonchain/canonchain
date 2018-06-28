@@ -385,13 +385,14 @@ void czr::block_processor::process_receive_many(std::deque<czr::block_processor_
 						auto b_hash(block->hash());
 
 						std::list<czr::block_hash> unhandleds;
-						//todo:dependency_unhandled_get(transaction, b_hash, unhandleds);
+						node.store.dependency_unhandled_get(transaction, b_hash, unhandleds);
 						for (czr::block_hash unhandled_hash : unhandleds)
 						{
-							//todo:dependency_unhandled_del(transaction, b_hash, unhandled_hash);
-							//todo:unhandled_dependency_del(transaction, unhandled_hash, b_hash);
+							node.store.dependency_unhandled_del(transaction, b_hash, unhandled_hash);
+							node.store.unhandled_dependency_del(transaction, unhandled_hash, b_hash);
+
 							bool dependency_exists;
-							//todo:unhandled_dependency_exists(transaction, unhandled_hash);
+							node.store.unhandled_dependency_exists(transaction, unhandled_hash);
 							if (!dependency_exists)
 							{
 								czr::joint_message jm;
@@ -456,8 +457,8 @@ czr::validate_result czr::block_processor::process_receive_one(MDB_txn * transac
 			node.store.unhandled_put(transaction_a, b_hash, message);
 			for (czr::block_hash p_missing : missing_parents_and_previous)
 			{
-				//todo:unhandled_dependency_put(transaction_a, b_hash, p_missing);
-				//todo:dependency_unhandled_put(transaction_a, p_missing, b_hash);
+				node.store.unhandled_dependency_put(transaction_a, b_hash, p_missing);
+				node.store.dependency_unhandled_put(transaction_a, p_missing, b_hash);
 			}
 			//todo: to request missing parents_and_previous
 			break;

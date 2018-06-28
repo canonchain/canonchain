@@ -202,9 +202,8 @@ czr::block_store::block_store(bool & error_a, boost::filesystem::path const & pa
 	skiplist(0),
 	fork_successor(0),
     unhandled(0),
-    
-
     unhandled_dependency(0),
+	dependency_unhandled(0),
 	prop(0)
 {
 	if (!error_a)
@@ -229,8 +228,10 @@ czr::block_store::block_store(bool & error_a, boost::filesystem::path const & pa
 		error_a |= mdb_dbi_open(transaction, "skiplist", MDB_CREATE, &skiplist) != 0;
 		error_a |= mdb_dbi_open(transaction, "fork_successor", MDB_CREATE, &fork_successor) != 0;
 		error_a |= mdb_dbi_open(transaction, "unhandled", MDB_CREATE, &unhandled) != 0;
-		error_a |= mdb_dbi_open(transaction, "prop", MDB_CREATE, &prop) != 0;
 		error_a |= mdb_dbi_open(transaction, "unhandled_dependency", MDB_CREATE, &unhandled_dependency) != 0;
+		error_a |= mdb_dbi_open(transaction, "dependency_unhandled", MDB_CREATE, &dependency_unhandled) != 0;
+		error_a |= mdb_dbi_open(transaction, "prop", MDB_CREATE, &prop) != 0;
+		
 	}
 }
 
@@ -880,17 +881,49 @@ bool czr::block_store::unhandled_dependency_exists(MDB_txn * transaction_a, czr:
 		result = true;
 	return result;
 }
-void czr::block_store::unhandled_dependency_put(MDB_txn * transaction_a, czr::unhandled_dependency_key const &key)
+
+void czr::block_store::unhandled_dependency_put(MDB_txn * transaction_a, czr::block_hash const &unhandle_a, czr::block_hash const &dependency_a)
 {
-	auto status(mdb_put(transaction_a, mci_block, key.val(), czr::mdb_val(), 0));
+	czr::unhandled_dependency_key key(unhandle_a, dependency_a);
+	auto status(mdb_put(transaction_a, unhandled_dependency, key.val(), czr::mdb_val(), 0));
 	assert(status == 0);
 
 }
-void czr::block_store::unhandled_dependency_del(MDB_txn * transaction_a, czr::unhandled_dependency_key const &key)
+void czr::block_store::unhandled_dependency_del(MDB_txn * transaction_a, czr::block_hash const &unhandle_a, czr::block_hash const &dependency_a)
+
 {
-	auto status(mdb_del(transaction_a, mci_block, key.val(), nullptr));
+	czr::unhandled_dependency_key key(unhandle_a, dependency_a);
+	auto status(mdb_del(transaction_a, unhandled_dependency, key.val(), nullptr));
 	assert(status == 0 || status == MDB_NOTFOUND);
 }
+
+void czr::block_store::dependency_unhandled_get(MDB_txn * transaction_a, czr::block_hash const &dependency_a, std::list<czr::block_hash>& unhandled_list_a)
+{
+	czr::unhandled_dependency_key unhandled_dependency_l(dependency_a,0);
+
+	for (czr::store_iterator i(transaction_a, dependency_unhandled, unhandled_dependency_l.val()), n(nullptr); i != n; ++i)
+	{
+		czr::unhandled_dependency_key key(i->first);
+		if (key.unhandled > dependency_a)
+			break;
+		unhandled_list_a.push_back(key.dependency);
+	}
+}
+
+void czr::block_store::dependency_unhandled_put(MDB_txn * transaction_a, czr::block_hash const &dependency_a, czr::block_hash const &unhandle_a)
+{
+	czr::unhandled_dependency_key key(dependency_a, unhandle_a);
+	auto status(mdb_put(transaction_a, dependency_unhandled, key.val(), czr::mdb_val(), 0));
+	assert(status == 0);
+}
+void czr::block_store::dependency_unhandled_del(MDB_txn * transaction_a, czr::block_hash const &dependency_a, czr::block_hash const &unhandle_a)
+
+{
+	czr::unhandled_dependency_key key(dependency_a, unhandle_a);
+	auto status(mdb_del(transaction_a, dependency_unhandled, key.val(), nullptr));
+	assert(status == 0 || status == MDB_NOTFOUND);
+}
+
 
 void czr::block_store::last_stable_mci_put(MDB_txn * transaction_a, uint64_t const & last_stable_mci_value)
 {
