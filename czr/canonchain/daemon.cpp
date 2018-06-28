@@ -135,11 +135,16 @@ void czr_daemon::daemon::run(boost::filesystem::path const & data_path)
 			{
 				node->start();
 
-				std::unique_ptr<czr::rpc> rpc = get_rpc(io_service, *node, config.rpc);
-				if (rpc && config.rpc_enable)
+				if (config.rpc_enable)
 				{
+					std::unique_ptr<czr::rpc> rpc = get_rpc(io_service, *node, config.rpc);
 					rpc->start();
 				}
+				else
+				{
+					BOOST_LOG(node->log) << "RPC is disabled";
+				}
+
 				runner = std::make_unique<czr::thread_runner>(io_service, config.node.io_threads);
 
 				signal(SIGABRT, &exit_handler::handle);

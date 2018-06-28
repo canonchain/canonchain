@@ -76,12 +76,6 @@ bool czr::rpc_config::deserialize_json(boost::property_tree::ptree const & tree_
 	auto result(false);
 	try
 	{
-		auto rpc_secure_l(tree_a.get_child_optional("secure"));
-		if (rpc_secure_l)
-		{
-			result = secure.deserialize_json(rpc_secure_l.get());
-		}
-
 		if (!result)
 		{
 			auto address_l(tree_a.get<std::string>("address"));
@@ -134,6 +128,9 @@ void czr::rpc::start()
 	}
 
 	acceptor.listen();
+
+	BOOST_LOG(node.log) << "RPC started, bind on " << endpoint;
+	BOOST_LOG(node.log) << "RPC control is " << config.enable_control ? "enabled" : "disabled";
 
 	accept();
 }
@@ -1048,20 +1045,6 @@ void czr::rpc_handler::process_request()
 
 std::unique_ptr<czr::rpc> czr::get_rpc(boost::asio::io_service & service_a, czr::node & node_a, czr::rpc_config const & config_a)
 {
-	std::unique_ptr<rpc> impl;
-
-	if (config_a.secure.enable)
-	{
-#ifdef CANONCHAIN_SECURE_RPC
-		impl.reset(new rpc_secure(service_a, node_a, config_a));
-#else
-		std::cerr << "RPC configured for TLS, but the node is not compiled with TLS support" << std::endl;
-#endif
-	}
-	else
-	{
-		impl.reset(new rpc(service_a, node_a, config_a));
-	}
-
+	std::unique_ptr<rpc> impl(new rpc(service_a, node_a, config_a));
 	return impl;
 }

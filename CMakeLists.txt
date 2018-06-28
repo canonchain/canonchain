@@ -8,8 +8,6 @@ set(CMAKE_BUILD_WITH_INSTALL_RPATH TRUE)
 set(CMAKE_INSTALL_RPATH "\$ORIGIN/../lib:\$ORIGIN/")
 set(CMAKE_INSTALL_RPATH_USE_LINK_PATH TRUE)
 
-set (CANONCHAIN_SECURE_RPC OFF CACHE BOOL "")
-
 option(CANONCHAIN_ASAN_INT "Enable ASan+UBSan+Integer overflow" OFF)
 option(CANONCHAIN_ASAN "Enable ASan+UBSan" OFF)
 option(CANONCHAIN_SIMD_OPTIMIZATIONS "Enable CPU-specific SIMD optimizations (SSE/AVX or NEON, e.g.)" OFF)
@@ -85,18 +83,6 @@ else ()
 		set (PLATFORM_LINK_FLAGS "${PLATFORM_LINK_FLAGS} -fsanitize=thread")
 	endif()
 endif (APPLE)
-
-if (CANONCHAIN_SECURE_RPC)
-	find_package (OpenSSL 1.0 EXACT REQUIRED)
-	include_directories(${OPENSSL_INCLUDE_DIR})
-	add_definitions (-DCANONCHAIN_SECURE_RPC)
-	message("OpenSSL include dir: ${OPENSSL_INCLUDE_DIR}")
-	message("OpenSSL libraries: ${OPENSSL_LIBRARIES}")
-	message("OpenSSL lib: ${OPENSSL_SSL_LIBRARY}")
-	message("Crypto lib: ${OPENSSL_CRYPTO_LIBRARY}")
-else ()
-	set (OPENSSL_LIBRARIES "")
-endif (CANONCHAIN_SECURE_RPC)
 
 include_directories (${CMAKE_SOURCE_DIR})
 
@@ -215,10 +201,6 @@ elseif (${CMAKE_SYSTEM_NAME} MATCHES "FreeBSD")
 else ()
 	error ("Unknown platform: ${CMAKE_SYSTEM_NAME}")
 endif ()
-	
-if (CANONCHAIN_SECURE_RPC)
-	set (SECURE_RPC_SOURCE czr/node/rpc_secure.cpp czr/node/rpc_secure.hpp)
-endif ()
 
 add_library (secure
 	${PLATFORM_SECURE_SOURCE}
@@ -250,7 +232,6 @@ add_library (czr_lib_static STATIC ${CZR_LIB_SOURCES})
 
 add_library (node
 	${PLATFORM_NODE_SOURCE}
-	${SECURE_RPC_SOURCE}
 	czr/node/common.cpp
 	czr/node/common.hpp
 	czr/node/chain.hpp
@@ -327,4 +308,4 @@ endif (WIN32)
 target_link_libraries (czr_lib ed25519 xxhash blake2 ${CRYPTOPP_LIBRARY})
 target_link_libraries (czr_lib_static ed25519 xxhash blake2 ${CRYPTOPP_LIBRARY})
 
-target_link_libraries (canonchain p2p rlp node secure lmdb ed25519 czr_lib_static argon2 ${OPENSSL_LIBRARIES} ${CRYPTOPP_LIBRARY} ${Boost_ATOMIC_LIBRARY} ${Boost_CHRONO_LIBRARY} ${Boost_REGEX_LIBRARY} ${Boost_DATE_TIME_LIBRARY} ${Boost_FILESYSTEM_LIBRARY} ${Boost_SYSTEM_LIBRARY} ${Boost_LOG_LIBRARY} ${Boost_PROGRAM_OPTIONS_LIBRARY} ${Boost_LOG_SETUP_LIBRARY} ${Boost_THREAD_LIBRARY} ${PLATFORM_LIBS})
+target_link_libraries (canonchain p2p rlp node secure lmdb ed25519 czr_lib_static argon2 ${CRYPTOPP_LIBRARY} ${Boost_ATOMIC_LIBRARY} ${Boost_CHRONO_LIBRARY} ${Boost_REGEX_LIBRARY} ${Boost_DATE_TIME_LIBRARY} ${Boost_FILESYSTEM_LIBRARY} ${Boost_SYSTEM_LIBRARY} ${Boost_LOG_LIBRARY} ${Boost_PROGRAM_OPTIONS_LIBRARY} ${Boost_LOG_SETUP_LIBRARY} ${Boost_THREAD_LIBRARY} ${PLATFORM_LIBS})
