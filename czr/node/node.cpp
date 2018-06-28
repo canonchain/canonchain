@@ -770,7 +770,9 @@ void czr::add_node_options(boost::program_options::options_description & descrip
 		("account", boost::program_options::value<std::string>(), "Defines <account> for other commands")
 		("file", boost::program_options::value<std::string>(), "Defines <file> for other commands")
 		("key", boost::program_options::value<std::string>(), "Defines the <key> for other commands, hex")
-		("password", boost::program_options::value<std::string>(), "Defines <password> for other commands");
+		("password", boost::program_options::value<std::string>(), "Defines <password> for other commands")
+		("rpc_enable", "Rpc is become effective once")
+		("rpc_enable_control", "Rpc_enable is become effective once");
 	// clang-format on
 }
 

@@ -1,6 +1,7 @@
 #include <czr/canonchain/daemon.hpp>
 
 #include <boost/property_tree/json_parser.hpp>
+#include <boost/program_options.hpp> 
 #include <fstream>
 #include <iostream>
 #include <thread>
@@ -106,7 +107,7 @@ void czr_daemon::daemon_config::writebytes2file(dev::bytes & bytes,boost::filesy
 	return ;
 }
 
-void czr_daemon::daemon::run(boost::filesystem::path const & data_path)
+void czr_daemon::daemon::run(boost::filesystem::path const &data_path, boost::program_options::variables_map &vm)
 {
 	boost::filesystem::create_directories(data_path);
 	czr_daemon::daemon_config config(data_path);
@@ -114,6 +115,14 @@ void czr_daemon::daemon::run(boost::filesystem::path const & data_path)
 	std::fstream config_file;
 	std::unique_ptr<czr::thread_runner> runner;
 	auto error(czr::fetch_object(config, config_path, config_file));
+	if (vm.count("rpc_enable")>0)
+	{	
+	   config.rpc_enable = true;	
+	}
+	if (vm.count("rpc_enable_control")>0)
+	{
+		config.rpc.enable_control = true;	
+	}
 	if (!error)
 	{
 		config.node.logging.init(data_path);
