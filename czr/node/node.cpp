@@ -666,24 +666,6 @@ void czr::node::stop()
 	}
 }
 
-czr::block_hash czr::node::latest(czr::account const & account_a)
-{
-	czr::transaction transaction(store.environment, nullptr, false);
-	return ledger.latest(transaction, account_a);
-}
-
-czr::uint128_t czr::node::balance(czr::account const & account_a)
-{
-	czr::transaction transaction(store.environment, nullptr, false);
-	return ledger.account_balance(transaction, account_a);
-}
-
-std::unique_ptr<czr::block> czr::node::block(czr::block_hash const & hash_a)
-{
-	czr::transaction transaction(store.environment, nullptr, false);
-	return store.block_get(transaction, hash_a);
-}
-
 void czr::node::ongoing_retry_late_message()
 {
 	auto late_msg_info_list(late_message_cache.purge_list_ealier_than(czr::seconds_since_epoch()));

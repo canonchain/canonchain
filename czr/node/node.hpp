@@ -300,9 +300,6 @@ namespace czr
 		void stop();
 		std::shared_ptr<czr::node> shared();
 		int store_version();
-		czr::block_hash latest(czr::account const &);
-		czr::uint128_t balance(czr::account const &);
-		std::unique_ptr<czr::block> block(czr::block_hash const &);
 		void ongoing_retry_late_message();
 		dev::bytes network_bytes();
 
