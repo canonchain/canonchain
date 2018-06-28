@@ -56,7 +56,7 @@ void czr::wallet::send_async(czr::account const & from_a, czr::account const & t
 czr::send_result czr::wallet::send_action(czr::account const & from_a, czr::account const & to_a,
 	czr::amount const & amount_a, std::vector<uint8_t> data_a, std::string const & password_a, boost::optional<std::string> id_a)
 {
-	std::shared_ptr<czr::joint_message> message;
+	std::shared_ptr<czr::joint_message> joint;
 	boost::optional<czr::mdb_val> id_mdb_val;
 	if (id_a)
 	{
@@ -76,7 +76,7 @@ czr::send_result czr::wallet::send_action(czr::account const & from_a, czr::acco
 				auto block = node.store.block_get(transaction, hash);
 				if (block != nullptr)
 				{
-					message = std::make_shared<czr::joint_message>(std::shared_ptr<czr::block>(block.release()));
+					joint = std::make_shared<czr::joint_message>(std::shared_ptr<czr::block>(block.release()));
 					cached_block = true;
 				}
 			}
@@ -85,7 +85,7 @@ czr::send_result czr::wallet::send_action(czr::account const & from_a, czr::acco
 				error = true;
 			}
 		}
-		if (!error && message == nullptr)
+		if (!error && joint == nullptr)
 		{
 			{
 				czr::transaction transaction(node.store.environment, nullptr, false);
@@ -114,7 +114,7 @@ czr::send_result czr::wallet::send_action(czr::account const & from_a, czr::acco
 				switch (compose_result.code)
 				{
 				case czr::compose_result_codes::ok:
-					message = compose_result.message;
+					joint = compose_result.message;
 					break;
 				case czr::compose_result_codes::insufficient_balance:
 					return czr::send_result(czr::send_result_codes::insufficient_balance, nullptr);
@@ -131,24 +131,24 @@ czr::send_result czr::wallet::send_action(czr::account const & from_a, czr::acco
 				}
 			}
 
-			if (message != nullptr)
+			if (joint != nullptr)
 			{
 				if (id_mdb_val)
 				{
 					czr::transaction transaction(node.store.environment, nullptr, true);
-					auto status(mdb_put(transaction, node.wallet.send_action_ids, *id_mdb_val, czr::mdb_val(message->block->hash()), 0));
+					auto status(mdb_put(transaction, node.wallet.send_action_ids, *id_mdb_val, czr::mdb_val(joint->block->hash()), 0));
 					if (status != 0)
 					{
-						message = nullptr;
+						joint = nullptr;
 						error = true;
 					}
 				}
 			}
 		}
 	}
-	if (!error && message != nullptr)
+	if (!error && joint != nullptr)
 	{
-		node.process_active(*message);
+		node.process_local_joint(*joint);
 	}
 
 	if (error)
@@ -157,7 +157,7 @@ czr::send_result czr::wallet::send_action(czr::account const & from_a, czr::acco
 	}
 	else
 	{
-		return czr::send_result(czr::send_result_codes::ok, message->block);
+		return czr::send_result(czr::send_result_codes::ok, joint->block);
 	}
 }
 

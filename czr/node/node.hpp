@@ -165,9 +165,27 @@ namespace czr
 	class block_processor_item
 	{
 	public:
-		block_processor_item(czr::joint_message);
+		block_processor_item(czr::joint_message const & joint_a) :
+			joint(joint_a),
+			remote_node_id(0)
+		{
+		}
+
+		block_processor_item(czr::joint_message const & joint_a, p2p::node_id const & remote_node_id_a) :
+			joint(joint_a),
+			remote_node_id(remote_node_id_a)
+		{
+		}
+
+		bool is_local() const
+		{
+			return remote_node_id.is_zero();
+		}
+
 		czr::joint_message joint;
+		p2p::node_id remote_node_id;
 	};
+
 	// Processing blocks is a potentially long IO operation
 	// This class isolates block insertion from other operations like servicing network operations
 	class block_processor
@@ -178,9 +196,8 @@ namespace czr
 		void stop();
 		void flush();
 		void add(czr::block_processor_item const &);
-		void process_receive_many(czr::block_processor_item const &);
 		void process_receive_many(std::deque<czr::block_processor_item> &);
-		czr::validate_result process_receive_one(MDB_txn *, czr::joint_message const &);
+		czr::validate_result process_receive_one(MDB_txn *, czr::block_processor_item const &);
 		void process_blocks();
 		czr::node & node;
 
@@ -195,10 +212,10 @@ namespace czr
 	class late_message_info
 	{
 	public:
-		late_message_info(czr::joint_message const & message_a);
+		late_message_info(czr::block_processor_item const & item_a);
 		uint64_t timestamp;
 		czr::block_hash hash;
-		czr::joint_message const & message;
+		czr::block_processor_item const & item;
 	};
 
 	class late_message_cache
@@ -255,11 +272,12 @@ namespace czr
 			alarm.service.post(action_a);
 		}
 		bool copy_with_compaction(boost::filesystem::path const &);
+		void process_local_joint(czr::joint_message const & joint);
+		void process_remote_joint(czr::joint_message const & joint, p2p::node_id const & remote_id);
 		void start();
 		void stop();
 		std::shared_ptr<czr::node> shared();
 		int store_version();
-		void process_active(czr::joint_message const &);
 		czr::block_hash latest(czr::account const &);
 		czr::uint128_t balance(czr::account const &);
 		std::unique_ptr<czr::block> block(czr::block_hash const &);
