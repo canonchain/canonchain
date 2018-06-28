@@ -108,7 +108,7 @@ void node_table::do_discover(node_id const & rand_node_id, unsigned const & roun
 
 	if (tried.empty())
 	{
-		BOOST_LOG_TRIVIAL(debug) << "Terminating discover after " << round << " rounds.";
+		//BOOST_LOG_TRIVIAL(debug) << "Terminating discover after " << round << " rounds.";
 		discover_loop();
 		return;
 	}
