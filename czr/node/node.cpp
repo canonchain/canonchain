@@ -804,7 +804,8 @@ void czr::add_node_options(boost::program_options::options_description & descrip
 		("key", boost::program_options::value<std::string>(), "Defines the <key> for other commands, hex")
 		("password", boost::program_options::value<std::string>(), "Defines <password> for other commands")
 		("rpc_enable", "Rpc is become effective once")
-		("rpc_enable_control", "Rpc_enable is become effective once");
+		("rpc_enable_control", "Rpc_enable is become effective once")
+		("witness","Start witness node");
 	// clang-format on
 }
 

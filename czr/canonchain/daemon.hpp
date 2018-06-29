@@ -37,4 +37,5 @@ namespace czr_daemon
 		czr::node_config node;
 		bool witness_enable;
 	};
+
 }
