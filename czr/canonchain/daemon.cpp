@@ -75,11 +75,11 @@ void czr_daemon::daemon_config::readfile2bytes(dev::bytes &ret, boost::filesyste
 	std::ifstream in;
 	in.open(filepath.string(), std::ios_base::in | std::ios_base::binary);
 	if (in.is_open())
-	{ 
+	{
 		size_t const c_elementSize = sizeof(typename dev::bytes::value_type);
 		in.seekg(0, in.end);
 		size_t length = in.tellg();
-		if(length)
+		if (length)
 		{
 			in.seekg(0, in.beg);
 			ret.resize((length + c_elementSize - 1) / c_elementSize);
@@ -96,8 +96,8 @@ void czr_daemon::daemon_config::writebytes2file(dev::bytes & bytes,boost::filesy
 	if(out.is_open())
 	{
 		out.write(reinterpret_cast<char const*>(bytes.data()), bytes.size());
-		out.close();	   
-	}	
+	return ;   
+ }	
 }
 
 void czr_daemon::daemon_config::readfile2string(std::string & str, boost::filesystem::path const&filepath)
@@ -132,12 +132,35 @@ void czr_daemon::daemon::run(boost::filesystem::path const &data_path, boost::pr
 	std::unique_ptr<czr::thread_runner> runner;
 	auto error(czr::fetch_object(config, config_path, config_file));
 	if (vm.count("rpc_enable")>0)
-	{	
-	   config.rpc_enable = true;	
+	{
+		config.rpc_enable = true;
 	}
 	if (vm.count("rpc_enable_control")>0)
 	{
-		config.rpc.enable_control = true;	
+		config.rpc.enable_control = true;
+	}
+
+	//--witness 	
+	bool is_witness(false);
+	czr::error_message error_msg;
+	std::string account;
+	std::string password;
+	if (vm.count("witness")>0)
+	{
+		//todo getpassword
+		if (vm.count("account") == 0 || vm.count("password") == 0)
+		{
+			error_msg.error = true;
+			error_msg.message = "witness need account and password\n ";
+			std::cerr << "witness need account and password\n ";
+			return;
+		}
+		else
+		{
+			is_witness = true;
+			account = vm["account"].as<std::string>();
+			password = vm["password"].as<std::string>();
+		}
 	}
 
 	if (!error)
@@ -172,32 +195,24 @@ void czr_daemon::daemon::run(boost::filesystem::path const &data_path, boost::pr
 
 			//node
 			std::shared_ptr<czr::node> node(std::make_shared<czr::node>(init, io_service, data_path, alarm, config.node, node_key, restore_network_bytes));
-
-			//--witness 
-			if (vm.count("witness")>0 && (!init.error))
+			if (!init.error)
 			{
-				if (vm.count("account") == 0 || vm.count("password") == 0)
+				//witness node start
+				if (is_witness)
 				{
-					std::cerr << "cmd :witness need account and password\n ";
-					init.error = true;
+					czr::witness witness_l(error_msg, *node, account, password);
+					if (error_msg.error)
+					{
+						std::cerr << error_msg.message << std::endl;
+						return;
+					}
+					node->start();
+					witness_l.start();
 				}
 				else
 				{
-					std::string account = vm["account"].as<std::string>();
-					std::string password = vm["password"].as<std::string>();
-					czr::error_message error_msg;
-					czr::witness witness_l(error_msg,*node, account, password);
-					if (error_msg.error)
-					{
-						std::cerr << error_msg.message<<std::endl;
-						init.error = true;
-					}
+					node->start();
 				}
-			}
-
-			if (!init.error)
-			{
-				node->start();
 
 				std::unique_ptr<czr::rpc> rpc = get_rpc(io_service, *node, config.rpc);
 				if (config.rpc_enable)
@@ -214,7 +229,7 @@ void czr_daemon::daemon::run(boost::filesystem::path const &data_path, boost::pr
 				signal(SIGABRT, &exit_handler::handle);
 				signal(SIGTERM, &exit_handler::handle);
 				signal(SIGINT, &exit_handler::handle);
-				
+
 				while (!exit_handler::should_exit())
 					std::this_thread::sleep_for(std::chrono::milliseconds(1000));
 
