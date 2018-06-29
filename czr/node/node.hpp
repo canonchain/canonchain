@@ -177,6 +177,26 @@ namespace czr
 		{
 		}
 
+		block_processor_item(bool & error_a, dev::RLP const & r)
+		{
+			error_a = r.itemCount() != 2;
+			if (error_a)
+				return;
+
+			joint = czr::joint_message(error_a, r[0]);
+			if (error_a)
+				return;
+
+			remote_node_id = (p2p::node_id)r[1];
+		}
+
+		void stream_RLP(dev::RLPStream & s) const
+		{
+			s.appendList(2);
+			joint.stream_RLP(s);
+			s << remote_node_id;
+		}
+
 		bool is_local() const
 		{
 			return remote_node_id.is_zero();
@@ -225,6 +245,7 @@ namespace czr
 
 		void add(czr::late_message_info const & info);
 		std::vector<czr::late_message_info> purge_list_ealier_than(uint64_t const & timestamp);
+		size_t size() const;
 
 	private:
 		boost::multi_index_container<
@@ -243,6 +264,7 @@ namespace czr
 
 		void add(czr::block_hash const & hash_a);
 		bool contains(czr::block_hash const & hash_a);
+		size_t size() const;
 
 	private:
 		boost::multi_index_container<
@@ -278,10 +300,6 @@ namespace czr
 		void stop();
 		std::shared_ptr<czr::node> shared();
 		int store_version();
-		czr::block_hash latest(czr::account const &);
-		czr::uint128_t balance(czr::account const &);
-		std::unique_ptr<czr::block> block(czr::block_hash const &);
-		void ongoing_store_flush();
 		void ongoing_unhandle_flush();
 		void ongoing_retry_late_message();
 		dev::bytes network_bytes();

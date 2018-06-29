@@ -69,7 +69,7 @@ public:
 	czr::rpc_config config;
 	czr::node & node;
 	bool on;
-	static uint16_t const rpc_port = czr::czr_network == czr::czr_networks::czr_live_network ? 7076 : 55000;
+	static uint16_t const rpc_port = czr::czr_network == czr::czr_networks::czr_live_network ? 8765 : 48765;
 };
 class rpc_connection : public std::enable_shared_from_this<czr::rpc_connection>
 {
@@ -111,6 +111,7 @@ public:
 	void block ();
 	void blocks ();
 	void block_count ();
+	void block_list();
 
 
 	void send ();

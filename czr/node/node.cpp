@@ -381,13 +381,18 @@ void czr::block_processor::process_receive_many(std::deque<czr::block_processor_
 						{
 							node.store.dependency_unhandled_del(transaction, b_hash, unhandled_hash);
 							node.store.unhandled_dependency_del(transaction, unhandled_hash, b_hash);
+
 							bool dependency_exists(node.store.unhandled_dependency_exists(transaction, unhandled_hash));
 							if (!dependency_exists)
 							{
-								czr::joint_message jm;
-								node.store.unhandled_get(transaction, unhandled_hash, jm);
+								dev::bytes b;
+								node.store.unhandled_get(transaction, unhandled_hash, b);
 								node.store.unhandled_del(transaction, unhandled_hash);
-								blocks_processing.push_front(jm);
+								bool error(false);
+								czr::block_processor_item item(error, dev::RLP(b));
+								assert(!error);
+								if (!error)
+									blocks_processing.push_front(item);
 							}
 						}
 						break;
@@ -462,8 +467,15 @@ czr::validate_result czr::block_processor::process_receive_one(MDB_txn * transac
 			{
 				BOOST_LOG(node.log) << boost::str(boost::format("Missing parents and previous for: %1%") % b_hash.to_string());
 			}
+
+			dev::bytes b;
+			{
+				dev::RLPStream s;
+				item.stream_RLP(s);
+				s.swapOut(b);
+			}
+			node.store.unhandled_put(transaction_a, b_hash, b);
 			std::list<block_hash> missing_parents_and_previous(result.missing_parents_and_previous);
-			node.store.unhandled_put(transaction_a, b_hash, joint);
 
 			uint64_t dead_time(seconds_since_epoch());
 			node.store.deadtime_unhandle_put(transaction_a,dead_time, b_hash);
@@ -652,7 +664,6 @@ void czr::node::start()
 
 	host->register_capability(capability);
 	host->start();
-	ongoing_store_flush();
 	ongoing_unhandle_flush();
 	ongoing_retry_late_message();
 }
@@ -668,39 +679,6 @@ void czr::node::stop()
 	{
 		block_processor_thread.join();
 	}
-}
-
-czr::block_hash czr::node::latest(czr::account const & account_a)
-{
-	czr::transaction transaction(store.environment, nullptr, false);
-	return ledger.latest(transaction, account_a);
-}
-
-czr::uint128_t czr::node::balance(czr::account const & account_a)
-{
-	czr::transaction transaction(store.environment, nullptr, false);
-	return ledger.account_balance(transaction, account_a);
-}
-
-std::unique_ptr<czr::block> czr::node::block(czr::block_hash const & hash_a)
-{
-	czr::transaction transaction(store.environment, nullptr, false);
-	return store.block_get(transaction, hash_a);
-}
-
-void czr::node::ongoing_store_flush()
-{
-	{
-		czr::transaction transaction(store.environment, nullptr, true);
-		store.flush(transaction);
-	}
-	std::weak_ptr<czr::node> node_w(shared_from_this());
-	alarm.add(std::chrono::steady_clock::now() + std::chrono::seconds(5), [node_w]() {
-		if (auto node_l = node_w.lock())
-		{
-			node_l->ongoing_store_flush();
-		}
-	});
 }
 
 //---ongoing_unhandle_flush
@@ -1074,6 +1052,11 @@ std::vector<czr::late_message_info> czr::late_message_cache::purge_list_ealier_t
 	return result;
 }
 
+size_t czr::late_message_cache::size() const
+{
+	return container.size();
+}
+
 czr::invalid_block_cache::invalid_block_cache(size_t const & capacity_a):
 	capacity(capacity_a)
 {
@@ -1091,4 +1074,9 @@ void czr::invalid_block_cache::add(czr::block_hash const & hash_a)
 bool czr::invalid_block_cache::contains(czr::block_hash const & hash_a)
 {
 	return container.get<1>().find(hash_a) != container.get<1>().end();
+}
+
+size_t czr::invalid_block_cache::size() const
+{
+	return container.size();
 }

@@ -385,6 +385,8 @@ void czr::block::serialize_json(std::string & string_a) const
 
 void czr::block::serialize_json(boost::property_tree::ptree & tree) const
 {
+	tree.put("hash", hash().to_string());
+
 	hashables.serialize_json(tree);
 
 	std::string signature_l;

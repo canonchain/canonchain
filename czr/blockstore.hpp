@@ -81,16 +81,6 @@ namespace czr
 		czr::store_iterator account_begin(MDB_txn *);
 		czr::store_iterator account_end();
 
-		void unchecked_clear(MDB_txn *);
-		void unchecked_put(MDB_txn *, czr::block_hash const &, std::shared_ptr<czr::block> const &);
-		std::vector<std::shared_ptr<czr::block>> unchecked_get(MDB_txn *, czr::block_hash const &);
-		void unchecked_del(MDB_txn *, czr::block_hash const &, czr::block const &);
-		czr::store_iterator unchecked_begin(MDB_txn *);
-		czr::store_iterator unchecked_begin(MDB_txn *, czr::block_hash const &);
-		czr::store_iterator unchecked_end();
-		size_t unchecked_count(MDB_txn *);
-		std::unordered_multimap<czr::block_hash, std::shared_ptr<czr::block>> unchecked_cache;
-
 		bool block_summary_get(MDB_txn *, czr::block_hash const &, czr::summary_hash &);
 		void block_summary_put(MDB_txn *, czr::block_hash const &, czr::summary_hash const &);
 
@@ -160,12 +150,10 @@ namespace czr
 		bool my_witness_list_get(MDB_txn * transaction_a, czr::witness_list_info & my_wl_info);
 		void my_witness_list_put(MDB_txn * transaction_a, czr::witness_list_info my_wl_info);
 
-		bool unhandled_get(MDB_txn * transaction_a, czr::block_hash const & hash_a, czr::joint_message & joint);
-		void unhandled_put(MDB_txn * transaction_a, czr::block_hash const & hash_a, czr::joint_message const & joint);
+		bool unhandled_get(MDB_txn * transaction_a, czr::block_hash const & hash_a, dev::bytes & rlp);
+		void unhandled_put(MDB_txn * transaction_a, czr::block_hash const & hash_a, dev::bytes & rlp);
 		void unhandled_del(MDB_txn * transaction_a, czr::block_hash const & hash_a);
-
-		void flush(MDB_txn *);
-		std::mutex cache_mutex;
+		size_t unhandled_count(MDB_txn * transaction_a);
 
 		void version_put(MDB_txn *, int);
 		int version_get(MDB_txn *);
@@ -181,8 +169,6 @@ namespace czr
 		MDB_dbi latest_account_state;
 		// block_hash -> block
 		MDB_dbi blocks;
-		// block_hash -> block                                          // Unchecked bootstrap blocks
-		MDB_dbi unchecked;
 		// uint256_union -> ?											// Meta information about block store
 		MDB_dbi meta;
 

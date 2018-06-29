@@ -24,7 +24,7 @@ namespace czr
 		using hash256 = czr::uint256_union;
 
 		static uint16_t const version(0);
-		static uint16_t const default_port = czr::czr_network == czr::czr_networks::czr_live_network ? 7075 : 54000;
+		static uint16_t const default_port = czr::czr_network == czr::czr_networks::czr_live_network ? 30606 : 40606;
 		static uint16_t const default_max_peers(25);
 
 		static size_t const tcp_header_size(4);
