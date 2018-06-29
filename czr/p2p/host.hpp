@@ -17,8 +17,7 @@ namespace czr
 		class host : public std::enable_shared_from_this<host>
 		{
 		public:
-			host(p2p_config const & config_a, ba::io_service & io_service_a,
-				dev::bytesConstRef restore_network_bytes_a);
+			host(p2p_config const & config_a, boost::asio::io_service & io_service_a, czr::private_key const & node_key, dev::bytesConstRef restore_network_bytes_a);
 			void start();
 			void stop();
 			void register_capability(std::shared_ptr<icapability> cap);
@@ -48,7 +47,6 @@ namespace czr
 			void read_ack(std::shared_ptr<bi::tcp::socket> const & socket, std::shared_ptr<ba::deadline_timer> const & idle_timer, hash256 const & my_nonce);
 			void start_peer(std::shared_ptr<bi::tcp::socket> const & socket, ack_message const & ack);
 
-			czr::private_key network_alias(dev::bytesConstRef const & bytes);
 			void restore_network(dev::bytesConstRef const & bytes);
 
 			p2p_config const & config;

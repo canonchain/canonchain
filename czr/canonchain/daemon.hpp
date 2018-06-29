@@ -32,6 +32,8 @@ namespace czr_daemon
 		void serialize_json(boost::property_tree::ptree &);
 		void readfile2bytes(dev::bytes &,boost::filesystem::path const&);
 		void writebytes2file(dev::bytes &, boost::filesystem::path const &);
+		void readfile2string(std::string & ret, boost::filesystem::path const & filepath);
+		void writestring2file(std::string const & str, boost::filesystem::path const & filepath);
 		bool rpc_enable;
 		czr::rpc_config rpc;
 		czr::node_config node;
