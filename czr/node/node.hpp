@@ -300,6 +300,7 @@ namespace czr
 		void stop();
 		std::shared_ptr<czr::node> shared();
 		int store_version();
+		void ongoing_unhandle_flush();
 		void ongoing_retry_late_message();
 		dev::bytes network_bytes();
 
@@ -337,8 +338,6 @@ namespace czr
 	
 	void add_node_options(boost::program_options::options_description &);
 	bool handle_node_options(boost::program_options::variables_map &);
-	
-
 	class inactive_node
 	{
 	public:

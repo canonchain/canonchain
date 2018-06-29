@@ -127,6 +127,10 @@ namespace czr
 		void dependency_unhandled_put(MDB_txn * transaction_a, czr::block_hash const &dependency_a, czr::block_hash const &unhandle_a);
 		void dependency_unhandled_del(MDB_txn * transaction_a, czr::block_hash const &dependency_a, czr::block_hash const &unhandle_a);
 
+		//delunhandle
+		void deadtime_unhandle_put(MDB_txn * transaction_a,uint64_t deadtime_a,czr::block_hash const &unhandle_a);
+		void deadtime_unhandle_del(MDB_txn * transaction_a,uint64_t deadtime_a);
+
 		void last_stable_mci_put(MDB_txn * transaction_a, uint64_t const & last_stable_mci_value);
 		uint64_t last_stable_mci_get(MDB_txn *);
 
@@ -197,6 +201,7 @@ namespace czr
 		MDB_dbi unhandled;
 		MDB_dbi unhandled_dependency;
 		MDB_dbi dependency_unhandled;
+		MDB_dbi deadtime_unhandled;
 		//key -> value
 		MDB_dbi prop;
 

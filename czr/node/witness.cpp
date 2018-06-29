@@ -2,6 +2,7 @@
 #include <czr/node/common.hpp>
 
 
+
 czr::witness::witness(czr::error_message & error_msg, czr::node & node_a, std::string const & account_text, std::string const & password_a):
 	node(node_a),
 	ledger(node_a.ledger)
@@ -18,7 +19,7 @@ czr::witness::witness(czr::error_message & error_msg, czr::node & node_a, std::s
 	if (error)
 	{
 		error_msg.error = true;
-		error_msg.message = "Wrong password";
+		error_msg.message = "Account not exists or password wrong ";
 		return;
 	}
 }
@@ -161,7 +162,6 @@ void czr::witness::do_witness()
 		}
 
 		this_l->is_witnessing.clear();
-
 	}, boost::none);
 }
 
@@ -199,7 +199,7 @@ bool czr::witness::is_my_block_without_mci(MDB_txn * transaction_a)
 	return false;
 }
 
-std::atomic_flag is_witnessing = ATOMIC_FLAG_INIT;
+std::atomic_flag czr::witness::is_witnessing = ATOMIC_FLAG_INIT;
 uint32_t const czr::witness::max_do_witness_interval(3000);
 uint64_t const czr::witness::threshold_distance(50);
 

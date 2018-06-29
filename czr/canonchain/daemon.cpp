@@ -6,6 +6,7 @@
 #include <iostream>
 #include <thread>
 #include <czr/node/working.hpp>
+#include <czr/node/witness.hpp>
 
 czr_daemon::daemon_config::daemon_config(boost::filesystem::path const & application_path_a) :
 	rpc_enable(false)
@@ -138,6 +139,7 @@ void czr_daemon::daemon::run(boost::filesystem::path const &data_path, boost::pr
 	{
 		config.rpc.enable_control = true;	
 	}
+
 	if (!error)
 	{
 		config.node.logging.init(data_path);
@@ -170,6 +172,29 @@ void czr_daemon::daemon::run(boost::filesystem::path const &data_path, boost::pr
 
 			//node
 			std::shared_ptr<czr::node> node(std::make_shared<czr::node>(init, io_service, data_path, alarm, config.node, node_key, restore_network_bytes));
+
+			//--witness 
+			if (vm.count("witness")>0 && (!init.error))
+			{
+				if (vm.count("account") == 0 || vm.count("password") == 0)
+				{
+					std::cerr << "cmd :witness need account and password\n ";
+					init.error = true;
+				}
+				else
+				{
+					std::string account = vm["account"].as<std::string>();
+					std::string password = vm["password"].as<std::string>();
+					czr::error_message error_msg;
+					czr::witness witness_l(error_msg,*node, account, password);
+					if (error_msg.error)
+					{
+						std::cerr << error_msg.message<<std::endl;
+						init.error = true;
+					}
+				}
+			}
+
 			if (!init.error)
 			{
 				node->start();
