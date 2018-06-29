@@ -689,9 +689,9 @@ void czr::node::stop()
 void czr::node::ongoing_unhandle_flush()
 {
 	std::weak_ptr<czr::node> node_w(shared_from_this());
-	alarm.add(std::chrono::steady_clock::now() + std::chrono::minutes(10), [node_w](){
+	alarm.add(std::chrono::steady_clock::now() + std::chrono::minutes(1), [node_w]() {
 		if (auto node_l = node_w.lock())
-		{			
+		{
 			{
 				czr::transaction transaction(node_l->store.environment, nullptr, true);
 				std::chrono::seconds sec(-3600);
@@ -708,6 +708,7 @@ void czr::node::ongoing_unhandle_flush()
 
 void czr::node::ongoing_retry_late_message()
 {
+	
 	auto late_msg_info_list(late_message_cache.purge_list_ealier_than(czr::seconds_since_epoch()));
 	for (auto info : late_msg_info_list)
 		block_processor.add(info.item);

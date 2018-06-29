@@ -200,14 +200,16 @@ void czr_daemon::daemon::run(boost::filesystem::path const &data_path, boost::pr
 				//witness node start
 				if (is_witness)
 				{
-					czr::witness witness_l(error_msg, *node, account, password);
+					std::shared_ptr<czr::witness> witness_l(std::make_shared<czr::witness>(error_msg, *node, account, password));
+
+					//czr::witness witness_l(error_msg, *node, account, password);
 					if (error_msg.error)
 					{
 						std::cerr << error_msg.message << std::endl;
 						return;
 					}
 					node->start();
-					witness_l.start();
+					witness_l->start();
 				}
 				else
 				{

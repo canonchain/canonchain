@@ -850,7 +850,7 @@ void czr::rpc_handler::witness_list_set()
 		vecwin.push_back(acco);
 	}
 
-	if (vecwin.size() != 12)
+	if (vecwin.size() != czr::witness_count)
 	{
 		error_response(response, "Witness_list not equal 12");
 		return;
