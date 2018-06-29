@@ -129,7 +129,7 @@ void czr::rpc::start()
 
 	acceptor.listen();
 
-	BOOST_LOG(node.log) << "RPC started, bind on " << endpoint;
+	BOOST_LOG(node.log) << "RPC started, http://" << endpoint;
 	BOOST_LOG(node.log) << "RPC control is " << (config.enable_control ? "enabled" : "disabled");
 
 	accept();
@@ -632,15 +632,25 @@ void czr::rpc_handler::block_list()
 	if (!error)
 	{
 		czr::transaction transaction(node.store.environment, nullptr, false);
-		czr::block_hash last_hash(0);
+		czr::block_hash search_hash(0);
 		boost::optional<std::string> last_hash_text(request.get_optional<std::string>("last_hash"));
 		if (last_hash_text)
 		{
+			czr::block_hash last_hash;
 			error = last_hash.decode_hex(*last_hash_text);
 			if (error)
 			{
 				error_response(response, "Invalid last_hash");
 				return;
+			}
+			auto block = node.store.block_get(transaction, last_hash);
+			if (block && block->hashables.from == account)
+			{
+				search_hash = block->previous();
+			}
+			else
+			{
+				error_response(response, "Can not find the block of <last_hash> made by <account>");
 			}
 		}
 		else
@@ -649,28 +659,28 @@ void czr::rpc_handler::block_list()
 			bool error(node.store.account_get(transaction, account, info));
 			if (!error)
 			{
-				last_hash = info.head;
+				search_hash = info.head;
 			}
 		}
 
 		boost::property_tree::ptree resp_l;
 		boost::property_tree::ptree blocks_l;
 		int i = 0;
-		while (i++ < limit && !last_hash.is_zero())
+		while (i++ < limit && !search_hash.is_zero())
 		{
 			boost::property_tree::ptree block_l;
-			auto block = node.store.block_get(transaction, last_hash);
+			auto block = node.store.block_get(transaction, search_hash);
 			if (!block)
 				break;
 			block->serialize_json(block_l);
 
 			czr::block_state state;
-			bool error(node.store.block_state_get(transaction, last_hash, state));
+			bool error(node.store.block_state_get(transaction, search_hash, state));
 			assert(!error);
 			state.serialize_json(block_l);
 
 			blocks_l.push_back(std::make_pair("", block_l));
-			last_hash = block->previous();
+			search_hash = block->previous();
 		}
 		resp_l.add_child("list", blocks_l);
 		response(resp_l);
