@@ -192,13 +192,9 @@ void czr_daemon::daemon::run(boost::filesystem::path const &data_path, boost::pr
 			config.readfile2bytes(nbytes, network_bytes_path);
 			restore_network_bytes = &(nbytes);
 
-			std::cerr << "init.error:" << init.error << std::endl;
-
 			//node
 			std::shared_ptr<czr::node> node(std::make_shared<czr::node>(init, io_service, data_path, alarm, config.node, node_key, restore_network_bytes));
 			
-			std::cerr << "init.error:" << init.error << std::endl;
-
 			if (!init.error)
 			{
 				//witness node start

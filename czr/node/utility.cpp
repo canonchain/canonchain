@@ -39,22 +39,22 @@ czr::mdb_env::mdb_env(bool & error_a, boost::filesystem::path const & path_a, in
 		if (!error)
 		{
 			auto status1(mdb_env_create(&environment));
-			std::cerr << status1 << std::endl;
 			assert(status1 == 0);
+			//std::cerr << status1 << std::endl;
 
 			auto status2(mdb_env_set_maxdbs(environment, max_dbs));
 			assert(status2 == 0);
-			std::cerr << status2 << std::endl;
+			//std::cerr << status2 << std::endl;
 
 			auto status3(mdb_env_set_mapsize(environment, 1ULL * 500 * 1024 * 1024 * 1024)); // 0.5 Terabyte
 			assert(status3 == 0);
-			std::cerr << status3 << std::endl;
+			//std::cerr << status3 << std::endl;
 
 			// It seems if there's ever more threads than mdb_env_set_maxreaders has read slots available, we get failures on transaction creation unless MDB_NOTLS is specified
 			// This can happen if something like 256 io_threads are specified in the node config
 			auto status4(mdb_env_open(environment, path_a.string().c_str(), MDB_NOSUBDIR | MDB_NOTLS, 00600));
 			error_a = status4 != 0;
-			std::cerr << status4 << std::endl;
+			//std::cerr << status4 << std::endl;
 		}
 		else
 		{

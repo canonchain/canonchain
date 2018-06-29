@@ -76,8 +76,8 @@ void host::start()
 	m_node_table->set_event_handler(new host_node_table_event_handler(*this));
 	m_node_table->start();
 
-	for (auto & node : bootstrap_nodes)
-		m_node_table->add_node(*node);
+	//for (auto & node : bootstrap_nodes)
+	//	m_node_table->add_node(*node);
 
 	restore_network(&restore_network_bytes);
 
@@ -278,18 +278,18 @@ void host::connect(std::shared_ptr<node_info> const & ne)
 	}
 
 	bi::tcp::endpoint ep(ne->endpoint);
-	BOOST_LOG_TRIVIAL(debug) << "Attempting connection to node " << ne->id.to_string() << "@" << ep;
+	//BOOST_LOG_TRIVIAL(debug) << "Attempting connection to node " << ne->id.to_string() << "@" << ep;
 	std::shared_ptr<bi::tcp::socket> socket = std::make_shared<bi::tcp::socket>(io_service);
 	auto this_l(shared_from_this());
 	socket->async_connect(ep, [ne, ep, socket, this_l](boost::system::error_code const& ec)
 	{
 		if (ec)
 		{
-			BOOST_LOG_TRIVIAL(info) << "Connection refused to node " << ne->id.to_string() << "@" << ep << ", message: " << ec.message();
+			//BOOST_LOG_TRIVIAL(info) << "Connection refused to node " << ne->id.to_string() << "@" << ep << ", message: " << ec.message();
 		}
 		else
 		{
-			BOOST_LOG_TRIVIAL(info) << "Connecting to " << ne->id.to_string() << "@" << ep;
+			//BOOST_LOG_TRIVIAL(info) << "Connecting to " << ne->id.to_string() << "@" << ep;
 			this_l->do_handshake(socket);
 		}
 
@@ -678,7 +678,7 @@ void host::on_node_table_event(node_id const & node_id_a, node_table_event_type 
 {
 	if (type_a == node_table_event_type::node_entry_added)
 	{
-		BOOST_LOG_TRIVIAL(info) << "Node entry added, id:" << node_id_a.to_string();
+		//BOOST_LOG_TRIVIAL(info) << "Node entry added, id:" << node_id_a.to_string();
 
 		if (std::shared_ptr<node_info> nf = m_node_table->get_node(node_id_a))
 		{
@@ -688,7 +688,7 @@ void host::on_node_table_event(node_id const & node_id_a, node_table_event_type 
 	}
 	else if (type_a == node_table_event_type::node_entry_dropped)
 	{
-		BOOST_LOG_TRIVIAL(info) << "Node entry dropped, id:" << node_id_a.to_string();
+		//BOOST_LOG_TRIVIAL(info) << "Node entry dropped, id:" << node_id_a.to_string();
 	}
 }
 

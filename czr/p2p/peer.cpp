@@ -27,7 +27,7 @@ void peer::register_capability(std::shared_ptr<peer_capability> const & cap)
 
 void peer::start()
 {
-	BOOST_LOG_TRIVIAL(info) << "Peer start, node id: " << m_node_id.to_string();
+	BOOST_LOG_TRIVIAL(info) << "Peer start, node id: " << m_node_id.to_string() << "@" << socket->remote_endpoint();
 
 	auto this_l(shared_from_this());
 	for (auto pc : capabilities)
@@ -273,12 +273,15 @@ void peer::drop(disconnect_reason const & reason)
 		return;
 	is_dropped = true;
 
+	boost::system::error_code ec;
+	BOOST_LOG_TRIVIAL(info) << "Peer dropped " << m_node_id.to_string()  << "@" <<  socket->remote_endpoint(ec);
+
 	if (socket->is_open())
 	{
 		try
 		{
-			boost::system::error_code ec;
-			BOOST_LOG_TRIVIAL(info) << "Closing " << socket->remote_endpoint(ec) << " (" << reason_of(reason) << ")";
+			//boost::system::error_code ec;
+			//BOOST_LOG_TRIVIAL(info) << "Closing " << socket->remote_endpoint(ec) << " (" << reason_of(reason) << ")";
 			socket->shutdown(boost::asio::ip::tcp::socket::shutdown_both, ec);
 			socket->close();
 		}

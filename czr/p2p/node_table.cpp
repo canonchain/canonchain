@@ -264,7 +264,8 @@ void node_table::handle_receive(bi::udp::endpoint const & from, dev::bytesConstR
 				auto it(find_node_timeouts.find(in.source_id));
 				if (it != find_node_timeouts.end())
 				{
-					if (now - it->second < req_timeout)
+					BOOST_LOG_TRIVIAL(debug) << (now - it->second).count() / 1000000 << "ms";
+					if ((now - it->second) < req_timeout)
 						expected = true;
 					else
 						find_node_timeouts.erase(it);
@@ -272,7 +273,7 @@ void node_table::handle_receive(bi::udp::endpoint const & from, dev::bytesConstR
 			}
 			if (!expected)
 			{
-				BOOST_LOG_TRIVIAL(debug) << "Dropping unsolicited neighbours packet from " << from.address();
+				BOOST_LOG_TRIVIAL(debug) << "Dropping unsolicited neighbours packet from " << from;
 				break;
 			}
 
@@ -545,7 +546,7 @@ void node_table::add_node(node_info const & node_a, node_relation relation_a)
 	}
 
 	//todo: node_endpoint operator<<
-	BOOST_LOG_TRIVIAL(debug) << "addNode pending for " << (bi::udp::endpoint)node_a.endpoint;
+	//BOOST_LOG_TRIVIAL(debug) << "Add Node pending for " << (bi::udp::endpoint)node_a.endpoint;
 	ping(node_a.endpoint);
 }
 
