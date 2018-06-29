@@ -724,8 +724,6 @@ void czr::node::ongoing_unhandle_flush()
 }
 
 
-
-
 void czr::node::ongoing_retry_late_message()
 {
 	auto late_msg_info_list(late_message_cache.purge_list_ealier_than(czr::seconds_since_epoch()));
