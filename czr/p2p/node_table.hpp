@@ -160,6 +160,7 @@ namespace czr
 			std::list<std::shared_ptr<node_info>> snapshot() const;
 			void process_events();
 			void set_event_handler(node_table_event_handler* handler);
+			std::list<node_info> nodes() const;
 
 		private:
 			// Constants for Kademlia, derived from address space.
@@ -216,8 +217,8 @@ namespace czr
 			std::unique_ptr<ba::deadline_timer> discover_timer;
 
 			//Known Node Endpoints
-			std::unordered_map<node_id, std::shared_ptr<node_entry>> nodes;
-			mutable std::mutex nodes_mutex;
+			std::unordered_map<node_id, std::shared_ptr<node_entry>> m_nodes;
+			mutable std::mutex m_nodes_mutex;
 
 			//State of p2p node network
 			std::array<node_bucket, s_bins> states;

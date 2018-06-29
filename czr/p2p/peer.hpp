@@ -46,7 +46,8 @@ namespace czr
 			bool is_connected();
 			void disconnect(disconnect_reason const & reason);
 			std::chrono::steady_clock::time_point last_received();
-			node_id remote_node_id();
+			node_id remote_node_id() const;
+			bi::tcp::endpoint remote_endpoint() const;
 
 		private:
 			void read_loop();

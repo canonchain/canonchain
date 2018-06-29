@@ -113,6 +113,8 @@ public:
 	void block_count ();
 	void block_list();
 
+	void peers();
+	void nodes();
 
 	void send ();
 	void stop ();

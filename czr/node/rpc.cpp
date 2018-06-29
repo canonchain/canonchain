@@ -547,6 +547,7 @@ void czr::rpc_handler::accounts_frontiers()
 	response(response_l);
 }
 
+
 void czr::rpc_handler::block()
 {
 	std::string hash_text(request.get<std::string>("hash"));
@@ -689,6 +690,44 @@ void czr::rpc_handler::block_list()
 	{
 		error_response(response, "Invalid account");
 	}
+}
+
+
+void czr::rpc_handler::peers()
+{
+	boost::property_tree::ptree response_l;
+	boost::property_tree::ptree peers_l;
+	std::unordered_map<p2p::node_id, bi::tcp::endpoint> peers(node.host->peers());
+	for (auto i : peers)
+	{
+		p2p::node_id id(i.first);
+		bi::tcp::endpoint endpoint(i.second);
+
+		boost::property_tree::ptree peer_l;
+		peer_l.put("id", id.to_string());
+		peer_l.put("endpoint", endpoint);
+		peers_l.push_back(std::make_pair("", peer_l));
+	}
+
+	response_l.add_child("peers", peers_l);
+	response(response_l);
+}
+
+void czr::rpc_handler::nodes()
+{
+	boost::property_tree::ptree response_l;
+	boost::property_tree::ptree nodes_l;
+	std::list<p2p::node_info> nodes(node.host->nodes());
+	for (p2p::node_info node : nodes)
+	{
+		boost::property_tree::ptree node_l;
+		node_l.put("id", node.id.to_string());
+		node_l.put("endpoint", (bi::tcp::endpoint)node.endpoint);
+		nodes_l.push_back(std::make_pair("", node_l));
+	}
+
+	response_l.add_child("nodes", nodes_l);
+	response(response_l);
 }
 
 
@@ -943,7 +982,7 @@ void czr::rpc_connection::read()
 
 					if (this_l->node->config.logging.log_rpc())
 					{
-						BOOST_LOG(this_l->node->log) << boost::str(boost::format("RPC request %2% completed in: %1% microseconds") % std::chrono::duration_cast<std::chrono::microseconds> (std::chrono::steady_clock::now() - start).count() % boost::io::group(std::hex, std::showbase, reinterpret_cast<uintptr_t> (this_l.get())));
+						//BOOST_LOG(this_l->node->log) << boost::str(boost::format("RPC request %2% completed in: %1% microseconds") % std::chrono::duration_cast<std::chrono::microseconds> (std::chrono::steady_clock::now() - start).count() % boost::io::group(std::hex, std::showbase, reinterpret_cast<uintptr_t> (this_l.get())));
 					}
 				});
 				if (this_l->request.method() == boost::beast::http::verb::post)
@@ -1081,7 +1120,14 @@ void czr::rpc_handler::process_request()
 		{
 			block_list();
 		}
-
+		else if (action == "peers")
+		{
+			peers();
+		}
+		else if (action == "nodes")
+		{
+			nodes();
+		}
 		else if (action == "stop")
 		{
 			stop();
