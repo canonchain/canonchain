@@ -117,9 +117,9 @@ size_t czr::mdb_val::size() const
 
 uint64_t czr::mdb_val::uint64() const
 {
-	uint64_t result;
+	uint64_t result(0);
 	assert(size() == sizeof(result));
-	std::copy(reinterpret_cast<uint8_t const *> (data()), reinterpret_cast<uint8_t const *> (data()) + sizeof(result), &result);
+	result = *(uint64_t*)data();
 	return result;
 }
 
