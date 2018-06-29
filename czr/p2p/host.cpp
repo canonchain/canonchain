@@ -136,7 +136,7 @@ void host::start_listen(bi::address const & listen_ip, uint16_t const & port)
 	{
 		bi::tcp::endpoint endpoint(listen_ip, port);
 		acceptor->open(endpoint.protocol());
-		acceptor->set_option(bi::tcp::acceptor::reuse_address(true));
+		//acceptor->set_option(bi::tcp::acceptor::reuse_address(true));
 		acceptor->bind(endpoint);
 		acceptor->listen();
 

@@ -513,7 +513,7 @@ std::list<node_info>  node_table::nodes() const
 
 void node_table::add_node(node_info const & node_a, node_relation relation_a)
 {
-	if (!node_a.endpoint)
+	if (!node_a.endpoint || node_a.id == my_node_info.id)
 		return;
 
 	if (relation_a == node_relation::known)
@@ -640,7 +640,7 @@ void node_table::note_active_node(node_id const & node_id_a, bi::udp::endpoint c
 	std::shared_ptr<node_entry> new_node = get_node(node_id_a);
 	if (new_node && !new_node->pending)
 	{
-		BOOST_LOG_TRIVIAL(debug) << "Noting active node: " << node_id_a.to_string() << " " << endpoint_a.address().to_string() << ":" << endpoint_a.port();
+		//BOOST_LOG_TRIVIAL(debug) << "Noting active node: " << node_id_a.to_string() << " " << endpoint_a.address().to_string() << ":" << endpoint_a.port();
 		new_node->endpoint.address = endpoint_a.address();
 		new_node->endpoint.udp_port = endpoint_a.port();
 
