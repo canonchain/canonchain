@@ -4,11 +4,11 @@
 
 using namespace czr::p2p;
 
-host::host(p2p_config const & config_a, boost::asio::io_service & io_service_a,
+host::host(p2p_config const & config_a, boost::asio::io_service & io_service_a, czr::private_key const & node_key,
 	dev::bytesConstRef restore_network_bytes_a) :
 	config(config_a),
 	io_service(io_service_a),
-	alias(network_alias(restore_network_bytes_a)),
+	alias(node_key),
 	acceptor(std::make_unique<bi::tcp::acceptor>(io_service_a)),
 	restore_network_bytes(restore_network_bytes_a.toBytes()),
 	is_run(false),
@@ -72,7 +72,7 @@ void host::start()
 	start_listen(listen_ip, port);
 	accept_loop();
 
-	m_node_table = std::make_shared<node_table>(io_service, alias, node_endpoint(listen_ip, port, port));
+	m_node_table = std::make_shared<node_table>(io_service, alias, node_endpoint(listen_ip, port, port), bootstrap_nodes);
 	m_node_table->set_event_handler(new host_node_table_event_handler(*this));
 	m_node_table->start();
 
@@ -692,19 +692,6 @@ void host::on_node_table_event(node_id const & node_id_a, node_table_event_type 
 	}
 }
 
-czr::private_key host::network_alias(dev::bytesConstRef const & bytes)
-{
-	dev::RLP r(bytes);
-	if (r.itemCount() > 1)
-		return (czr::private_key)r[1];
-	else
-	{
-		czr::private_key prv;
-		random_pool.GenerateBlock(prv.bytes.data(), prv.bytes.size());
-		return prv;
-	}
-}
-
 void host::restore_network(dev::bytesConstRef const & bytes)
 {
 	if (!bytes.size())
@@ -715,10 +702,9 @@ void host::restore_network(dev::bytesConstRef const & bytes)
 	if (r.itemCount() > 0 && r[0].isInt() && version >= czr::p2p::version)
 	{
 		// r[0] = version
-		// r[1] = key
-		// r[2] = nodes
+		// r[1] = nodes
 
-		for (auto i : r[2])
+		for (auto i : r[1])
 		{
 			// todo: ipv6
 			if (i[0].itemCount() != 4 && i[0].size() != 4)
@@ -744,8 +730,8 @@ dev::bytes host::network_bytes() const
 		count++;
 	}
 
-	dev::RLPStream ret(3);
-	ret << czr::p2p::version << alias.prv.data;
+	dev::RLPStream ret(2);
+	ret << czr::p2p::version;
 	ret.appendList(count);
 	if (!!count)
 		ret.appendRaw(network.out(), count);

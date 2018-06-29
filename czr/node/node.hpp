@@ -284,9 +284,9 @@ namespace czr
 	{
 	public:
 		node(czr::node_init & init_a, boost::asio::io_service & service_a, uint16_t peering_port_a, boost::filesystem::path const & application_path_a, 
-			czr::alarm & alarm_a, czr::logging const & logging_a, dev::bytesConstRef restore_network_bytes);
+			czr::alarm & alarm_a, czr::logging const & logging_a, czr::private_key const & node_key_a, dev::bytesConstRef restore_network_bytes);
 		node(czr::node_init & init_a, boost::asio::io_service & service_a, boost::filesystem::path const & application_path_a, 
-			czr::alarm & alarm_a, czr::node_config const & config_a, dev::bytesConstRef restore_network_bytes);
+			czr::alarm & alarm_a, czr::node_config const & config_a, czr::private_key const & node_key_a, dev::bytesConstRef restore_network_bytes);
 		~node();
 		template <typename T>
 		void background(T action_a)
@@ -324,6 +324,7 @@ namespace czr
 		czr::block_arrival block_arrival;
 		czr::late_message_cache late_message_cache;
 		czr::invalid_block_cache invalid_block_cache;
+		std::atomic_flag is_stopped = ATOMIC_FLAG_INIT;
 	};
 
 	class thread_runner

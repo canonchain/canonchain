@@ -72,14 +72,10 @@ bool czr_daemon::daemon_config::upgrade_json(unsigned version_a, boost::property
 
 void czr_daemon::daemon_config::readfile2bytes(dev::bytes &ret, boost::filesystem::path const&filepath)
 {
-	//read2bytes
-	auto toopenfile((filepath / "node.rlp"));
-	std::ifstream  in;
-	std::string str;
-	in.open(toopenfile.string(), std::ios_base::in | std::ios_base::binary);
+	std::ifstream in;
+	in.open(filepath.string(), std::ios_base::in | std::ios_base::binary);
 	if (in.is_open())
 	{
-
 		size_t const c_elementSize = sizeof(typename dev::bytes::value_type);
 		in.seekg(0, in.end);
 		size_t length = in.tellg();
@@ -91,22 +87,41 @@ void czr_daemon::daemon_config::readfile2bytes(dev::bytes &ret, boost::filesyste
 		}
 		in.close();
 	}
-	return;
 }
 
-void czr_daemon::daemon_config::writebytes2file(dev::bytes & bytes, boost::filesystem::path const&filepath)
+void czr_daemon::daemon_config::writebytes2file(dev::bytes & bytes,boost::filesystem::path const&filepath)
 {
-
-	auto toopenfile((filepath / "node.rlp"));
 	std::ofstream out;
-	out.open(toopenfile.string(), std::ios_base::out | std::ios_base::binary);
-	if (out.is_open())
+	out.open(filepath.string(), std::ios_base::out | std::ios_base::binary);
+	if(out.is_open())
 	{
 		out.write(reinterpret_cast<char const*>(bytes.data()), bytes.size());
+	return ;   
+ }	
+}
+
+void czr_daemon::daemon_config::readfile2string(std::string & str, boost::filesystem::path const&filepath)
+{
+	std::ifstream in;
+	in.open(filepath.string(), std::ios_base::in);
+	if (in.is_open())
+	{
+		in >> str;
+		in.close();
+	}
+}
+
+void czr_daemon::daemon_config::writestring2file(std::string const & str, boost::filesystem::path const & filepath)
+{
+	std::ofstream out;
+	out.open(filepath.string(), std::ios_base::out | std::ios_base::binary);
+	if (out.is_open())
+	{
+		out << str;
 		out.close();
 	}
-	return;
 }
+
 
 void czr_daemon::daemon::run(boost::filesystem::path const &data_path, boost::program_options::variables_map &vm)
 {
@@ -157,14 +172,29 @@ void czr_daemon::daemon::run(boost::filesystem::path const &data_path, boost::pr
 		czr::node_init init;
 		try
 		{
+			//node key
+			czr::private_key node_key;
+
+			boost::filesystem::path nodekey_path(data_path / "nodekey");
+			std::string nodekey_str;
+			config.readfile2string(nodekey_str, data_path / "nodekey");
+
+			bool nodekey_error(node_key.decode_hex(nodekey_str));
+			if (nodekey_error)
+			{
+				czr::random_pool.GenerateBlock(node_key.bytes.data(), node_key.bytes.size());
+				config.writestring2file(node_key.to_string(), nodekey_path);
+			}
+
+			boost::filesystem::path network_bytes_path(data_path / "network.rlp");
 			//get network bytes
 			dev::bytesConstRef restore_network_bytes;
 			dev::bytes nbytes;
-			config.readfile2bytes(nbytes, data_path);
+			config.readfile2bytes(nbytes, network_bytes_path);
 			restore_network_bytes = &(nbytes);
 
 			//node
-			std::shared_ptr<czr::node> node(std::make_shared<czr::node>(init, io_service, data_path, alarm, config.node, restore_network_bytes));
+			std::shared_ptr<czr::node> node(std::make_shared<czr::node>(init, io_service, data_path, alarm, config.node, node_key, restore_network_bytes));
 			if (!init.error)
 			{
 				//witness node start
@@ -205,7 +235,7 @@ void czr_daemon::daemon::run(boost::filesystem::path const &data_path, boost::pr
 
 				//save network bytes
 				dev::bytes network_bytes(node->network_bytes());
-				config.writebytes2file(network_bytes, data_path);
+				config.writebytes2file(network_bytes, network_bytes_path);
 
 				node->stop();
 				io_service.stop();

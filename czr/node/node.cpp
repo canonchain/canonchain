@@ -590,19 +590,19 @@ void czr::gap_cache::purge_old()
 
 czr::node::node(czr::node_init & init_a, boost::asio::io_service & service_a, uint16_t peering_port_a, 
 	boost::filesystem::path const & application_path_a, czr::alarm & alarm_a, czr::logging const & logging_a,
-	dev::bytesConstRef restore_network_bytes_a) :
-	node(init_a, service_a, application_path_a, alarm_a, czr::node_config(logging_a), restore_network_bytes_a)
+	czr::private_key const & node_key_a, dev::bytesConstRef restore_network_bytes_a) :
+	node(init_a, service_a, application_path_a, alarm_a, czr::node_config(logging_a), node_key_a, restore_network_bytes_a)
 {
 }
 
 czr::node::node(czr::node_init & init_a, boost::asio::io_service & service_a, 
 	boost::filesystem::path const & application_path_a, czr::alarm & alarm_a, czr::node_config const & config_a, 
-	dev::bytesConstRef restore_network_bytes_a) :
+	czr::private_key const & node_key_a, dev::bytesConstRef restore_network_bytes_a) :
 	io_service(service_a),
 	config(config_a),
 	alarm(alarm_a),
 	capability(std::make_shared<czr::node_capability>(*this)),
-	host(std::make_shared<p2p::host>(config.p2p, io_service, restore_network_bytes_a)),
+	host(std::make_shared<p2p::host>(config.p2p, io_service, node_key_a, restore_network_bytes_a)),
 	store(init_a.error, application_path_a / "data.ldb", config_a.lmdb_max_dbs),
 	gap_cache(*this),
 	ledger(store),
@@ -638,6 +638,7 @@ czr::node::node(czr::node_init & init_a, boost::asio::io_service & service_a,
 
 czr::node::~node()
 {
+	stop();
 }
 
 bool czr::node::copy_with_compaction(boost::filesystem::path const & destination_file)
@@ -670,14 +671,17 @@ void czr::node::start()
 
 void czr::node::stop()
 {
-	BOOST_LOG(log) << "Node stopping";
-
-	host->stop();
-	block_processor.stop();
-	wallet.stop();
-	if (block_processor_thread.joinable())
+	if (!is_stopped.test_and_set())
 	{
-		block_processor_thread.join();
+		BOOST_LOG(log) << "Node stopping";
+
+		host->stop();
+		block_processor.stop();
+		wallet.stop();
+		if (block_processor_thread.joinable())
+		{
+			block_processor_thread.join();
+		}
 	}
 }
 
@@ -1011,7 +1015,7 @@ czr::inactive_node::inactive_node(boost::filesystem::path const & path) :
 {
 	boost::filesystem::create_directories(path);
 	logging.init(path);
-	node = std::make_shared<czr::node>(init, *service, 24000, path, alarm, logging, dev::bytesConstRef());
+	node = std::make_shared<czr::node>(init, *service, 24000, path, alarm, logging, 0, dev::bytesConstRef());
 }
 
 czr::inactive_node::~inactive_node()
