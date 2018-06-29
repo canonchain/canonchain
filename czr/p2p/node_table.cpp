@@ -2,7 +2,8 @@
 
 using namespace czr::p2p;
 
-node_table::node_table(boost::asio::io_service & io_service_a, czr::keypair const & alias_a, node_endpoint const & endpoint_a) :
+node_table::node_table(boost::asio::io_service & io_service_a, czr::keypair const & alias_a, node_endpoint const & endpoint_a, 
+	std::vector<std::shared_ptr<node_info>> const & bootstrap_nodes_a) :
 	io_service(io_service_a),
 	my_node_info(alias_a.pub, endpoint_a),
 	secret(alias_a.prv.data),
@@ -10,6 +11,9 @@ node_table::node_table(boost::asio::io_service & io_service_a, czr::keypair cons
 	my_endpoint(endpoint_a),
 	is_cancel(false)
 {
+	for (auto const &  bn : bootstrap_nodes_a)
+		bootstrap_nodes.push_back(std::make_shared<node_entry>(my_node_info.id, bn->id, bn->endpoint));
+
 	for (unsigned i = 0; i < s_bins; i++)
 		states[i].distance = i;
 }
@@ -87,8 +91,15 @@ void node_table::do_discover(node_id const & rand_node_id, unsigned const & roun
 		tried_a = std::make_shared<std::set<std::shared_ptr<node_entry>>>();
 
 	std::vector<std::shared_ptr<node_entry>> nearest = nearest_node_entries(rand_node_id);
+	if (round == 0 && nearest.size() == 0)
+	{
+		for (std::shared_ptr<node_entry> const & bn : bootstrap_nodes)
+			nearest.push_back(bn);
+	}
+
 	std::list<std::shared_ptr<node_entry>> tried;
 	for (unsigned i = 0; i < nearest.size() && tried.size() < s_alpha; i++)
+	{
 		if (!tried_a->count(nearest[i]))
 		{
 			auto n = nearest[i];
@@ -105,6 +116,7 @@ void node_table::do_discover(node_id const & rand_node_id, unsigned const & roun
 
 			send((bi::udp::endpoint)n->endpoint, p);
 		}
+	}
 
 	if (tried.empty())
 	{

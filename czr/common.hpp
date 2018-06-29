@@ -209,7 +209,7 @@ namespace czr
 		static czr::summary_hash gen_summary_hash(czr::block_hash const & block_hash,
 			std::vector<czr::summary_hash> const & parent_hashs,
 			std::set<czr::summary_hash> const & skip_list,
-			bool const & is_fork, bool const & is_error, bool const & is_fail,
+			bool const & is_fork, bool const & is_invalid, bool const & is_fail,
 			czr::account_state_hash const & from_state_hash, czr::account_state_hash const & to_state_hash);
 	};
 }

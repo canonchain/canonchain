@@ -72,7 +72,7 @@ void host::start()
 	start_listen(listen_ip, port);
 	accept_loop();
 
-	m_node_table = std::make_shared<node_table>(io_service, alias, node_endpoint(listen_ip, port, port));
+	m_node_table = std::make_shared<node_table>(io_service, alias, node_endpoint(listen_ip, port, port), bootstrap_nodes);
 	m_node_table->set_event_handler(new host_node_table_event_handler(*this));
 	m_node_table->start();
 

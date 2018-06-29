@@ -150,7 +150,7 @@ namespace czr
 		class node_table : public std::enable_shared_from_this<node_table>
 		{
 		public:
-			node_table(boost::asio::io_service & io_service_a, czr::keypair const & alias_a, node_endpoint const & endpoint);
+			node_table(boost::asio::io_service & io_service_a, czr::keypair const & alias_a, node_endpoint const & endpoint_a, std::vector<std::shared_ptr<node_info>> const & bootstrap_nodes_a);
 			~node_table();
 
 			void start();
@@ -232,6 +232,8 @@ namespace czr
 			std::mutex  find_node_timeouts_mutex;
 
 			std::unique_ptr<node_table_event_handler> node_event_handler;
+
+			std::vector<std::shared_ptr<node_entry>> bootstrap_nodes;
 
 			bool is_cancel;
 		};
