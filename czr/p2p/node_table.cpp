@@ -113,7 +113,7 @@ void node_table::do_discover(node_id const & rand_node_id, unsigned const & roun
 			//add find node timeout
 			{
 				std::lock_guard<std::mutex> lock(find_node_timeouts_mutex);
-				find_node_timeouts.insert(std::make_pair(n->id, std::chrono::steady_clock::now()));
+				find_node_timeouts[n->id] = std::chrono::steady_clock::now();
 			}
 
 			send((bi::udp::endpoint)n->endpoint, p);
@@ -264,7 +264,6 @@ void node_table::handle_receive(bi::udp::endpoint const & from, dev::bytesConstR
 				auto it(find_node_timeouts.find(in.source_id));
 				if (it != find_node_timeouts.end())
 				{
-					BOOST_LOG_TRIVIAL(debug) << (now - it->second).count() / 1000000 << "ms";
 					if ((now - it->second) < req_timeout)
 						expected = true;
 					else

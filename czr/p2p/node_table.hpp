@@ -177,7 +177,7 @@ namespace czr
 			boost::posix_time::milliseconds const discover_interval = boost::posix_time::milliseconds(7200);
 			boost::posix_time::milliseconds const eviction_check_interval = boost::posix_time::milliseconds(75);
 			//How long to wait for requests (evict, find iterations).
-			std::chrono::milliseconds const req_timeout = std::chrono::milliseconds(3000);
+			std::chrono::milliseconds const req_timeout = std::chrono::milliseconds(300);
 
 			static size_t const max_udp_packet_size = 1028;
 
