@@ -145,20 +145,22 @@ void czr_daemon::daemon::run(boost::filesystem::path const &data_path, boost::pr
 	czr::error_message error_msg;
 	std::string account;
 	std::string password;
+	std::string filename;
 	if (vm.count("witness")>0)
 	{
 		//todo getpassword
-		if (vm.count("account") == 0 || vm.count("password") == 0)
+		if ((vm.count("account") == 0 && vm.count("file") == 0)|| vm.count("password") == 0)
 		{
 			error_msg.error = true;
 			error_msg.message = "witness need account and password\n ";
-			std::cerr << "witness need account and password\n ";
+			std::cerr << "witness need account or file and password\n ";
 			return;
 		}
 		else
 		{
 			is_witness = true;
-			account = vm["account"].as<std::string>();
+			account = (vm.count("account")>0) ? vm["account"].as<std::string>():"";
+			filename = (vm.count("file")>0) ? vm["file"].as<std::string>() : "";
 			password = vm["password"].as<std::string>();
 		}
 	}
