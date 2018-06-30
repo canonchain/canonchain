@@ -161,7 +161,7 @@ void host::accept_loop()
 
 		if (ec || !this_l->is_run)
 		{
-			BOOST_LOG_TRIVIAL(warning) << boost::str(boost::format("Error while accepting connections: %1%") % ec.message());
+			//BOOST_LOG_TRIVIAL(warning) << boost::str(boost::format("Error while accepting connections: %1%") % ec.message());
 			try
 			{
 				if (socket->is_open())
