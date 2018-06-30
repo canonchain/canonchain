@@ -159,7 +159,7 @@ void node_table::receive_loop()
 			return;
 
 		if (ec)
-			BOOST_LOG_TRIVIAL(warning) << "Receiving UDP message failed. " << ec.value() << " : " << ec.message();
+			//BOOST_LOG_TRIVIAL(warning) << "Receiving UDP message from " << recv_endpoint << " failed. " << ec.value() << " : " << ec.message();
 
 		if (size > 0)
 			handle_receive(recv_endpoint, dev::bytesConstRef(recv_buffer.data(), size));
