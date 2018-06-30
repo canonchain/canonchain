@@ -76,8 +76,8 @@ void host::start()
 	m_node_table->set_event_handler(new host_node_table_event_handler(*this));
 	m_node_table->start();
 
-	for (auto & node : bootstrap_nodes)
-		m_node_table->add_node(*node);
+	//for (auto & node : bootstrap_nodes)
+	//	m_node_table->add_node(*node);
 
 	restore_network(&restore_network_bytes);
 
@@ -103,8 +103,8 @@ void host::stop()
 	// disconnect peers
 	for (unsigned n = 0;; n = 0)
 	{
-		std::lock_guard<std::mutex> lock(peers_mutex);
-		for (auto i : peers)
+		std::lock_guard<std::mutex> lock(m_peers_mutex);
+		for (auto i : m_peers)
 			if (auto p = i.second.lock())
 				if (p->is_connected())
 				{
@@ -120,8 +120,8 @@ void host::stop()
 
 	//clear peers
 	{
-		std::lock_guard<std::mutex> lock(peers_mutex);
-		peers.clear();
+		std::lock_guard<std::mutex> lock(m_peers_mutex);
+		m_peers.clear();
 	}
 }
 
@@ -136,7 +136,7 @@ void host::start_listen(bi::address const & listen_ip, uint16_t const & port)
 	{
 		bi::tcp::endpoint endpoint(listen_ip, port);
 		acceptor->open(endpoint.protocol());
-		acceptor->set_option(bi::tcp::acceptor::reuse_address(true));
+		//acceptor->set_option(bi::tcp::acceptor::reuse_address(true));
 		acceptor->bind(endpoint);
 		acceptor->listen();
 
@@ -160,7 +160,7 @@ void host::accept_loop()
 	auto this_l(shared_from_this());
 	acceptor->async_accept(*socket, [socket, this_l](boost::system::error_code const & ec) {
 
-		BOOST_LOG_TRIVIAL(debug) << "Accept socket:" << socket->remote_endpoint();
+		//BOOST_LOG_TRIVIAL(debug) << "Accept socket:" << socket->remote_endpoint();
 
 		if (ec || !this_l->is_run)
 		{
@@ -176,7 +176,7 @@ void host::accept_loop()
 		{
 			if (this_l->avaliable_peer_count(peer_type::ingress) == 0)
 			{
-				BOOST_LOG_TRIVIAL(info) << "Dropping socket due to too many peers, peer count: " << this_l->peers.size() 
+				BOOST_LOG_TRIVIAL(info) << "Dropping socket due to too many peers, peer count: " << this_l->m_peers.size() 
 					<< ",pending peers: " << this_l->pending_conns.size() << ",remote endpoint: " << socket->remote_endpoint() 
 					<< ",max peers: " << this_l->max_peer_size(peer_type::ingress);
 				try
@@ -261,10 +261,10 @@ void host::connect(std::shared_ptr<node_info> const & ne)
 		return;
 
 	{
-		std::lock_guard<std::mutex> lock(peers_mutex);
-		if (peers.count(ne->id))
+		std::lock_guard<std::mutex> lock(m_peers_mutex);
+		if (m_peers.count(ne->id))
 		{
-			BOOST_LOG_TRIVIAL(debug) << "Aborted connect, node already connected, node id: " << ne->id.to_string();
+			//BOOST_LOG_TRIVIAL(debug) << "Aborted connect, node already connected, node id: " << ne->id.to_string();
 			return;
 		}
 	}
@@ -278,18 +278,18 @@ void host::connect(std::shared_ptr<node_info> const & ne)
 	}
 
 	bi::tcp::endpoint ep(ne->endpoint);
-	BOOST_LOG_TRIVIAL(debug) << "Attempting connection to node " << ne->id.to_string() << "@" << ep;
+	//BOOST_LOG_TRIVIAL(debug) << "Attempting connection to node " << ne->id.to_string() << "@" << ep;
 	std::shared_ptr<bi::tcp::socket> socket = std::make_shared<bi::tcp::socket>(io_service);
 	auto this_l(shared_from_this());
 	socket->async_connect(ep, [ne, ep, socket, this_l](boost::system::error_code const& ec)
 	{
 		if (ec)
 		{
-			BOOST_LOG_TRIVIAL(info) << "Connection refused to node " << ne->id.to_string() << "@" << ep << ", message: " << ec.message();
+			//BOOST_LOG_TRIVIAL(info) << "Connection refused to node " << ne->id.to_string() << "@" << ep << ", message: " << ec.message();
 		}
 		else
 		{
-			BOOST_LOG_TRIVIAL(info) << "Connecting to " << ne->id.to_string() << "@" << ep;
+			//BOOST_LOG_TRIVIAL(info) << "Connecting to " << ne->id.to_string() << "@" << ep;
 			this_l->do_handshake(socket);
 		}
 
@@ -302,10 +302,10 @@ void host::connect(std::shared_ptr<node_info> const & ne)
 
 size_t host::avaliable_peer_count(peer_type const & type)
 {
-	size_t count = peers.size() + pending_conns.size();
+	size_t count = m_peers.size() + pending_conns.size();
 	if (max_peer_size(type) <= count)
 		return 0;
-	return max_peer_size(type) - peers.size() - pending_conns.size();
+	return max_peer_size(type) - m_peers.size() - pending_conns.size();
 }
 
 uint32_t host::max_peer_size(peer_type const & type)
@@ -322,15 +322,15 @@ void host::keep_alive_peers()
 		return;
 
 	{
-		std::lock_guard<std::mutex> lock(peers_mutex);
-		for (auto it = peers.begin(); it != peers.end();)
+		std::lock_guard<std::mutex> lock(m_peers_mutex);
+		for (auto it = m_peers.begin(); it != m_peers.end();)
 			if (auto p = it->second.lock())
 			{
 				p->ping();
 				++it;
 			}
 			else
-				it = peers.erase(it);
+				it = m_peers.erase(it);
 	}
 
 	last_ping = std::chrono::steady_clock::now();
@@ -349,7 +349,7 @@ void host::try_connect_nodes(size_t const & avaliable_count)
 	}
 
 	//connect to bootstrap nodes
-	if (peers.size() == 0 && std::chrono::steady_clock::now() - start_time > node_fallback_interval)
+	if (m_peers.size() == 0 && std::chrono::steady_clock::now() - start_time > node_fallback_interval)
 	{
 		for (auto bn : bootstrap_nodes)
 		{
@@ -603,12 +603,12 @@ void host::start_peer(std::shared_ptr<bi::tcp::socket> const & socket, ack_messa
 		}
 
 		{
-			std::lock_guard<std::mutex> lock(peers_mutex);
+			std::lock_guard<std::mutex> lock(m_peers_mutex);
 
 			//check duplicate
-			if (peers.count(remote_node_id) && !!peers[remote_node_id].lock())
+			if (m_peers.count(remote_node_id) && !!m_peers[remote_node_id].lock())
 			{
-				auto exist_peer(peers[remote_node_id].lock());
+				auto exist_peer(m_peers[remote_node_id].lock());
 				if (exist_peer->is_connected())
 				{
 					BOOST_LOG_TRIVIAL(info) << boost::str(boost::format("Peer already exists, node id: %1%") % remote_node_id.to_string());
@@ -620,7 +620,7 @@ void host::start_peer(std::shared_ptr<bi::tcp::socket> const & socket, ack_messa
 			//check max peers
 			if(avaliable_peer_count(peer_type::ingress) == 0)
 			{
-				BOOST_LOG_TRIVIAL(info) << "Too many peers. peer count: " << peers.size() << ",pending peers: " << pending_conns.size() 
+				BOOST_LOG_TRIVIAL(info) << "Too many peers. peer count: " << m_peers.size() << ",pending peers: " << pending_conns.size() 
 					<< ",remote node id: " << remote_node_id.to_string() << ",remote endpoint: " << socket->remote_endpoint() 
 					<< ",max peers: " << max_peer_size(peer_type::ingress);
 
@@ -658,7 +658,7 @@ void host::start_peer(std::shared_ptr<bi::tcp::socket> const & socket, ack_messa
 
 			new_peer->start();
 
-			peers[remote_node_id] = new_peer;
+			m_peers[remote_node_id] = new_peer;
 		}
 	}
 	catch (std::exception const & e)
@@ -678,7 +678,7 @@ void host::on_node_table_event(node_id const & node_id_a, node_table_event_type 
 {
 	if (type_a == node_table_event_type::node_entry_added)
 	{
-		BOOST_LOG_TRIVIAL(info) << "Node entry added, id:" << node_id_a.to_string();
+		//BOOST_LOG_TRIVIAL(info) << "Node entry added, id:" << node_id_a.to_string();
 
 		if (std::shared_ptr<node_info> nf = m_node_table->get_node(node_id_a))
 		{
@@ -688,8 +688,26 @@ void host::on_node_table_event(node_id const & node_id_a, node_table_event_type 
 	}
 	else if (type_a == node_table_event_type::node_entry_dropped)
 	{
-		BOOST_LOG_TRIVIAL(info) << "Node entry dropped, id:" << node_id_a.to_string();
+		//BOOST_LOG_TRIVIAL(info) << "Node entry dropped, id:" << node_id_a.to_string();
 	}
+}
+
+std::unordered_map<node_id, bi::tcp::endpoint> czr::p2p::host::peers() const
+{
+	std::unordered_map<node_id, bi::tcp::endpoint> result;
+	std::lock_guard<std::mutex> lock(m_peers_mutex);
+	for (auto p : m_peers)
+	{
+		if (auto peer = p.second.lock())
+			result.insert(std::make_pair(peer->remote_node_id(), peer->remote_endpoint()));
+	}
+
+	return result;
+}
+
+std::list<node_info> czr::p2p::host::nodes() const
+{
+	return m_node_table->nodes();
 }
 
 void host::restore_network(dev::bytesConstRef const & bytes)

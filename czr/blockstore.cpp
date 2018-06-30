@@ -231,7 +231,6 @@ czr::block_store::block_store(bool & error_a, boost::filesystem::path const & pa
 		error_a |= mdb_dbi_open(transaction, "dependency_unhandled", MDB_CREATE, &dependency_unhandled) != 0;
 		error_a |= mdb_dbi_open(transaction, "deadtime_unhandled", MDB_CREATE, &deadtime_unhandled) != 0;
 		error_a |= mdb_dbi_open(transaction, "prop", MDB_CREATE, &prop) != 0;
-		
 	}
 }
 

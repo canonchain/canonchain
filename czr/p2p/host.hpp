@@ -23,6 +23,8 @@ namespace czr
 			void register_capability(std::shared_ptr<icapability> cap);
 			dev::bytes network_bytes() const;
 			void on_node_table_event(node_id const & node_id_a, node_table_event_type const & type_a);
+			std::unordered_map<node_id, bi::tcp::endpoint> peers() const;
+			std::list<node_info> nodes() const;
 
 		private:
 			enum class peer_type
@@ -55,8 +57,8 @@ namespace czr
 			std::map<capability_desc, std::shared_ptr<icapability>> capabilities;
 
 			std::unique_ptr<bi::tcp::acceptor> acceptor;
-			std::unordered_map<node_id, std::weak_ptr<peer>> peers;
-			std::mutex peers_mutex;
+			std::unordered_map<node_id, std::weak_ptr<peer>> m_peers;
+			mutable std::mutex m_peers_mutex;
 
 			std::unordered_set<node_id> pending_conns;
 			std::mutex pending_conns_mutex;

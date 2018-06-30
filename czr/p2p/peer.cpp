@@ -27,7 +27,7 @@ void peer::register_capability(std::shared_ptr<peer_capability> const & cap)
 
 void peer::start()
 {
-	BOOST_LOG_TRIVIAL(info) << "Peer start, node id: " << m_node_id.to_string();
+	BOOST_LOG_TRIVIAL(info) << "Peer start, node id: " << m_node_id.to_string() << "@" << socket->remote_endpoint();
 
 	auto this_l(shared_from_this());
 	for (auto pc : capabilities)
@@ -64,9 +64,14 @@ std::chrono::steady_clock::time_point peer::last_received()
 	return _last_received;
 }
 
-node_id czr::p2p::peer::remote_node_id()
+node_id czr::p2p::peer::remote_node_id() const
 {
 	return m_node_id;
+}
+
+bi::tcp::endpoint czr::p2p::peer::remote_endpoint() const
+{
+	return socket->remote_endpoint();
 }
 
 void peer::ping()
@@ -84,6 +89,9 @@ void peer::read_loop()
 	read_buffer.resize(czr::p2p::tcp_header_size);
 	ba::async_read(*socket, boost::asio::buffer(read_buffer, czr::p2p::tcp_header_size), [this, this_l](boost::system::error_code ec, std::size_t size)
 	{
+		if (is_dropped)
+			return;
+
 		if (!ec)
 		{
 			uint32_t packet_size(this_l->m_frame_coder->deserialize_packet_size(read_buffer));
@@ -96,6 +104,9 @@ void peer::read_loop()
 			read_buffer.resize(packet_size);
 			ba::async_read(*socket, boost::asio::buffer(read_buffer, packet_size), [this, this_l, packet_size](boost::system::error_code ec, std::size_t size)
 			{
+				if (is_dropped)
+					return;
+
 				if (!ec)
 				{
 					dev::bytesConstRef packet(read_buffer.data(), packet_size);
@@ -260,17 +271,20 @@ void peer::drop(disconnect_reason const & reason)
 {
 	if (is_dropped)
 		return;
+	is_dropped = true;
+
+	boost::system::error_code ec;
+	BOOST_LOG_TRIVIAL(info) << "Peer dropped " << m_node_id.to_string()  << "@" <<  socket->remote_endpoint(ec);
+
 	if (socket->is_open())
 	{
 		try
 		{
-			boost::system::error_code ec;
-			BOOST_LOG_TRIVIAL(info) << "Closing " << socket->remote_endpoint(ec) << " (" << reason_of(reason) << ")";
+			//boost::system::error_code ec;
+			//BOOST_LOG_TRIVIAL(info) << "Closing " << socket->remote_endpoint(ec) << " (" << reason_of(reason) << ")";
 			socket->shutdown(boost::asio::ip::tcp::socket::shutdown_both, ec);
 			socket->close();
 		}
 		catch (...) {}
 	}
-
-	is_dropped = true;
 }

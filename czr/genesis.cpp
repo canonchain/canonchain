@@ -3,29 +3,30 @@
 #include <boost/property_tree/json_parser.hpp>
 
 char const * test_genesis_data = R"%%%({
-    "from":"czr_3e3j5tkog48pnny9dmfzj1r16pg8t1e76dz5tmac6iq689wyjfpiij4txtdo",
-    "to":"czr_3e3j5tkog48pnny9dmfzj1r16pg8t1e76dz5tmac6iq689wyjfpiij4txtdo",
+    "from":"czr_1om565pqoa58fejtdcnz1taeuaocynotqdajbadnhoneqtx3xgoaqawtpac5",
+    "to":"czr_19rw6416uie15u9qfiyt8s8wr5zjac57c1gmb3bdrz1bo4dgm8gm3quwgrfg",
     "amount":"1000000",
     "previous":"000000000000000000000000000000000000000000000000000000000000",
     "parents":[],
     "witness_list_block":"0000000000000000000000000000000000000000000000000000000000000000",
     "witness_list":[
-		"czr_3t6k35gi95xu6tergt6p69ck76ogmitsa8mnijtpxm9fkcm736xtoncuoh01",
-		"czr_3t6k35gi95xu6tergt6p69ck76ogmitsa8mnijtpxm9fkcm736xtoncuoh02",
-		"czr_3t6k35gi95xu6tergt6p69ck76ogmitsa8mnijtpxm9fkcm736xtoncuoh03",
-		"czr_3t6k35gi95xu6tergt6p69ck76ogmitsa8mnijtpxm9fkcm736xtoncuoh04",
-		"czr_3t6k35gi95xu6tergt6p69ck76ogmitsa8mnijtpxm9fkcm736xtoncuoh05",
-		"czr_3t6k35gi95xu6tergt6p69ck76ogmitsa8mnijtpxm9fkcm736xtoncuoh06",
-		"czr_3t6k35gi95xu6tergt6p69ck76ogmitsa8mnijtpxm9fkcm736xtoncuoh07",
-		"czr_3t6k35gi95xu6tergt6p69ck76ogmitsa8mnijtpxm9fkcm736xtoncuoh08",
-		"czr_3t6k35gi95xu6tergt6p69ck76ogmitsa8mnijtpxm9fkcm736xtoncuoh09",
-		"czr_3t6k35gi95xu6tergt6p69ck76ogmitsa8mnijtpxm9fkcm736xtoncuoh10", 
-		"czr_3t6k35gi95xu6tergt6p69ck76ogmitsa8mnijtpxm9fkcm736xtoncuoh11",
-		"czr_3t6k35gi95xu6tergt6p69ck76ogmitsa8mnijtpxm9fkcm736xtoncuoh12"
+     "czr_19rw6416uie15u9qfiyt8s8wr5zjac57c1gmb3bdrz1bo4dgm8gm3quwgrfg",
+     "czr_1dx7bhufrkjezp619waf8fxaey486oddypua834943tb3squwaots4yexug1",
+     "czr_1mq7emka3d1o7gxgn5bera1a1hprxzdego6d8hzspauada3dwggwgbrxibmn",
+     "czr_1om565pqoa58fejtdcnz1taeuaocynotqdajbadnhoneqtx3xgoaqawtpac5",
+     "czr_1r4k3dktqqf65uj64zhsfq9yekw4on5z4n554q347qwrzwk3cgae9indkmkc",
+     "czr_1rasmtxbe1zs5ci1rwto9m7btzhf7qoxo3km7ryfeebedkueg3197os7syfq",
+     "czr_1xkiaigais6p1d9t4pgpw8uwj5rp5f7sdzbue98pnwusc185xgyry95ftums",
+     "czr_3hm5yqgu5ien17ec4ytnb68ynj9ey361pt81ze9d1yk9qke67sjfch11pkh7",
+     "czr_3igubg9qb1fr7uoydq7h8azb1x4i3qkirgb9gdex14fcy11yy8bbekckh5bs",
+     "czr_3kbf4urj7uo91ghsq1cgdd3ez86e8eu1sifsyx3b8rzq97b9q9atwkaokya9",
+     "czr_3omxq3jmd51ohdnbyea84pz8meemph7n8ywnq1mkpzh3apsj4s9yz9uocbbk",
+     "czr_3z1docm8bqeeogpwp7h7x1t5p8m65paqjqm4qn6afiycmdmmuxynimjgau4e"
     ],
     "last_summary":"0000000000000000000000000000000000000000000000000000000000000000",
     "last_summary_block":"0000000000000000000000000000000000000000000000000000000000000000",
     "data":"",
+	"exec_timestamp":"1526568538",
 	"signature": "9F0C933C8ADE004D808EA1985FA746A7E95BA2A38F867640F53EC8F180BDFE9E2C1268DEAD7C2664F356E37ABA362BC58E46DBA03E523A7B5A19E4B6EB12BB02"
 })%%%";
 
@@ -58,30 +59,29 @@ char const * beta_genesis_data = R"%%%({
 })%%%";
 
 char const * live_genesis_data = R"%%%({
-    "from":"czr_1om565pqoa58fejtdcnz1taeuaocynotqdajbadnhoneqtx3xgoaqawtpac5",
-    "to":"czr_19rw6416uie15u9qfiyt8s8wr5zjac57c1gmb3bdrz1bo4dgm8gm3quwgrfg",
+    "from":"czr_3e3j5tkog48pnny9dmfzj1r16pg8t1e76dz5tmac6iq689wyjfpiij4txtdo",
+    "to":"czr_3e3j5tkog48pnny9dmfzj1r16pg8t1e76dz5tmac6iq689wyjfpiij4txtdo",
     "amount":"1000000",
     "previous":"000000000000000000000000000000000000000000000000000000000000",
     "parents":[],
     "witness_list_block":"0000000000000000000000000000000000000000000000000000000000000000",
     "witness_list":[
-     "czr_19rw6416uie15u9qfiyt8s8wr5zjac57c1gmb3bdrz1bo4dgm8gm3quwgrfg",
-     "czr_1dx7bhufrkjezp619waf8fxaey486oddypua834943tb3squwaots4yexug1",
-     "czr_1mq7emka3d1o7gxgn5bera1a1hprxzdego6d8hzspauada3dwggwgbrxibmn",
-     "czr_1om565pqoa58fejtdcnz1taeuaocynotqdajbadnhoneqtx3xgoaqawtpac5",
-     "czr_1r4k3dktqqf65uj64zhsfq9yekw4on5z4n554q347qwrzwk3cgae9indkmkc",
-     "czr_1rasmtxbe1zs5ci1rwto9m7btzhf7qoxo3km7ryfeebedkueg3197os7syfq",
-     "czr_1xkiaigais6p1d9t4pgpw8uwj5rp5f7sdzbue98pnwusc185xgyry95ftums",
-     "czr_3hm5yqgu5ien17ec4ytnb68ynj9ey361pt81ze9d1yk9qke67sjfch11pkh7",
-     "czr_3igubg9qb1fr7uoydq7h8azb1x4i3qkirgb9gdex14fcy11yy8bbekckh5bs",
-     "czr_3kbf4urj7uo91ghsq1cgdd3ez86e8eu1sifsyx3b8rzq97b9q9atwkaokya9",
-     "czr_3omxq3jmd51ohdnbyea84pz8meemph7n8ywnq1mkpzh3apsj4s9yz9uocbbk",
-     "czr_3z1docm8bqeeogpwp7h7x1t5p8m65paqjqm4qn6afiycmdmmuxynimjgau4e"
+		"czr_3t6k35gi95xu6tergt6p69ck76ogmitsa8mnijtpxm9fkcm736xtoncuoh01",
+		"czr_3t6k35gi95xu6tergt6p69ck76ogmitsa8mnijtpxm9fkcm736xtoncuoh02",
+		"czr_3t6k35gi95xu6tergt6p69ck76ogmitsa8mnijtpxm9fkcm736xtoncuoh03",
+		"czr_3t6k35gi95xu6tergt6p69ck76ogmitsa8mnijtpxm9fkcm736xtoncuoh04",
+		"czr_3t6k35gi95xu6tergt6p69ck76ogmitsa8mnijtpxm9fkcm736xtoncuoh05",
+		"czr_3t6k35gi95xu6tergt6p69ck76ogmitsa8mnijtpxm9fkcm736xtoncuoh06",
+		"czr_3t6k35gi95xu6tergt6p69ck76ogmitsa8mnijtpxm9fkcm736xtoncuoh07",
+		"czr_3t6k35gi95xu6tergt6p69ck76ogmitsa8mnijtpxm9fkcm736xtoncuoh08",
+		"czr_3t6k35gi95xu6tergt6p69ck76ogmitsa8mnijtpxm9fkcm736xtoncuoh09",
+		"czr_3t6k35gi95xu6tergt6p69ck76ogmitsa8mnijtpxm9fkcm736xtoncuoh10", 
+		"czr_3t6k35gi95xu6tergt6p69ck76ogmitsa8mnijtpxm9fkcm736xtoncuoh11",
+		"czr_3t6k35gi95xu6tergt6p69ck76ogmitsa8mnijtpxm9fkcm736xtoncuoh12"
     ],
     "last_summary":"0000000000000000000000000000000000000000000000000000000000000000",
     "last_summary_block":"0000000000000000000000000000000000000000000000000000000000000000",
     "data":"",
-	"exec_timestamp":"1526568538",
 	"signature": "9F0C933C8ADE004D808EA1985FA746A7E95BA2A38F867640F53EC8F180BDFE9E2C1268DEAD7C2664F356E37ABA362BC58E46DBA03E523A7B5A19E4B6EB12BB02"
 })%%%";
 

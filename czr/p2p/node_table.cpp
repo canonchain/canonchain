@@ -34,15 +34,17 @@ void node_table::start()
 		try
 		{
 			socket->bind(udp_endpoint);
+			BOOST_LOG_TRIVIAL(info) << "Node discovery start on " << udp_endpoint;
 		}
 		catch (...)
 		{
-			socket->bind(bi::udp::endpoint(bi::udp::v4(), udp_endpoint.port()));
+			auto uep(bi::udp::endpoint(bi::udp::v4(), udp_endpoint.port()));
+			socket->bind(uep);
+			BOOST_LOG_TRIVIAL(info) << "Node discovery bind fail on " << udp_endpoint << " and start on " << uep;
 		}
 		receive_loop();
 		discover_loop();
 
-		BOOST_LOG_TRIVIAL(info) << "Node discovery start on " << udp_endpoint;
 	}
 	catch (std::exception const & e)
 	{
@@ -111,7 +113,7 @@ void node_table::do_discover(node_id const & rand_node_id, unsigned const & roun
 			//add find node timeout
 			{
 				std::lock_guard<std::mutex> lock(find_node_timeouts_mutex);
-				find_node_timeouts.insert(std::make_pair(n->id, std::chrono::steady_clock::now()));
+				find_node_timeouts[n->id] = std::chrono::steady_clock::now();
 			}
 
 			send((bi::udp::endpoint)n->endpoint, p);
@@ -167,6 +169,8 @@ void node_table::receive_loop()
 
 void node_table::handle_receive(bi::udp::endpoint const & from, dev::bytesConstRef const & data)
 {
+	//BOOST_LOG_TRIVIAL(debug) << "Receive packet, " << packet->source_id.to_string() << "@" << from;
+
 	try {
 		std::unique_ptr<discover_packet> packet = interpret_packet(from, data);
 		if (!packet)
@@ -182,6 +186,8 @@ void node_table::handle_receive(bi::udp::endpoint const & from, dev::bytesConstR
 		{
 		case  discover_packet_type::ping:
 		{
+			//BOOST_LOG_TRIVIAL(debug) << "Receive packet ping, " << packet->source_id.to_string() << "@" << from;
+
 			auto in = dynamic_cast<ping_packet const&>(*packet);
 			node_endpoint from_node_endpoint(from.address(), from.port(), in.tcp_port);
 			add_node(node_info(packet->source_id, from_node_endpoint));
@@ -192,6 +198,8 @@ void node_table::handle_receive(bi::udp::endpoint const & from, dev::bytesConstR
 		}
 		case discover_packet_type::pong:
 		{
+			//BOOST_LOG_TRIVIAL(debug) << "Receive packet pong, " << packet->source_id.to_string() << "@" << from;
+
 			auto in = dynamic_cast<pong_packet const &>(*packet);
 			// whenever a pong is received, check if it's in evictions
 			bool found = false;
@@ -228,11 +236,12 @@ void node_table::handle_receive(bi::udp::endpoint const & from, dev::bytesConstR
 					add_node(node_info(packet->source_id, node_endpoint(from.address(), from.port(), from.port())));
 			}
 
-			BOOST_LOG_TRIVIAL(debug) << "PONG from " << packet->source_id.to_string() << ":" << from;
 			break;
 		}
 		case discover_packet_type::find_node:
 		{
+			//BOOST_LOG_TRIVIAL(debug) << "Receive packet find_node, " << packet->source_id.to_string() << "@" << from;
+
 			auto in = dynamic_cast<find_node_packet const&>(*packet);
 			std::vector<std::shared_ptr<node_entry>> nearest = nearest_node_entries(in.target);
 			static unsigned const nlimit = (max_udp_packet_size - 130) / neighbour::max_size;
@@ -245,6 +254,8 @@ void node_table::handle_receive(bi::udp::endpoint const & from, dev::bytesConstR
 		}
 		case  discover_packet_type::neighbours:
 		{
+			//BOOST_LOG_TRIVIAL(debug) << "Receive packet neighbours, " << packet->source_id.to_string() << "@" << from;
+
 			auto in = dynamic_cast<neighbours_packet const&>(*packet);
 			bool expected = false;
 			auto now = std::chrono::steady_clock::now();
@@ -253,7 +264,7 @@ void node_table::handle_receive(bi::udp::endpoint const & from, dev::bytesConstR
 				auto it(find_node_timeouts.find(in.source_id));
 				if (it != find_node_timeouts.end())
 				{
-					if (now - it->second < req_timeout)
+					if ((now - it->second) < req_timeout)
 						expected = true;
 					else
 						find_node_timeouts.erase(it);
@@ -261,7 +272,7 @@ void node_table::handle_receive(bi::udp::endpoint const & from, dev::bytesConstR
 			}
 			if (!expected)
 			{
-				BOOST_LOG_TRIVIAL(debug) << "Dropping unsolicited neighbours packet from " << from.address();
+				BOOST_LOG_TRIVIAL(debug) << "Dropping unsolicited neighbours packet from " << from;
 				break;
 			}
 
@@ -396,6 +407,8 @@ void node_table::do_write()
 	bi::udp::endpoint endpoint(datagram.endpoint);
 	socket->async_send_to(boost::asio::buffer(datagram.data), endpoint, [this, this_l, endpoint](boost::system::error_code ec, std::size_t size)
 	{
+		//BOOST_LOG_TRIVIAL(debug) << "Sending UDP message to " << endpoint;
+
 		if (ec)
 			BOOST_LOG_TRIVIAL(warning) << "Sending UDP message failed. " << ec.value() << " : " << ec.message();
 
@@ -418,8 +431,8 @@ void node_table::ping(node_endpoint const & to)
 
 std::shared_ptr<node_entry> node_table::get_node(node_id node_id_a)
 {
-	std::lock_guard<std::mutex> lock(nodes_mutex);
-	return nodes.count(node_id_a) ? nodes[node_id_a] : std::shared_ptr<node_entry>();
+	std::lock_guard<std::mutex> lock(m_nodes_mutex);
+	return m_nodes.count(node_id_a) ? m_nodes[node_id_a] : std::shared_ptr<node_entry>();
 }
 
 std::vector<std::shared_ptr<node_entry>> node_table::nearest_node_entries(node_id const & target_a)
@@ -487,9 +500,20 @@ std::list<std::shared_ptr<node_info>> node_table::snapshot() const
 	return ret;
 }
 
+std::list<node_info>  node_table::nodes() const
+{
+	std::list<node_info> result;
+	std::lock_guard<std::mutex> lock(m_nodes_mutex);
+	for (auto p : m_nodes)
+	{
+		result.push_back(node_info(p.second->id, p.second->endpoint));
+	}
+	return result;
+}
+
 void node_table::add_node(node_info const & node_a, node_relation relation_a)
 {
-	if (!node_a.endpoint)
+	if (!node_a.endpoint || node_a.id == my_node_info.id)
 		return;
 
 	if (relation_a == node_relation::known)
@@ -497,18 +521,18 @@ void node_table::add_node(node_info const & node_a, node_relation relation_a)
 		auto node = std::make_shared<node_entry>(my_node_info.id, node_a.id, node_a.endpoint);
 		node->pending = false;
 		{
-			std::lock_guard<std::mutex> lock(nodes_mutex);
-			nodes[node_a.id] = node;
+			std::lock_guard<std::mutex> lock(m_nodes_mutex);
+			m_nodes[node_a.id] = node;
 		}
 		note_active_node(node_a.id, node_a.endpoint);
 		return;
 	}
 
 	{
-		std::lock_guard<std::mutex> lock(nodes_mutex);
-		if (nodes.count(node_a.id))
+		std::lock_guard<std::mutex> lock(m_nodes_mutex);
+		if (m_nodes.count(node_a.id))
 		{
-			auto ne(nodes[node_a.id]);
+			auto ne(m_nodes[node_a.id]);
 			if (ne->endpoint != node_a.endpoint)
 				ne->endpoint = node_a.endpoint;
 			return;
@@ -516,12 +540,12 @@ void node_table::add_node(node_info const & node_a, node_relation relation_a)
 		else
 		{
 			auto node = std::make_shared<node_entry>(my_node_info.id, node_a.id, node_a.endpoint);
-			nodes[node_a.id] = node;
+			m_nodes[node_a.id] = node;
 		}
 	}
 
 	//todo: node_endpoint operator<<
-	BOOST_LOG_TRIVIAL(debug) << "addNode pending for " << (bi::udp::endpoint)node_a.endpoint;
+	//BOOST_LOG_TRIVIAL(debug) << "Add Node pending for " << (bi::udp::endpoint)node_a.endpoint;
 	ping(node_a.endpoint);
 }
 
@@ -592,8 +616,8 @@ void node_table::drop_node(std::shared_ptr<node_entry> node_a)
 	}
 
 	{
-		std::lock_guard<std::mutex> lock(nodes_mutex);
-		nodes.erase(node_a->id);
+		std::lock_guard<std::mutex> lock(m_nodes_mutex);
+		m_nodes.erase(node_a->id);
 	}
 
 	// notify host
@@ -616,7 +640,7 @@ void node_table::note_active_node(node_id const & node_id_a, bi::udp::endpoint c
 	std::shared_ptr<node_entry> new_node = get_node(node_id_a);
 	if (new_node && !new_node->pending)
 	{
-		BOOST_LOG_TRIVIAL(debug) << "Noting active node: " << node_id_a.to_string() << " " << endpoint_a.address().to_string() << ":" << endpoint_a.port();
+		//BOOST_LOG_TRIVIAL(debug) << "Noting active node: " << node_id_a.to_string() << " " << endpoint_a.address().to_string() << ":" << endpoint_a.port();
 		new_node->endpoint.address = endpoint_a.address();
 		new_node->endpoint.udp_port = endpoint_a.port();
 
@@ -707,11 +731,11 @@ void node_table::do_check_evictions()
 		std::list<std::shared_ptr<node_entry>> drop;
 		{
 			std::lock_guard<std::mutex> evictions_lock(evictions_mutex);
-			std::lock_guard<std::mutex> nodes_lock(nodes_mutex);
+			std::lock_guard<std::mutex> nodes_lock(m_nodes_mutex);
 			for (auto & e : evictions)
 				if (std::chrono::steady_clock::now() - e.second.evicted_time > req_timeout)
-					if (nodes.count(e.second.new_node_id))
-						drop.push_back(nodes[e.second.new_node_id]);
+					if (m_nodes.count(e.second.new_node_id))
+						drop.push_back(m_nodes[e.second.new_node_id]);
 			evictions_remain = (evictions.size() - drop.size() > 0);
 		}
 
