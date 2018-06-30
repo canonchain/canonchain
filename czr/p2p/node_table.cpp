@@ -67,7 +67,9 @@ void node_table::discover_loop()
 			return;
 
 		if (ec)
+		{
 			BOOST_LOG_TRIVIAL(warning) << "Discover loop error: " << ec.value() << ":" << ec.message();
+		}
 
 		//BOOST_LOG_TRIVIAL(debug) << "Do discover";
 
@@ -141,7 +143,9 @@ void node_table::do_discover(node_id const & rand_node_id, unsigned const & roun
 			return;
 
 		if (ec)
+		{
 			BOOST_LOG_TRIVIAL(debug) << "Do discover error: " << ec.value() << ":" << ec.message();
+		}
 
 		do_discover(rand_node_id, round + 1, tried_a);
 	});
@@ -159,7 +163,9 @@ void node_table::receive_loop()
 			return;
 
 		if (ec)
+		{
 			//BOOST_LOG_TRIVIAL(warning) << "Receiving UDP message from " << recv_endpoint << " failed. " << ec.value() << " : " << ec.message();
+		}
 
 		if (size > 0)
 			handle_receive(recv_endpoint, dev::bytesConstRef(recv_buffer.data(), size));
@@ -410,7 +416,9 @@ void node_table::do_write()
 		//BOOST_LOG_TRIVIAL(debug) << "Sending UDP message to " << endpoint;
 
 		if (ec)
+		{
 			BOOST_LOG_TRIVIAL(warning) << "Sending UDP message failed. " << ec.value() << " : " << ec.message();
+		}
 
 		{
 			std::lock_guard<std::mutex> lock(send_queue_mutex);
@@ -732,7 +740,9 @@ void node_table::do_check_evictions()
 	eviction_check_timer->async_wait([this](boost::system::error_code const& ec)
 	{
 		if (ec)
+		{
 			BOOST_LOG_TRIVIAL(debug) << "Check Evictions timer was probably cancelled: " << ec.value() << " " << ec.message();
+		}
 
 		if (ec.value() == boost::asio::error::operation_aborted)
 			return;
