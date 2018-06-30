@@ -28,6 +28,7 @@ czr::witness::witness(czr::error_message & error_msg, czr::node & node_a, std::s
 		error_msg.message = "Account not exists or password wrong";
 		return;
 	}
+	BOOST_LOG(node.log) << "witness account:" << account.to_account();
 }
 
 void czr::witness::check_and_witness()
