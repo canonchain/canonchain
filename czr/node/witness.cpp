@@ -17,7 +17,9 @@ czr::witness::witness(czr::error_message & error_msg, czr::node & node_a, std::s
 			error_msg.message = "Invalid account or json file";
 			return;
 		}
+		account = kc.account;
 	}
+
 
 	error = node.key_manager.unlock(account, password_a);
 	if (error)

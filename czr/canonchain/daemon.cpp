@@ -143,22 +143,31 @@ void czr_daemon::daemon::run(boost::filesystem::path const &data_path, boost::pr
 	//--witness 	
 	bool is_witness(false);
 	czr::error_message error_msg;
-	std::string account;
+	std::string account_file;
 	std::string password;
 	if (vm.count("witness")>0)
 	{
 		//todo getpassword
-		if (vm.count("account") == 0 || vm.count("password") == 0)
+		if ((vm.count("account") == 0 && vm.count("file") == 0)|| vm.count("password") == 0)
 		{
 			error_msg.error = true;
 			error_msg.message = "witness need account and password\n ";
-			std::cerr << "witness need account and password\n ";
+			std::cerr << "witness need account or file and password\n ";
 			return;
 		}
 		else
 		{
 			is_witness = true;
-			account = vm["account"].as<std::string>();
+			account_file = (vm.count("account")>0) ? vm["account"].as<std::string>():"";
+			if (account_file.empty())
+			{
+				std::string filepath = (vm.count("file")>0) ? vm["file"].as<std::string>() : "";
+				if (!filepath.empty())
+				{
+					config.readfile2string(account_file, filepath);
+							
+				}
+			}
 			password = vm["password"].as<std::string>();
 		}
 	}
@@ -200,7 +209,7 @@ void czr_daemon::daemon::run(boost::filesystem::path const &data_path, boost::pr
 				//witness node start
 				if (is_witness)
 				{
-					std::shared_ptr<czr::witness> witness_l(std::make_shared<czr::witness>(error_msg, *node, account, password));
+					std::shared_ptr<czr::witness> witness_l(std::make_shared<czr::witness>(error_msg, *node, account_file, password));
 
 					//czr::witness witness_l(error_msg, *node, account, password);
 					if (error_msg.error)
