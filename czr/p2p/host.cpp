@@ -160,7 +160,7 @@ void host::accept_loop()
 	auto this_l(shared_from_this());
 	acceptor->async_accept(*socket, [socket, this_l](boost::system::error_code const & ec) {
 
-		BOOST_LOG_TRIVIAL(debug) << "Accept socket:" << socket->remote_endpoint();
+		//BOOST_LOG_TRIVIAL(debug) << "Accept socket:" << socket->remote_endpoint();
 
 		if (ec || !this_l->is_run)
 		{

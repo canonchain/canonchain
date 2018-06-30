@@ -1,25 +1,29 @@
 #include <czr/node/witness.hpp>
 #include <czr/node/common.hpp>
 
-
-
-czr::witness::witness(czr::error_message & error_msg, czr::node & node_a, std::string const & account_text, std::string const & password_a):
+czr::witness::witness(czr::error_message & error_msg, czr::node & node_a, std::string const & account_or_file_text, std::string const & password_a):
 	node(node_a),
 	ledger(node_a.ledger)
 {
-	bool error(account.decode_account(account_text));
+	bool error(account.decode_account(account_or_file_text));
 	if (error)
 	{
-		error_msg.error = true;
-		error_msg.message = "Invalid account";
-		return;
+		czr::transaction transaction(node.store.environment, nullptr, true);
+		czr::key_content kc;
+		bool error(node.key_manager.import(transaction, account_or_file_text, kc));
+		if (error)
+		{
+			error_msg.error = true;
+			error_msg.message = "Invalid account or json file";
+			return;
+		}
 	}
 
 	error = node.key_manager.unlock(account, password_a);
 	if (error)
 	{
 		error_msg.error = true;
-		error_msg.message = "Account not exists or password wrong ";
+		error_msg.message = "Account not exists or password wrong";
 		return;
 	}
 }
