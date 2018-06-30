@@ -444,7 +444,7 @@ czr::validate_result czr::block_processor::process_receive_one(MDB_txn * transac
 			node.capability->send_block(joint);
 
 			bool is_catch_up(false);  //todo: get is_catch_up;
-			if (node.m_witness || !is_catch_up)
+			if (node.m_witness && !is_catch_up)
 				//if I am a witness, do work
 				node.m_witness->check_and_witness();
 

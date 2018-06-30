@@ -46,7 +46,6 @@ bool p2p_config::deserialize_json(bool & upgraded_a, boost::property_tree::ptree
 			auto bootstrap_peer(i->second.get<std::string>(""));
 			bootstrap_nodes.push_back(bootstrap_peer);
 		}
-
 		try
 		{
 			port = std::stoul(port_l);

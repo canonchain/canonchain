@@ -246,7 +246,7 @@ czr::key_content::key_content(bool & error_a, std::string const & json_a)
 			}
 		}
 	}
-	catch (...)
+	catch (std::exception const &e)
 	{
 		error_a = true;
 	}
@@ -464,11 +464,20 @@ bool czr::key_manager::unlock(czr::public_key const & pub_a, std::string const &
 void czr::key_manager::write_backup(czr::public_key const & account, std::string const & json)
 {
 	std::ofstream backup_file;
-	backup_file.open((backup_path / (account.to_account() + ".json")).string());
-	if (!backup_file.fail())
+	bool result(false);
+	
+	//backup_file.open((backup_path / (account.to_account() + ".json")).string());
+	boost::filesystem::path path((backup_path /(account.to_account() + ".json")));
+	backup_file.open(path.string());
+	if(backup_file.fail())
 	{
-		backup_file << json;
-	}
+		//mkkdir
+		result = boost::filesystem::create_directory(backup_path);
+		assert(result);
+		backup_file.open(path.string());
+	}	
+	assert(!backup_file.fail());
+	backup_file << json;
 }
 
 czr::key_content czr::key_manager::gen_key_content(czr::raw_key const & prv, std::string const & password_a)

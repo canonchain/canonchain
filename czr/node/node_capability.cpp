@@ -81,6 +81,7 @@ void czr::node_capability::send_block(czr::joint_message const & message)
 {
 	czr::block_hash block_hash(message.block->hash());
 	std::lock_guard<std::mutex> lock(peers_mutex);
+	int sendcnt(0);
 	for (auto it = peers.begin(); it != peers.end();)
 	{
 		czr::peer_info pi(it->second);
@@ -94,10 +95,12 @@ void czr::node_capability::send_block(czr::joint_message const & message)
 			p->prep(s, pi.offset + (unsigned)czr::sub_packet_type::joint, 1);
 			message.stream_RLP(s);
 			p->send(s);
+			sendcnt++;
 		}
 		else
 			it = peers.erase(it);
 	}
+	BOOST_LOG(node.log) << "send block, hash: " << block_hash.to_string()<<" ,sendcnt: "<< sendcnt;
 }
 
 void czr::node_capability::mark_as_known_block(p2p::node_id node_id_a, czr::block_hash block_hash_a)

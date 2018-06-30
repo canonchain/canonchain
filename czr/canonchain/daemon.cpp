@@ -140,6 +140,18 @@ void czr_daemon::daemon::run(boost::filesystem::path const &data_path, boost::pr
 		config.rpc.enable_control = true;
 	}
 
+	if (config.node.p2p.bootstrap_nodes.empty())
+	{
+		if (czr::czr_network == czr::czr_networks::czr_test_network)
+		{
+			config.node.p2p.bootstrap_nodes.push_back("czrnode://AD794A71675C0B347AD80C4C88058DECDBB8D21B6DD697FEC392206B2A2F0E50@39.104.164.210:30606");
+			config.node.p2p.bootstrap_nodes.push_back("czrnode://F6824FD9166CA7BA1034D7A26DD7B68F6541699052FBA38721DFC6961DCD0092@39.104.185.31:30606");
+			config.node.p2p.bootstrap_nodes.push_back("czrnode://86334FB2C0DB0612DC17BF554F939DF2E4CE2A4E46FA6C1D5BDF63404F59A9CA@39.104.180.242:30606");
+			config.node.p2p.bootstrap_nodes.push_back("czrnode://063BB230EB5EDB1BF43133C2C4C0CD38AE769E442E3F0A7E732C8B96DFEFEE0D@39.104.80.166:30606");
+		}
+
+	}
+
 	//--witness 	
 	bool is_witness(false);
 	czr::error_message error_msg;
