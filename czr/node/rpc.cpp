@@ -982,7 +982,7 @@ void czr::rpc_connection::read()
 
 					if (this_l->node->config.logging.log_rpc())
 					{
-						//BOOST_LOG(this_l->node->log) << boost::str(boost::format("RPC request %2% completed in: %1% microseconds") % std::chrono::duration_cast<std::chrono::microseconds> (std::chrono::steady_clock::now() - start).count() % boost::io::group(std::hex, std::showbase, reinterpret_cast<uintptr_t> (this_l.get())));
+						BOOST_LOG(this_l->node->log) << boost::str(boost::format("RPC request %2% completed in: %1% microseconds") % std::chrono::duration_cast<std::chrono::microseconds> (std::chrono::steady_clock::now() - start).count() % boost::io::group(std::hex, std::showbase, reinterpret_cast<uintptr_t> (this_l.get())));
 					}
 				});
 				if (this_l->request.method() == boost::beast::http::verb::post)

@@ -445,9 +445,13 @@ czr::validate_result czr::block_processor::process_receive_one(MDB_txn * transac
 
 			bool is_catch_up(false);  //todo: get is_catch_up;
 			if (node.m_witness && !is_catch_up)
-				//if I am a witness, do work
-				node.m_witness->check_and_witness();
-
+			{
+				auto node_l(node.shared());
+				node.background([node_l]() {
+					//if I am a witness, do work
+					node_l->m_witness->check_and_witness();
+				});
+			}
 			if (node.config.logging.ledger_logging())
 			{
 				std::string const & json(joint.block->to_json());

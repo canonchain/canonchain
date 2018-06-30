@@ -46,7 +46,7 @@ bool czr::node_capability::read_packet(std::shared_ptr<p2p::peer> peer_a, unsign
 				return true;
 			}
 
-			BOOST_LOG(node.log) << "Get joint message, blcok hash:" << joint.block->hash().to_string();
+			//BOOST_LOG(node.log) << "Get joint message, blcok hash:" << joint.block->hash().to_string();
 
 			czr::block_hash block_hash(joint.block->hash());
 			if (node.config.logging.network_message_logging())
