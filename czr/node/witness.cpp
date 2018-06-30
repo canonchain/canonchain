@@ -28,17 +28,6 @@ czr::witness::witness(czr::error_message & error_msg, czr::node & node_a, std::s
 	}
 }
 
-void czr::witness::start()
-{
-	//todo:trigger check_and_witness when non-sync new block message coming	
-	//check_and_witness();
-	std::shared_ptr<czr::witness> witness_w(shared_from_this());
-	node.alarm.add(std::chrono::steady_clock::now() + std::chrono::seconds(5), [witness_w]() {
-			witness_w->check_and_witness();
-			witness_w->start();
-	} );
-}
-
 void czr::witness::check_and_witness()
 {
 	if (is_witnessing.test_and_set())

@@ -8,6 +8,7 @@
 #include <czr/node/wallet.hpp>
 #include <czr/p2p/host.hpp>
 #include <czr/node/node_capability.hpp>
+#include <czr/node/witness.hpp>
 
 #include <condition_variable>
 #include <memory>
@@ -279,6 +280,7 @@ namespace czr
 	class chain;
 	class validation;
 	class node_capability;
+	class witness;
 
 	class node : public std::enable_shared_from_this<czr::node>
 	{
@@ -303,6 +305,7 @@ namespace czr
 		void ongoing_unhandle_flush();
 		void ongoing_retry_late_message();
 		dev::bytes network_bytes();
+		void to_be_a_witness(std::shared_ptr<czr::witness> witness_a);
 
 		boost::asio::io_service & io_service;
 		czr::node_config config;
@@ -325,6 +328,8 @@ namespace czr
 		czr::late_message_cache late_message_cache;
 		czr::invalid_block_cache invalid_block_cache;
 		std::atomic_flag is_stopped = ATOMIC_FLAG_INIT;
+
+		std::shared_ptr<czr::witness> m_witness;
 	};
 
 	class thread_runner

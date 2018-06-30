@@ -511,9 +511,19 @@ std::list<node_info>  node_table::nodes() const
 	return result;
 }
 
+bool node_table::is_bootstrap_node(node_id const & id)
+{
+	for (auto bn : bootstrap_nodes)
+	{
+		if (bn->id == id)
+			return true;
+	}
+	return false;
+}
+
 void node_table::add_node(node_info const & node_a, node_relation relation_a)
 {
-	if (!node_a.endpoint || node_a.id == my_node_info.id)
+	if (!node_a.endpoint || node_a.id == my_node_info.id || is_bootstrap_node(node_a.id))
 		return;
 
 	if (relation_a == node_relation::known)
@@ -634,7 +644,7 @@ node_bucket & node_table::bucket_UNSAFE(node_entry const * node_a)
 void node_table::note_active_node(node_id const & node_id_a, bi::udp::endpoint const& endpoint_a)
 {
 	//self
-	if (node_id_a == my_node_info.id)
+	if (node_id_a == my_node_info.id || is_bootstrap_node(node_id_a))
 		return;
 
 	std::shared_ptr<node_entry> new_node = get_node(node_id_a);

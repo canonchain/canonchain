@@ -76,9 +76,6 @@ void host::start()
 	m_node_table->set_event_handler(new host_node_table_event_handler(*this));
 	m_node_table->start();
 
-	//for (auto & node : bootstrap_nodes)
-	//	m_node_table->add_node(*node);
-
 	restore_network(&restore_network_bytes);
 
 	BOOST_LOG_TRIVIAL(info) << "P2P started, czrnode://" << alias.pub.to_string() << "@" << listen_ip << ":" << port;
@@ -351,11 +348,11 @@ void host::try_connect_nodes(size_t const & avaliable_count)
 	//connect to bootstrap nodes
 	if (m_peers.size() == 0 && std::chrono::steady_clock::now() - start_time > node_fallback_interval)
 	{
-		for (auto bn : bootstrap_nodes)
+		if (bootstrap_nodes.size() > 0)
 		{
-			if (!avaliable_peer_count(peer_type::egress))
-				break;
-			connect(bn);
+			//only random pick one
+			auto rindex(czr::random_pool.GenerateWord32(0, bootstrap_nodes.size() - 1));
+			connect(bootstrap_nodes[rindex]);
 		}
 	}
 

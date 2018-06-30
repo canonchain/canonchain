@@ -443,6 +443,11 @@ czr::validate_result czr::block_processor::process_receive_one(MDB_txn * transac
 			//send block
 			node.capability->send_block(joint);
 
+			bool is_catch_up(false);  //todo: get is_catch_up;
+			if (node.m_witness || !is_catch_up)
+				//if I am a witness, do work
+				node.m_witness->check_and_witness();
+
 			if (node.config.logging.ledger_logging())
 			{
 				std::string const & json(joint.block->to_json());
@@ -665,6 +670,7 @@ void czr::node::start()
 
 	host->register_capability(capability);
 	host->start();
+
 	ongoing_unhandle_flush();
 	ongoing_retry_late_message();
 }
@@ -705,7 +711,6 @@ void czr::node::ongoing_unhandle_flush()
 
 }
 
-
 void czr::node::ongoing_retry_late_message()
 {
 	
@@ -725,6 +730,11 @@ void czr::node::ongoing_retry_late_message()
 dev::bytes czr::node::network_bytes()
 {
 	return host->network_bytes();
+}
+
+void czr::node::to_be_a_witness(std::shared_ptr<czr::witness> witness_a)
+{
+	m_witness = witness_a;
 }
 
 void czr::block_arrival::add(czr::block_hash const & hash_a)

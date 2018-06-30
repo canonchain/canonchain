@@ -208,13 +208,11 @@ void czr_daemon::daemon::run(boost::filesystem::path const &data_path, boost::pr
 						std::cerr << error_msg.message << std::endl;
 						return;
 					}
-					node->start();
-					witness_l->start();
+
+					node->to_be_a_witness(witness_l);
 				}
-				else
-				{
-					node->start();
-				}
+					
+				node->start();
 
 				std::unique_ptr<czr::rpc> rpc = get_rpc(io_service, *node, config.rpc);
 				if (config.rpc_enable)

@@ -162,6 +162,8 @@ namespace czr
 			void set_event_handler(node_table_event_handler* handler);
 			std::list<node_info> nodes() const;
 
+			bool is_bootstrap_node(node_id const & id);
+
 		private:
 			// Constants for Kademlia, derived from address space.
 			static unsigned const s_address_byte_size = 32;							//< Size of address type in bytes.
