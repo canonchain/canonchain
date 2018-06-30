@@ -366,7 +366,7 @@ bool czr::ledger::check_stable_from_later_blocks(MDB_txn * transaction_a, czr::b
 	if (earlier_block_state.is_free)
 		return false;
 
-	uint64_t max_later_parents_limci;
+	uint64_t max_later_parents_limci(0);
 	czr::block_hash best_later_hash;
 	czr::block_state best_later_state;
 	for (czr::block_hash const & later_hash : later_hashs)
